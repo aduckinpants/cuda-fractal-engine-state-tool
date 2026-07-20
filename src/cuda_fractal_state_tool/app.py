@@ -12,6 +12,7 @@ from .process_utils import find_processes_by_name
 from .proposal import build_color_shape_example, build_noop_example, parse_proposal_v1
 from .runtime_surface import DEFAULT_RUNTIME_CMD
 from .state_workflow import WorkflowResult, execute_proposal_workflow, launch_proven_candidate
+from .workspace_layout import WorkspaceLayout
 
 
 @dataclass
@@ -24,14 +25,14 @@ class Phase1Paths:
 
 
 def default_phase1_paths(repo_root: Optional[Path] = None) -> Phase1Paths:
-    root = (repo_root or Path.cwd()).resolve()
-    data_root = root / ".local"
+    layout = WorkspaceLayout.from_repo_root(repo_root)
+    data_root = layout.data_root
     return Phase1Paths(
         data_root=data_root,
-        probe_root=data_root / "runtime_probe",
-        baselines_root=data_root / "baselines",
-        baseline_manifest_path=data_root / "baselines" / BASELINE_ID / "manifest.json",
-        working_states_root=data_root / "working_states",
+        probe_root=layout.runtime_probe_root,
+        baselines_root=layout.baselines_root,
+        baseline_manifest_path=layout.baseline_manifest_path(BASELINE_ID),
+        working_states_root=layout.working_states_root,
     )
 
 

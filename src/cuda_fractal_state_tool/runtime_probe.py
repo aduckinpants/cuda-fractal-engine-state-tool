@@ -18,6 +18,7 @@ from .runtime_surface import (
     sha256_file,
 )
 from .state_compare import compare_json_documents
+from .workspace_layout import WorkspaceLayout
 
 
 _COMMAND_NAMES = (
@@ -273,7 +274,7 @@ def run_probe(runtime_cmd_path: Path, output_root: Path, timeout_seconds: float 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run the Phase 0 runtime authority probe")
     parser.add_argument("--runtime-cmd", type=Path, default=DEFAULT_RUNTIME_CMD)
-    parser.add_argument("--output-root", type=Path, default=Path(".local") / "runtime_probe")
+    parser.add_argument("--output-root", type=Path, default=WorkspaceLayout.from_repo_root().runtime_probe_root)
     parser.add_argument("--timeout-seconds", type=float, default=90.0)
     args = parser.parse_args(argv)
     summary = run_probe(args.runtime_cmd, args.output_root, args.timeout_seconds)

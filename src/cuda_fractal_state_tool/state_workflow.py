@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from dataclasses import asdict, dataclass
@@ -19,12 +20,15 @@ from .runtime_surface import (
     build_runtime_identity,
 )
 from .state_compare import DocumentComparison, compare_json_documents
+from .workspace_layout import WorkspaceLayout
 
 
 @dataclass
 class WorkflowResult:
     status: str
     working_state_dir: Path
+    validation_run_dir: Path
+    validation_run_manifest_path: Path
     transport_candidate_path: Path
     proven_state_path: Optional[Path]
     replay_state_path: Optional[Path]
@@ -46,12 +50,56 @@ def _write_json(path: Path, value: Any) -> None:
     path.write_text(dumps_pretty(value), encoding="utf-8")
 
 
+def _write_json_with_stdlib(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, sort_keys=True), encoding="utf-8")
+
+
 def _copy_if_exists(source: Path, destination: Path) -> bool:
     if not source.exists():
         return False
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, destination)
     return True
+
+
+def _build_validation_run_manifest(
+    state_id: str,
+    status: str,
+    baseline: FrozenBaseline,
+    proposal: ProposalV1,
+    state_dir: Path,
+    validation_path: Path,
+    replay_state_path: Path,
+    replay_frame_path: Path,
+    proven_state_path: Optional[Path],
+    diff_result: Optional[DocumentComparison],
+    replay_result: ProcessResult,
+    runtime_cmd_path: Path,
+) -> dict[str, Any]:
+    return {
+        "run_id": state_id,
+        "status": status,
+        "timestamp_utc": _utc_now(),
+        "baseline_id": baseline.baseline_id,
+        "baseline_sha256": baseline.manifest["state_sha256"],
+        "proposal_version": proposal.proposal_version,
+        "overrides": dict(proposal.overrides),
+        "working_state_dir": str(state_dir.resolve()),
+        "transport_candidate_path": str((state_dir / "transport_candidate.json").resolve()),
+        "proven_state_path": str(proven_state_path) if proven_state_path else None,
+        "replay_state_path": str(replay_state_path) if replay_state_path.exists() else None,
+        "replay_frame_path": str(replay_frame_path) if replay_frame_path.exists() else None,
+        "validation_path": str(validation_path.resolve()),
+        "candidate_replay_diff_path": str((state_dir / "candidate_replay_diff.json").resolve()) if diff_result else None,
+        "runtime_identity": build_runtime_identity(runtime_cmd_path.resolve(), runtime_cmd_path.resolve().parent),
+        "command": build_replay_command(runtime_cmd_path.resolve(), state_dir / "transport_candidate.json", state_dir / "replay"),
+        "exit_code": replay_result.exit_code,
+        "timed_out": replay_result.timed_out,
+        "elapsed_seconds": replay_result.elapsed_seconds,
+        "stdout_path": str((state_dir / "stdout.txt").resolve()),
+        "stderr_path": str((state_dir / "stderr.txt").resolve()),
+    }
 
 
 def replay_transport_candidate(runtime_cmd_path: Path, candidate_path: Path, replay_dir: Path, timeout_seconds: float = 90.0) -> ProcessResult:
@@ -75,6 +123,9 @@ def execute_proposal_workflow(
     proposal = parse_proposal_v1(proposal_text, baseline.baseline_id, baseline.manifest["state_sha256"])
 
     state_dir = working_states_root.resolve() / state_id
+    validation_run_dir = state_dir.parent.parent / "validation_runs" / state_id
+    validation_run_dir.mkdir(parents=True, exist_ok=True)
+    validation_run_manifest_path = validation_run_dir / "manifest.json"
     replay_dir = state_dir / "replay"
     candidate_path = state_dir / "transport_candidate.json"
     proposal_path = state_dir / "proposal.json"
@@ -141,9 +192,27 @@ def execute_proposal_workflow(
     }
     _write_json(validation_path, validation)
 
+    validation_run_manifest = _build_validation_run_manifest(
+        state_id,
+        status,
+        baseline,
+        proposal,
+        state_dir,
+        validation_path,
+        replay_state_path,
+        replay_frame_path,
+        proven_state_path,
+        diff_result,
+        replay_result,
+        runtime_cmd_path,
+    )
+    _write_json_with_stdlib(validation_run_manifest_path, validation_run_manifest)
+
     return WorkflowResult(
         status=status,
         working_state_dir=state_dir,
+        validation_run_dir=validation_run_dir,
+        validation_run_manifest_path=validation_run_manifest_path,
         transport_candidate_path=candidate_path,
         proven_state_path=proven_state_path,
         replay_state_path=replay_state_path if replay_state_path.exists() else None,

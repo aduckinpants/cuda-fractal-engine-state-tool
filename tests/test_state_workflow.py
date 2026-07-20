@@ -46,6 +46,8 @@ class StateWorkflowIntegrationTests(unittest.TestCase):
             self.assertEqual(noop.transport_candidate_path.read_bytes(), frozen.state_path.read_bytes())
             self.assertIsNotNone(noop.proven_state_path)
             self.assertTrue((noop.working_state_dir / "candidate_replay_diff.json").exists())
+            self.assertTrue(noop.validation_run_manifest_path.exists())
+            self.assertTrue(noop.validation_run_dir.exists())
 
             max_iter = execute_proposal_workflow(
                 build_max_iter_example(frozen.manifest["state_sha256"]),
@@ -70,6 +72,7 @@ class StateWorkflowIntegrationTests(unittest.TestCase):
             self.assertTrue((color.working_state_dir / "stdout.txt").exists())
             self.assertTrue((color.working_state_dir / "stderr.txt").exists())
             self.assertTrue((color.working_state_dir / "validation.json").exists())
+            self.assertTrue((color.validation_run_manifest_path).exists())
 
             packet = build_intake_packet(frozen.manifest_path, PROBE_ROOT / "replay_one" / "state.json")
             self.assertIn("Return a sparse proposal_v1 JSON document", packet)
