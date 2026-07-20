@@ -10,5 +10,6 @@ __all__ = [
     "runtime_surface",
     "state_workflow",
     "runtime_probe",
+    "validation_runs",
     "state_compare",
 ]
