@@ -7,6 +7,7 @@ This document records the bounded Phase 1 color override support and its provena
 Phase 1 does not expose arbitrary `color_pipeline_draft` authorship. The supported color override surface is intentionally limited to one directly grounded scalar path:
 
 - `params.color_shape`
+- `params.color_grading`
 
 The non-color Phase 1 path is:
 
@@ -18,7 +19,7 @@ The non-color Phase 1 path is:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `params.color_shape` | baseline and replay-proven state JSON | runtime `--describe-parameter-surface` plus source enum ids in `ui_app/src/enum_id_utils.h` | `ColorPipelineShape` ids in `ui_app/src/enum_id_utils.h` and parameter-surface metadata | not needed for scalar replacement | direct mapping through `AdvancedColorShapeFunctionId` in `ui_app/src/color_pipeline_core.h` where `identity -> identity` and `repeat -> repeat` | mixed: runtime parameter-surface output plus source mapping helper | yes, bounded to `identity` and `repeat` | direct identifier bridge with no palette alias translation |
 | `params.color_palette` | baseline and replay-proven state JSON | serialized scalar and runtime state | enum ids available in source and runtime state | palette function library exists, but scalar `joy` maps to replay function `joy_root_palette` rather than a direct id match | alias bridge in `ui_app/src/color_pipeline_core.h` | mixed, with adaptation | no | Phase 1 excludes alias-translated palette authorship |
-| `params.color_grading` | baseline and replay-proven state JSON | serialized scalar and runtime state | enum ids available in source and runtime state | grading function ids exposed in source helpers | `basin_default -> basin_default` is direct, but `escape_default -> contrast_lift` is adapted | mixed, partially direct and partially adapted | no | keep Phase 1 to one simpler direct color seam |
+| `params.color_grading` | baseline and replay-proven state JSON | runtime parameter-surface metadata plus source grading ids | grading function ids exposed in source helpers | `AdvancedColorGradingFunctionId` in `ui_app/src/color_pipeline_core.h` | `basin_default -> basin_default` is direct | mixed: runtime parameter-surface output plus source grading helper | yes, bounded to `basin_default` | direct enough for V1 intake |
 | `color_pipeline_draft` | replay artifact only | replay artifact JSON | row/function metadata not surfaced by Phase 0 runtime outputs alone | requires function-library authority beyond the scalar surface | lane/function catalog is richer than the scalar contract | mixed and currently incomplete for V1 | no | arbitrary pipeline authorship is out of scope for Phase 1 |
 
 ## UI Salt Breadcrumb
@@ -32,8 +33,9 @@ Phase 0 established that the published runtime exposes `--describe-parameter-sur
 
 ## Phase 1 Conclusion
 
-Phase 1 supports exactly one useful non-default color override:
+Phase 1 supports two useful color overrides:
 
 - `params.color_shape = "repeat"`
+- `params.color_grading = "basin_default"`
 
-This path is accepted because its serialized identifier and replay-pipeline function identifier match directly through the source-backed shape mapping helper, and because the baseline already carries the default repeat-shape owner fields needed for a bounded proof.
+These paths are accepted because the serialized identifiers and replay-pipeline function identifiers are grounded by the source-backed mapping helpers, and because the baseline already carries the owner fields needed for a bounded proof.

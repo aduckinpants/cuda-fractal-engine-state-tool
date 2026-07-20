@@ -8,7 +8,7 @@ from pathlib import Path
 from cuda_fractal_state_tool.baseline import freeze_phase0_baseline
 from cuda_fractal_state_tool.intake import build_intake_packet
 from cuda_fractal_state_tool.json_utils import dumps_pretty
-from cuda_fractal_state_tool.proposal import build_color_shape_example, build_max_iter_example, build_noop_example
+from cuda_fractal_state_tool.proposal import build_color_grading_example, build_color_shape_example, build_max_iter_example, build_noop_example
 from cuda_fractal_state_tool.runtime_surface import build_detached_viewer_launch_command, build_replay_command
 from cuda_fractal_state_tool.state_workflow import execute_proposal_workflow
 
@@ -76,10 +76,23 @@ class StateWorkflowIntegrationTests(unittest.TestCase):
             self.assertTrue((color.validation_run_manifest_path).exists())
             self.assertEqual(color.runtime_status, "runtime_success")
 
+            grading = execute_proposal_workflow(
+                build_color_grading_example(frozen.manifest["state_sha256"]),
+                frozen.manifest_path,
+                root / "working_states",
+                "color_grading",
+                runtime_cmd_path=RUNTIME_CMD,
+            )
+            self.assertEqual(grading.status, "runtime_proof_succeeded")
+            grading_text = grading.replay_state_path.read_text(encoding="utf-8") if grading.replay_state_path else ""
+            self.assertIn('"function_id": "basin_default"', grading_text)
+            self.assertEqual(grading.runtime_status, "runtime_success")
+
             packet = build_intake_packet(frozen.manifest_path, PROBE_ROOT / "replay_one" / "state.json")
             self.assertIn("Return a sparse proposal_v1 JSON document", packet)
             self.assertIn("params.max_iter", packet)
             self.assertIn("params.color_shape", packet)
+            self.assertIn("params.color_grading", packet)
             self.assertIn("schema provenance status: mismatched", packet)
 
 

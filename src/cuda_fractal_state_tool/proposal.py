@@ -37,6 +37,13 @@ def _validate_color_shape(value: Any) -> None:
         raise ValueError("params.color_shape must be one of: identity, repeat")
 
 
+def _validate_color_grading(value: Any) -> None:
+    if not isinstance(value, str):
+        raise ValueError("params.color_grading must be a string enum id")
+    if value != "basin_default":
+        raise ValueError("params.color_grading must be basin_default")
+
+
 PATH_SPECS: dict[str, ProposalPathSpec] = {
     "params.max_iter": ProposalPathSpec(
         path="params.max_iter",
@@ -59,6 +66,17 @@ PATH_SPECS: dict[str, ProposalPathSpec] = {
         type_range_source="enum_id_utils.h ColorPipelineShape ids and describe-parameter-surface output.",
         pipeline_mapping_source="color_pipeline_core AdvancedColorShapeFunctionId maps identity -> identity and repeat -> repeat.",
         runtime_or_source_provenance="mixed: runtime parameter surface plus source color-pipeline mapping helpers",
+    ),
+    "params.color_grading": ProposalPathSpec(
+        path="params.color_grading",
+        value_kind="enum",
+        accepted_values=("basin_default",),
+        validator=_validate_color_grading,
+        provenance="baseline serialized path",
+        accepted_values_source="Runtime parameter-surface metadata and source grading ids.",
+        type_range_source="enum ids exposed by the source grading helpers and runtime parameter surface.",
+        pipeline_mapping_source="color_pipeline_core AdvancedColorGradingFunctionId maps basin_default -> basin_default.",
+        runtime_or_source_provenance="mixed: runtime parameter surface plus source color-pipeline grading helpers",
     ),
 }
 
@@ -155,6 +173,18 @@ def build_color_shape_example(baseline_sha256: str) -> str:
             "proposal_version": 1,
             "base_state": {"id": BASELINE_ID, "sha256": baseline_sha256},
             "overrides": {"params.color_shape": "repeat"},
+        }
+    )
+
+
+def build_color_grading_example(baseline_sha256: str) -> str:
+    from .json_utils import dumps_pretty
+
+    return dumps_pretty(
+        {
+            "proposal_version": 1,
+            "base_state": {"id": BASELINE_ID, "sha256": baseline_sha256},
+            "overrides": {"params.color_grading": "basin_default"},
         }
     )
 

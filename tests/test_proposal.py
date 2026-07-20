@@ -30,6 +30,10 @@ class ProposalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_proposal_v1('{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, "overrides": {"view.center_x": 1}}', "runtime-default-v1", "hash")
 
+    def test_color_grading_override_is_accepted(self) -> None:
+        proposal = parse_proposal_v1('{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, "overrides": {"params.color_grading": "basin_default"}}', "runtime-default-v1", "hash")
+        self.assertEqual(proposal.overrides["params.color_grading"], "basin_default")
+
     def test_parent_child_overlap_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             parse_proposal_v1('{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, "overrides": {"params": 1, "params.max_iter": 2}}', "runtime-default-v1", "hash")

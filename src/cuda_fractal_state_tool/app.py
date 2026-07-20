@@ -9,7 +9,7 @@ from .baseline import BASELINE_ID, freeze_phase0_baseline, load_frozen_baseline
 from .intake import build_intake_packet
 from .materializer import materialize_transport_candidate
 from .process_utils import find_processes_by_name
-from .proposal import build_color_shape_example, build_noop_example, parse_proposal_v1
+from .proposal import build_color_grading_example, build_color_shape_example, build_noop_example, parse_proposal_v1
 from .runtime_surface import DEFAULT_RUNTIME_CMD
 from .state_workflow import WorkflowResult, execute_proposal_workflow, launch_proven_candidate
 from .workspace_layout import WorkspaceLayout
@@ -58,6 +58,9 @@ class Phase1Controller:
 
     def example_color_proposal(self) -> str:
         return build_color_shape_example(self.baseline.manifest["state_sha256"])
+
+    def example_grading_proposal(self) -> str:
+        return build_color_grading_example(self.baseline.manifest["state_sha256"])
 
     def materialize(self, proposal_text: str) -> Path:
         proposal = parse_proposal_v1(proposal_text, self.baseline.baseline_id, self.baseline.manifest["state_sha256"])
@@ -117,15 +120,16 @@ class Phase1App:
 
         button_row = ttk.Frame(self.root)
         button_row.grid(row=1, column=0, sticky="ew", padx=8)
-        for column in range(6):
+        for column in range(7):
             button_row.columnconfigure(column, weight=1)
 
         ttk.Button(button_row, text="Load Example No-Op Proposal", command=self._load_noop).grid(row=0, column=0, sticky="ew", padx=2, pady=2)
         ttk.Button(button_row, text="Load Example Color Proposal", command=self._load_color).grid(row=0, column=1, sticky="ew", padx=2, pady=2)
-        ttk.Button(button_row, text="Materialize", command=self._materialize).grid(row=0, column=2, sticky="ew", padx=2, pady=2)
-        ttk.Button(button_row, text="Replay Prove", command=self._replay).grid(row=0, column=3, sticky="ew", padx=2, pady=2)
-        ttk.Button(button_row, text="Copy Intake Packet", command=self._copy_intake).grid(row=0, column=4, sticky="ew", padx=2, pady=2)
-        ttk.Button(button_row, text="Launch New Viewer", command=self._launch).grid(row=0, column=5, sticky="ew", padx=2, pady=2)
+        ttk.Button(button_row, text="Load Example Grading Proposal", command=self._load_grading).grid(row=0, column=2, sticky="ew", padx=2, pady=2)
+        ttk.Button(button_row, text="Materialize", command=self._materialize).grid(row=0, column=3, sticky="ew", padx=2, pady=2)
+        ttk.Button(button_row, text="Replay Prove", command=self._replay).grid(row=0, column=4, sticky="ew", padx=2, pady=2)
+        ttk.Button(button_row, text="Copy Intake Packet", command=self._copy_intake).grid(row=0, column=5, sticky="ew", padx=2, pady=2)
+        ttk.Button(button_row, text="Launch New Viewer", command=self._launch).grid(row=0, column=6, sticky="ew", padx=2, pady=2)
 
         self.proposal_text = tk.Text(self.root, height=18, width=120)
         self.proposal_text.grid(row=2, column=0, sticky="nsew", padx=8, pady=8)
@@ -152,6 +156,11 @@ class Phase1App:
         self.proposal_text.delete("1.0", "end")
         self.proposal_text.insert("1.0", self.controller.example_color_proposal())
         self._set_status("Loaded color-shape proposal example.\n")
+
+    def _load_grading(self) -> None:
+        self.proposal_text.delete("1.0", "end")
+        self.proposal_text.insert("1.0", self.controller.example_grading_proposal())
+        self._set_status("Loaded color-grading proposal example.\n")
 
     def _materialize(self) -> None:
         try:
