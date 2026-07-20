@@ -8,7 +8,7 @@ from typing import Optional
 
 from .baseline import BASELINE_ID
 from .runtime_surface import DEFAULT_RUNTIME_CMD
-from .state_workflow import execute_proposal_workflow
+from .state_workflow import execute_proposal_workflow, launch_proven_candidate
 from .workspace_layout import WorkspaceLayout
 
 
@@ -36,6 +36,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--runtime-cmd", type=Path, default=DEFAULT_RUNTIME_CMD, help="Runtime command path")
     parser.add_argument("--timeout-seconds", type=float, default=90.0)
     parser.add_argument("--promotion-profile", type=str, default="none")
+    parser.add_argument("--launch-viewer-on-success", action="store_true", help="Launch viewer with the proven candidate when proof succeeds")
     args = parser.parse_args(argv)
 
     proposal_text = args.proposal.read_text(encoding="utf-8")
@@ -53,6 +54,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         promotion_profile=args.promotion_profile,
     )
 
+    launched_viewer_pid: Optional[int] = None
+    if args.launch_viewer_on_success and result.status == "runtime_proof_succeeded" and result.proven_state_path is not None:
+        launched = launch_proven_candidate(args.runtime_cmd, result.proven_state_path)
+        launched_viewer_pid = launched.pid
+
     payload = {
         "status": result.status,
         "runtime_status": result.runtime_status,
@@ -67,6 +73,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "promotion_report_path": str(result.promotion_report_path.resolve()) if result.promotion_report_path else None,
         "replay_state_path": str(result.replay_state_path.resolve()) if result.replay_state_path else None,
         "validation_path": str(result.validation_path.resolve()),
+        "launched_viewer_pid": launched_viewer_pid,
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0 if result.status == "runtime_proof_succeeded" else 2

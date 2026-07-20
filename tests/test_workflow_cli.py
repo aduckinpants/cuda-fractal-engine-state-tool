@@ -87,6 +87,68 @@ class WorkflowCliTests(unittest.TestCase):
             self.assertEqual(payload["status"], "runtime_proof_failed")
             self.assertIsNone(payload["proven_state_path"])
 
+    def test_cli_launches_viewer_on_success_when_requested(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            proposal_path = root / "proposal.json"
+            proposal_path.write_text('{"proposal_version":1,"base_state":{"id":"runtime-default-v1","sha256":"hash"},"overrides":{}}', encoding="utf-8")
+
+            mock_popen = type("P", (), {"pid": 4242})()
+            with patch("cuda_fractal_state_tool.workflow_cli.execute_proposal_workflow", return_value=self._make_result(root, "runtime_proof_succeeded")), patch(
+                "cuda_fractal_state_tool.workflow_cli.launch_proven_candidate",
+                return_value=mock_popen,
+            ) as mock_launch:
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = main(
+                        [
+                            "--proposal",
+                            str(proposal_path),
+                            "--baseline-manifest",
+                            str(root / "baselines" / "runtime-default-v1" / "manifest.json"),
+                            "--working-root",
+                            str(root / "working"),
+                            "--state-id",
+                            "manual_run",
+                            "--launch-viewer-on-success",
+                        ]
+                    )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["launched_viewer_pid"], 4242)
+            self.assertEqual(mock_launch.call_count, 1)
+
+    def test_cli_does_not_launch_viewer_when_proof_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            proposal_path = root / "proposal.json"
+            proposal_path.write_text('{"proposal_version":1,"base_state":{"id":"runtime-default-v1","sha256":"hash"},"overrides":{}}', encoding="utf-8")
+
+            with patch("cuda_fractal_state_tool.workflow_cli.execute_proposal_workflow", return_value=self._make_result(root, "runtime_proof_failed")), patch(
+                "cuda_fractal_state_tool.workflow_cli.launch_proven_candidate"
+            ) as mock_launch:
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = main(
+                        [
+                            "--proposal",
+                            str(proposal_path),
+                            "--baseline-manifest",
+                            str(root / "baselines" / "runtime-default-v1" / "manifest.json"),
+                            "--working-root",
+                            str(root / "working"),
+                            "--state-id",
+                            "manual_run",
+                            "--launch-viewer-on-success",
+                        ]
+                    )
+
+            self.assertEqual(exit_code, 2)
+            payload = json.loads(stdout.getvalue())
+            self.assertIsNone(payload["launched_viewer_pid"])
+            mock_launch.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

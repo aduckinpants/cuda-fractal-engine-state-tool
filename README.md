@@ -58,6 +58,7 @@ Run a proposal workflow from a proposal file (non-UI path):
 ```powershell
 $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_proposal.json --promotion-profile none
+py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_proposal.json --promotion-profile none --launch-viewer-on-success
 ```
 
 Run the minimal UI:
