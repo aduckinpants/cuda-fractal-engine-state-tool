@@ -79,6 +79,31 @@ py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_draf
 py -3.14 -m cuda_fractal_state_tool.validation_runs --list --promotion-profile color_pipeline_draft_only_v1 --status runtime_proof_succeeded --limit 5
 ```
 
+Prompt-session harness for repeatable agent-style tests:
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3.14 -m cuda_fractal_state_tool.prompt_session_cli --pack .local\prompt_session_pack.json
+```
+
+Example pack schema:
+
+```json
+{
+	"session_id": "draft-smoke-pack",
+	"cases": [
+		{
+			"case_id": "draft-identity",
+			"proposal_path": ".local/proposal_draft_smoke.json",
+			"state_id": "draft_identity_run",
+			"promotion_profile": "color_pipeline_draft_only_v1",
+			"expected_status": "runtime_proof_succeeded",
+			"expected_runtime_status": "runtime_success"
+		}
+	]
+}
+```
+
 The workflow CLI JSON payload now includes `runtime_metadata_cache` copied from the validation artifact.
 Use this field to verify cache hit/miss behavior and metadata provenance paths before lane-authoring decisions.
 
