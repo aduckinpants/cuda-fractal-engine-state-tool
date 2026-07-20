@@ -95,11 +95,14 @@ def summarize_validation_runs(
     )
     status_counts: dict[str, int] = {}
     runtime_status_counts: dict[str, int] = {}
+    promotion_profile_counts: dict[str, int] = {}
     for run in runs:
         status = str(run.get("status") or "unknown")
         runtime_status = str(run.get("runtime_status") or "unknown")
+        profile = str(run.get("promotion_profile") or "none")
         status_counts[status] = status_counts.get(status, 0) + 1
         runtime_status_counts[runtime_status] = runtime_status_counts.get(runtime_status, 0) + 1
+        promotion_profile_counts[profile] = promotion_profile_counts.get(profile, 0) + 1
     return {
         "index_path": str(path.resolve()),
         "run_count": len(runs),
@@ -110,6 +113,7 @@ def summarize_validation_runs(
         },
         "status_counts": status_counts,
         "runtime_status_counts": runtime_status_counts,
+        "promotion_profile_counts": promotion_profile_counts,
         "latest_run": runs[0] if runs else None,
     }
 
@@ -119,6 +123,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=None)
     parser.add_argument("--index", type=Path, default=None, help="Override index path")
     parser.add_argument("--list", action="store_true", help="Print filtered run entries")
+    parser.add_argument("--limit", type=int, default=None, help="Limit list output to the first N runs")
     parser.add_argument("--latest", action="store_true", help="Print only the latest run entry")
     parser.add_argument("--status", type=str, default=None, help="Filter by validation status")
     parser.add_argument("--runtime-status", type=str, default=None, help="Filter by runtime status")
@@ -133,6 +138,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             runtime_status=args.runtime_status,
             promotion_profile=args.promotion_profile,
         )
+        if args.limit is not None:
+            runs = runs[: max(args.limit, 0)]
         print(json.dumps(runs, indent=2, sort_keys=True))
         return 0
 

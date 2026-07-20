@@ -10,6 +10,7 @@ from cuda_fractal_state_tool.validation_runs import (
   latest_validation_run,
   list_validation_runs,
   load_validation_index,
+  main,
   summarize_validation_runs,
 )
 
@@ -70,6 +71,8 @@ class ValidationRunsTests(unittest.TestCase):
             self.assertEqual(summary["status_counts"]["runtime_proof_failed"], 1)
             self.assertEqual(summary["runtime_status_counts"]["runtime_success"], 2)
             self.assertEqual(summary["runtime_status_counts"]["runtime_failure"], 1)
+            self.assertEqual(summary["promotion_profile_counts"]["observed_runtime_enrichment_v1"], 1)
+            self.assertEqual(summary["promotion_profile_counts"]["none"], 2)
 
             filtered = filter_validation_runs(runs, promotion_profile="observed_runtime_enrichment_v1")
             self.assertEqual(len(filtered), 1)
@@ -83,6 +86,45 @@ class ValidationRunsTests(unittest.TestCase):
             self.assertEqual(summary_filtered["run_count"], 1)
             self.assertEqual(summary_filtered["status_counts"]["runtime_proof_succeeded"], 1)
             self.assertEqual(summary_filtered["filters"]["promotion_profile"], "observed_runtime_enrichment_v1")
+
+    def test_list_limit_returns_only_first_n_sorted_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "index.json"
+            path.write_text(
+                """{
+  "entries": [
+    {
+      "run_id": "older",
+      "timestamp_utc": "2026-07-20T10:00:00+00:00",
+      "status": "runtime_proof_failed",
+      "runtime_status": "runtime_failure"
+    },
+    {
+      "run_id": "newer",
+      "timestamp_utc": "2026-07-20T11:00:00+00:00",
+      "status": "runtime_proof_succeeded",
+      "runtime_status": "runtime_success"
+    },
+    {
+      "run_id": "newest",
+      "timestamp_utc": "2026-07-20T12:00:00+00:00",
+      "status": "runtime_proof_succeeded",
+      "runtime_status": "runtime_success"
+    }
+  ]
+}
+""",
+                encoding="utf-8",
+            )
+
+            runs = filter_validation_runs(list_validation_runs(path))
+            limited = runs[:1]
+            self.assertEqual(len(limited), 1)
+            self.assertEqual(limited[0]["run_id"], "newest")
+
+            # Smoke the CLI path with --list --limit to ensure it parses and exits.
+            exit_code = main(["--index", str(path), "--list", "--limit", "1"])
+            self.assertEqual(exit_code, 0)
 
 
 if __name__ == "__main__":

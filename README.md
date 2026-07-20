@@ -48,6 +48,7 @@ Inspect validation runs (summary/list/latest with filters):
 $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.validation_runs
 py -3.14 -m cuda_fractal_state_tool.validation_runs --list --status runtime_proof_succeeded
+py -3.14 -m cuda_fractal_state_tool.validation_runs --list --status runtime_proof_succeeded --limit 5
 py -3.14 -m cuda_fractal_state_tool.validation_runs --latest --promotion-profile observed_runtime_enrichment_v1
 ```
 
