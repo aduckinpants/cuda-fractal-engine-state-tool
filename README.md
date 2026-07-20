@@ -58,6 +58,8 @@ Run the minimal UI:
 ./run_ui.cmd
 ```
 
+The UI includes a promotion profile selector used by Replay Prove (`none`, single-key profiles, and combined observed enrichment).
+
 Direct module launch (equivalent):
 
 ```powershell

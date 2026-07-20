@@ -3,9 +3,11 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from cuda_fractal_state_tool.app import Phase1Controller, Phase1Paths
 from cuda_fractal_state_tool.json_utils import dumps_pretty
+from cuda_fractal_state_tool.state_workflow import WorkflowResult
 
 
 class AppControllerTests(unittest.TestCase):
@@ -37,6 +39,36 @@ class AppControllerTests(unittest.TestCase):
             self.assertIn("params.color_palette", packet)
             self.assertIn("params.color_grading", packet)
             self.assertIn("schema provenance status: mismatched", packet)
+
+    def test_replay_prove_forwards_selected_promotion_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            probe = self._make_probe_root(root)
+            paths = Phase1Paths(root, probe, root / "baselines", root / "baselines" / "runtime-default-v1" / "manifest.json", root / "working_states")
+            controller = Phase1Controller(paths, runtime_cmd_path=Path(r"D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd"))
+
+            result = WorkflowResult(
+                status="runtime_proof_succeeded",
+                working_state_dir=root / "working_states" / "run",
+                validation_run_dir=root / "validation_runs" / "run",
+                validation_run_manifest_path=root / "validation_runs" / "run" / "manifest.json",
+                validation_runs_index_path=root / "validation_runs" / "index.json",
+                runtime_status="runtime_success",
+                promotion_profile="color_pipeline_draft_only_v1",
+                promoted_state_path=root / "working_states" / "run" / "promoted_state.json",
+                promotion_report_path=root / "working_states" / "run" / "promotion_report.json",
+                transport_candidate_path=root / "working_states" / "run" / "transport_candidate.json",
+                proven_state_path=root / "working_states" / "run" / "state.json",
+                replay_state_path=root / "working_states" / "run" / "replay" / "state.json",
+                diff=None,
+                validation_path=root / "working_states" / "run" / "validation.json",
+            )
+
+            with patch("cuda_fractal_state_tool.app.execute_proposal_workflow", return_value=result) as mock_execute:
+                controller.replay_prove(controller.example_noop_proposal(), promotion_profile="color_pipeline_draft_only_v1")
+
+            self.assertEqual(controller.available_promotion_profiles()[0], "none")
+            self.assertEqual(mock_execute.call_args.kwargs["promotion_profile"], "color_pipeline_draft_only_v1")
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ from .proposal import (
     parse_proposal_v1,
 )
 from .runtime_surface import DEFAULT_RUNTIME_CMD
-from .state_workflow import WorkflowResult, execute_proposal_workflow, launch_proven_candidate
+from .state_workflow import PROMOTION_PROFILES, WorkflowResult, execute_proposal_workflow, launch_proven_candidate
 from .workspace_layout import WorkspaceLayout
 
 
@@ -83,7 +83,12 @@ class Phase1Controller:
         self.last_materialized_candidate = candidate_path
         return candidate_path
 
-    def replay_prove(self, proposal_text: str) -> WorkflowResult:
+    def available_promotion_profiles(self) -> list[str]:
+        profiles = list(PROMOTION_PROFILES.keys())
+        profiles.sort(key=lambda item: (item != "none", item))
+        return profiles
+
+    def replay_prove(self, proposal_text: str, promotion_profile: str = "none") -> WorkflowResult:
         state_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_phase1")
         self.last_workflow_result = execute_proposal_workflow(
             proposal_text,
@@ -91,6 +96,7 @@ class Phase1Controller:
             self.paths.working_states_root,
             state_id,
             runtime_cmd_path=self.runtime_cmd_path,
+            promotion_profile=promotion_profile,
         )
         return self.last_workflow_result
 
@@ -120,15 +126,31 @@ class Phase1App:
     def _build(self) -> None:
         ttk = self._ttk
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(2, weight=1)
+        self.root.rowconfigure(3, weight=1)
 
         import tkinter as tk
 
         self.baseline_status = tk.StringVar(value=self.controller.baseline_status_text())
         ttk.Label(self.root, textvariable=self.baseline_status).grid(row=0, column=0, sticky="ew", padx=8, pady=8)
 
+        controls_row = ttk.Frame(self.root)
+        controls_row.grid(row=1, column=0, sticky="ew", padx=8)
+        controls_row.columnconfigure(1, weight=1)
+        ttk.Label(controls_row, text="Promotion profile:").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=2)
+        self.promotion_profile = tk.StringVar(value="none")
+        profile_options = self.controller.available_promotion_profiles()
+        self.promotion_combo = ttk.Combobox(
+            controls_row,
+            textvariable=self.promotion_profile,
+            values=profile_options,
+            state="readonly",
+        )
+        self.promotion_combo.grid(row=0, column=1, sticky="ew", pady=2)
+        if profile_options:
+            self.promotion_combo.current(0)
+
         button_row = ttk.Frame(self.root)
-        button_row.grid(row=1, column=0, sticky="ew", padx=8)
+        button_row.grid(row=2, column=0, sticky="ew", padx=8)
         for column in range(8):
             button_row.columnconfigure(column, weight=1)
 
@@ -142,10 +164,10 @@ class Phase1App:
         ttk.Button(button_row, text="Launch New Viewer", command=self._launch).grid(row=0, column=7, sticky="ew", padx=2, pady=2)
 
         self.proposal_text = tk.Text(self.root, height=18, width=120)
-        self.proposal_text.grid(row=2, column=0, sticky="nsew", padx=8, pady=8)
+        self.proposal_text.grid(row=3, column=0, sticky="nsew", padx=8, pady=8)
 
         self.status_text = tk.Text(self.root, height=14, width=120)
-        self.status_text.grid(row=3, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        self.status_text.grid(row=4, column=0, sticky="nsew", padx=8, pady=(0, 8))
         self.status_text.insert("1.0", "Phase 1 UI ready. Load an example proposal or paste one manually.\n")
         self.status_text.configure(state="disabled")
 
@@ -186,8 +208,9 @@ class Phase1App:
         self._set_status(f"Materialized transport candidate:\n{candidate}\n")
 
     def _replay(self) -> None:
+        selected_profile = self.promotion_profile.get() or "none"
         try:
-            result = self.controller.replay_prove(self.proposal_text.get("1.0", "end"))
+            result = self.controller.replay_prove(self.proposal_text.get("1.0", "end"), promotion_profile=selected_profile)
         except Exception as exc:
             self._set_status(f"Replay prove failed before runtime invocation: {exc}\n")
             return
@@ -195,9 +218,11 @@ class Phase1App:
             "\n".join(
                 [
                     f"Status: {result.status}",
+                    f"Promotion profile: {result.promotion_profile}",
                     f"Working state: {result.working_state_dir}",
                     f"Transport candidate: {result.transport_candidate_path}",
                     f"Replay artifact: {result.replay_state_path}",
+                    f"Promoted state: {result.promoted_state_path}",
                     f"Validation record: {result.validation_path}",
                 ]
             )
