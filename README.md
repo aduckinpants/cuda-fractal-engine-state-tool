@@ -69,6 +69,15 @@ py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_propo
 py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_proposal.json --promotion-profile none --launch-viewer-on-success
 ```
 
+Phase 3 draft smoke path (proposal -> workflow -> validation-runs query):
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3.14 -m cuda_fractal_state_tool.proposal_cli --example color-pipeline-draft --draft-lane shape --draft-function identity --out .local\proposal_draft_smoke.json
+py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_draft_smoke.json --promotion-profile color_pipeline_draft_only_v1 --state-id draft_smoke_cli
+py -3.14 -m cuda_fractal_state_tool.validation_runs --list --promotion-profile color_pipeline_draft_only_v1 --status runtime_proof_succeeded --limit 5
+```
+
 The workflow CLI JSON payload now includes `runtime_metadata_cache` copied from the validation artifact.
 Use this field to verify cache hit/miss behavior and metadata provenance paths before lane-authoring decisions.
 
