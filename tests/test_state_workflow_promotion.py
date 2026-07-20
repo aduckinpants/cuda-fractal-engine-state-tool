@@ -112,6 +112,108 @@ class StateWorkflowPromotionTests(unittest.TestCase):
                     promotion_profile="not_a_profile",
                 )
 
+    def test_color_pipeline_draft_only_profile_promotes_single_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = self._make_baseline(root)
+            working_root = root / "working_states"
+            runtime_cmd = root / "runtime" / "fractal_ui.cmd"
+            runtime_cmd.parent.mkdir(parents=True, exist_ok=True)
+            runtime_cmd.write_text("@echo off\n", encoding="utf-8")
+
+            def fake_replay(runtime_cmd_path: Path, candidate_path: Path, replay_dir: Path, timeout_seconds: float = 90.0) -> ProcessResult:
+                replay_dir.mkdir(parents=True, exist_ok=True)
+                replay_doc = (
+                    candidate_path.read_text(encoding="utf-8")[:-2]
+                    + ', "color_pipeline_draft": {"lanes": [{"lane_id": "shape", "function_id": "repeat"}]}, "sidecar_orientation": {"yaw": 0.1}}\n'
+                )
+                (replay_dir / "state.json").write_text(replay_doc, encoding="utf-8")
+                (replay_dir / "frame.bmp").write_text("bmp", encoding="utf-8")
+                return ProcessResult(
+                    command=["cmd.exe"],
+                    cwd=str(runtime_cmd_path.parent),
+                    pid=123,
+                    exit_code=0,
+                    timed_out=False,
+                    elapsed_seconds=0.1,
+                    stdout="ok",
+                    stderr="",
+                    observed_process_tree=[],
+                )
+
+            with patch("cuda_fractal_state_tool.state_workflow.replay_transport_candidate", side_effect=fake_replay), patch(
+                "cuda_fractal_state_tool.state_workflow.build_runtime_identity",
+                return_value={"launcher_sha256": "abc"},
+            ):
+                baseline_sha = sha256_file(manifest_path.with_name("state.json"))
+                result = execute_proposal_workflow(
+                    build_noop_example(baseline_sha),
+                    manifest_path,
+                    working_root,
+                    "promoted_draft_only_run",
+                    runtime_cmd_path=runtime_cmd,
+                    promotion_profile="color_pipeline_draft_only_v1",
+                )
+
+            promoted_text = result.promoted_state_path.read_text(encoding="utf-8")
+            report_text = result.promotion_report_path.read_text(encoding="utf-8")
+            self.assertIn('"color_pipeline_draft"', promoted_text)
+            self.assertNotIn('"sidecar_orientation"', promoted_text)
+            self.assertIn('"allowed_keys": [', report_text)
+            self.assertIn('"color_pipeline_draft"', report_text)
+            self.assertNotIn('"sidecar_orientation"', report_text)
+
+    def test_sidecar_orientation_only_profile_promotes_single_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = self._make_baseline(root)
+            working_root = root / "working_states"
+            runtime_cmd = root / "runtime" / "fractal_ui.cmd"
+            runtime_cmd.parent.mkdir(parents=True, exist_ok=True)
+            runtime_cmd.write_text("@echo off\n", encoding="utf-8")
+
+            def fake_replay(runtime_cmd_path: Path, candidate_path: Path, replay_dir: Path, timeout_seconds: float = 90.0) -> ProcessResult:
+                replay_dir.mkdir(parents=True, exist_ok=True)
+                replay_doc = (
+                    candidate_path.read_text(encoding="utf-8")[:-2]
+                    + ', "color_pipeline_draft": {"lanes": [{"lane_id": "shape", "function_id": "repeat"}]}, "sidecar_orientation": {"yaw": 0.1}}\n'
+                )
+                (replay_dir / "state.json").write_text(replay_doc, encoding="utf-8")
+                (replay_dir / "frame.bmp").write_text("bmp", encoding="utf-8")
+                return ProcessResult(
+                    command=["cmd.exe"],
+                    cwd=str(runtime_cmd_path.parent),
+                    pid=123,
+                    exit_code=0,
+                    timed_out=False,
+                    elapsed_seconds=0.1,
+                    stdout="ok",
+                    stderr="",
+                    observed_process_tree=[],
+                )
+
+            with patch("cuda_fractal_state_tool.state_workflow.replay_transport_candidate", side_effect=fake_replay), patch(
+                "cuda_fractal_state_tool.state_workflow.build_runtime_identity",
+                return_value={"launcher_sha256": "abc"},
+            ):
+                baseline_sha = sha256_file(manifest_path.with_name("state.json"))
+                result = execute_proposal_workflow(
+                    build_noop_example(baseline_sha),
+                    manifest_path,
+                    working_root,
+                    "promoted_sidecar_only_run",
+                    runtime_cmd_path=runtime_cmd,
+                    promotion_profile="sidecar_orientation_only_v1",
+                )
+
+            promoted_text = result.promoted_state_path.read_text(encoding="utf-8")
+            report_text = result.promotion_report_path.read_text(encoding="utf-8")
+            self.assertIn('"sidecar_orientation"', promoted_text)
+            self.assertNotIn('"color_pipeline_draft"', promoted_text)
+            self.assertIn('"allowed_keys": [', report_text)
+            self.assertIn('"sidecar_orientation"', report_text)
+            self.assertNotIn('"color_pipeline_draft"', report_text)
+
 
 if __name__ == "__main__":
     unittest.main()

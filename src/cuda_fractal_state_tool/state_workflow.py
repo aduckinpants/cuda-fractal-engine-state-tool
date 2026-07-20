@@ -25,6 +25,10 @@ from .workspace_layout import WorkspaceLayout
 
 PROMOTION_PROFILES: dict[str, set[str]] = {
     "none": set(),
+    # Promote only the replay artifact lane/function draft payload.
+    "color_pipeline_draft_only_v1": {"color_pipeline_draft"},
+    # Promote only runtime-derived sidecar orientation fields.
+    "sidecar_orientation_only_v1": {"sidecar_orientation"},
     # Observed replay enrichments from probe evidence; applied as an explicit side artifact.
     "observed_runtime_enrichment_v1": {"color_pipeline_draft", "sidecar_orientation"},
 }
