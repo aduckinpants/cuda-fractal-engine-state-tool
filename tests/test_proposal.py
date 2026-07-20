@@ -141,6 +141,35 @@ class ProposalTests(unittest.TestCase):
                 "hash",
             )
 
+    def test_color_pipeline_draft_with_duplicate_lane_ids_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_proposal_v1(
+                '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+                '"overrides": {"color_pipeline_draft": {"lanes": [{"lane_id": "shape", "function_id": "identity"}, {"lane_id": "shape", "function_id": "repeat"}]}}}',
+                "runtime-default-v1",
+                "hash",
+            )
+
+    def test_partial_triplet_is_rejected_even_with_draft_override(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_proposal_v1(
+                '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+                '"overrides": {"params.color_signal": "iteration_count", "color_pipeline_draft": {"lanes": [{"lane_id": "shape", "function_id": "identity"}]}}}',
+                "runtime-default-v1",
+                "hash",
+            )
+
+    def test_full_triplet_and_draft_override_can_coexist(self) -> None:
+        proposal = parse_proposal_v1(
+            '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+            '"overrides": {"params.color_signal": "iteration_count", "params.color_palette": "cyclic_escape", "params.color_grading": "escape_default", '
+            '"color_pipeline_draft": {"lanes": [{"lane_id": "shape", "function_id": "identity"}]}}}',
+            "runtime-default-v1",
+            "hash",
+        )
+        self.assertIn("params.color_signal", proposal.overrides)
+        self.assertIn("color_pipeline_draft", proposal.overrides)
+
 
 if __name__ == "__main__":
     unittest.main()

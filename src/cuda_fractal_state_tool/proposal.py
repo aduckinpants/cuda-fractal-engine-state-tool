@@ -103,6 +103,7 @@ def _validate_color_pipeline_draft(value: Any) -> None:
     lanes = value.get("lanes")
     if not isinstance(lanes, list):
         raise ValueError("color_pipeline_draft.lanes must be an array")
+    seen_lane_ids: set[str] = set()
     for index, lane in enumerate(lanes):
         if not isinstance(lane, dict):
             raise ValueError(f"color_pipeline_draft.lanes[{index}] must be an object")
@@ -115,6 +116,10 @@ def _validate_color_pipeline_draft(value: Any) -> None:
             raise ValueError(f"color_pipeline_draft.lanes[{index}].lane_id must be a non-empty string")
         if not isinstance(lane["function_id"], str) or not lane["function_id"].strip():
             raise ValueError(f"color_pipeline_draft.lanes[{index}].function_id must be a non-empty string")
+        lane_id = lane["lane_id"]
+        if lane_id in seen_lane_ids:
+            raise ValueError(f"color_pipeline_draft contains duplicate lane_id: {lane_id}")
+        seen_lane_ids.add(lane_id)
 
 
 COLOR_TRIPLET_PATHS = {

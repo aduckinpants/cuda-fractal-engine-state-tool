@@ -26,7 +26,9 @@ The accepted payload shape will be a full deterministic replacement payload, not
 
 - Replace the full `color_pipeline_draft` object with a complete candidate payload.
 - Reference lane ids and function ids only if present in runtime-derived metadata catalog.
+- Use unique `lane_id` entries in `color_pipeline_draft.lanes` (no duplicates).
 - Keep scalar path contract unchanged (`params.max_iter`, `params.color_shape`, and coupled color triplet paths).
+- Scalar/triplet overrides may coexist with `color_pipeline_draft`, but color triplet coupling remains mandatory whenever any triplet path is present.
 
 ## Disallowed operations
 
