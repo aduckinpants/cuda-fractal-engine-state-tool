@@ -40,8 +40,65 @@ def _validate_color_shape(value: Any) -> None:
 def _validate_color_grading(value: Any) -> None:
     if not isinstance(value, str):
         raise ValueError("params.color_grading must be a string enum id")
-    if value != "basin_default":
-        raise ValueError("params.color_grading must be basin_default")
+    if value not in {
+        "basin_default",
+        "escape_default",
+        "phase_default",
+        "bands_default",
+    }:
+        raise ValueError("params.color_grading must be one of: basin_default, escape_default, phase_default, bands_default")
+
+
+def _validate_color_signal(value: Any) -> None:
+    if not isinstance(value, str):
+        raise ValueError("params.color_signal must be a string enum id")
+    if value not in {
+        "root_index",
+        "iteration_count",
+        "smooth_escape",
+        "phase_angle",
+        "iteration_bands",
+        "sdf_signed_distance",
+        "root_proximity",
+        "escape_magnitude",
+        "orbit_stripe",
+    }:
+        raise ValueError("params.color_signal contains an unsupported value for proposal_v1")
+
+
+def _validate_color_palette(value: Any) -> None:
+    if not isinstance(value, str):
+        raise ValueError("params.color_palette must be a string enum id")
+    if value not in {
+        "root_classic",
+        "cyclic_escape",
+        "joy",
+        "phase_wheel",
+        "banded_escape",
+        "explaino_cmap",
+    }:
+        raise ValueError("params.color_palette contains an unsupported value for proposal_v1")
+
+
+COLOR_TRIPLET_PATHS = {
+    "params.color_signal",
+    "params.color_palette",
+    "params.color_grading",
+}
+
+
+ALLOWED_COLOR_TRIPLETS = {
+    ("root_index", "root_classic", "basin_default"),
+    ("iteration_count", "cyclic_escape", "escape_default"),
+    ("smooth_escape", "cyclic_escape", "escape_default"),
+    ("root_index", "joy", "basin_default"),
+    ("phase_angle", "phase_wheel", "phase_default"),
+    ("iteration_bands", "banded_escape", "bands_default"),
+    ("sdf_signed_distance", "cyclic_escape", "escape_default"),
+    ("root_proximity", "explaino_cmap", "escape_default"),
+    ("escape_magnitude", "cyclic_escape", "escape_default"),
+    ("orbit_stripe", "phase_wheel", "phase_default"),
+}
 
 
 PATH_SPECS: dict[str, ProposalPathSpec] = {
@@ -67,15 +124,54 @@ PATH_SPECS: dict[str, ProposalPathSpec] = {
         pipeline_mapping_source="color_pipeline_core AdvancedColorShapeFunctionId maps identity -> identity and repeat -> repeat.",
         runtime_or_source_provenance="mixed: runtime parameter surface plus source color-pipeline mapping helpers",
     ),
+    "params.color_signal": ProposalPathSpec(
+        path="params.color_signal",
+        value_kind="enum",
+        accepted_values=(
+            "root_index",
+            "iteration_count",
+            "smooth_escape",
+            "phase_angle",
+            "iteration_bands",
+            "sdf_signed_distance",
+            "root_proximity",
+            "escape_magnitude",
+            "orbit_stripe",
+        ),
+        validator=_validate_color_signal,
+        provenance="baseline serialized path",
+        accepted_values_source="Runtime replay-proven color triplet sweep plus source color signal ids.",
+        type_range_source="diagnostics_capture enum ids and replay acceptance evidence.",
+        pipeline_mapping_source="color triplet bridge; signal is admitted only with a replay-proven palette+grading pair.",
+        runtime_or_source_provenance="mixed: published runtime replay proofs plus source enum ids",
+    ),
+    "params.color_palette": ProposalPathSpec(
+        path="params.color_palette",
+        value_kind="enum",
+        accepted_values=(
+            "root_classic",
+            "cyclic_escape",
+            "joy",
+            "phase_wheel",
+            "banded_escape",
+            "explaino_cmap",
+        ),
+        validator=_validate_color_palette,
+        provenance="baseline serialized path",
+        accepted_values_source="Runtime replay-proven color triplet sweep plus source color palette ids.",
+        type_range_source="diagnostics_capture enum ids and replay acceptance evidence.",
+        pipeline_mapping_source="color triplet bridge; palette is admitted only with a replay-proven signal+grading pair.",
+        runtime_or_source_provenance="mixed: published runtime replay proofs plus source enum ids",
+    ),
     "params.color_grading": ProposalPathSpec(
         path="params.color_grading",
         value_kind="enum",
-        accepted_values=("basin_default",),
+        accepted_values=("basin_default", "escape_default", "phase_default", "bands_default"),
         validator=_validate_color_grading,
         provenance="baseline serialized path",
         accepted_values_source="Runtime parameter-surface metadata and source grading ids.",
         type_range_source="enum ids exposed by the source grading helpers and runtime parameter surface.",
-        pipeline_mapping_source="color_pipeline_core AdvancedColorGradingFunctionId maps basin_default -> basin_default.",
+        pipeline_mapping_source="color triplet bridge; grading is admitted only with a replay-proven signal+palette pair.",
         runtime_or_source_provenance="mixed: runtime parameter surface plus source color-pipeline grading helpers",
     ),
 }
@@ -111,6 +207,28 @@ def _reject_overlaps(paths: list[str]) -> None:
                 raise ValueError(f"Proposal override paths overlap: {left_path} vs {right_path}")
 
 
+def _validate_color_triplet_constraints(overrides: Mapping[str, Any]) -> None:
+    triplet_in_overrides = COLOR_TRIPLET_PATHS & set(overrides.keys())
+    if not triplet_in_overrides:
+        return
+    if triplet_in_overrides != COLOR_TRIPLET_PATHS:
+        missing = sorted(COLOR_TRIPLET_PATHS - triplet_in_overrides)
+        raise ValueError(
+            "Color signal/palette/grading are coupled in proposal_v1. "
+            f"Missing paths for a color triplet override: {missing}"
+        )
+    triplet = (
+        overrides["params.color_signal"],
+        overrides["params.color_palette"],
+        overrides["params.color_grading"],
+    )
+    if triplet not in ALLOWED_COLOR_TRIPLETS:
+        raise ValueError(
+            "Color triplet is not in the replay-proven allowlist: "
+            f"{triplet}"
+        )
+
+
 def parse_proposal_v1(text: str, expected_baseline_id: str, expected_baseline_sha256: str) -> ProposalV1:
     try:
         value = loads_no_duplicates(text)
@@ -143,6 +261,8 @@ def parse_proposal_v1(text: str, expected_baseline_id: str, expected_baseline_sh
         if isinstance(override_value, (dict, list)):
             raise ValueError(f"Override path {path} does not support object or array replacement in proposal_v1")
         PATH_SPECS[path].validator(override_value)
+
+    _validate_color_triplet_constraints(overrides)
 
     return ProposalV1(
         proposal_version=1,
@@ -184,7 +304,27 @@ def build_color_grading_example(baseline_sha256: str) -> str:
         {
             "proposal_version": 1,
             "base_state": {"id": BASELINE_ID, "sha256": baseline_sha256},
-            "overrides": {"params.color_grading": "basin_default"},
+            "overrides": {
+                "params.color_signal": "root_index",
+                "params.color_palette": "joy",
+                "params.color_grading": "basin_default",
+            },
+        }
+    )
+
+
+def build_color_triplet_example(baseline_sha256: str) -> str:
+    from .json_utils import dumps_pretty
+
+    return dumps_pretty(
+        {
+            "proposal_version": 1,
+            "base_state": {"id": BASELINE_ID, "sha256": baseline_sha256},
+            "overrides": {
+                "params.color_signal": "iteration_count",
+                "params.color_palette": "cyclic_escape",
+                "params.color_grading": "escape_default",
+            },
         }
     )
 

@@ -15,6 +15,8 @@ BASELINE = '''{
   "params": {
     "max_iter": 500,
     "color_shape": "identity",
+        "color_signal": "root_index",
+        "color_palette": "joy",
     "color_grading": "basin_default",
     "unknown_field": 123
   },
@@ -49,16 +51,24 @@ class MaterializerTests(unittest.TestCase):
             self.assertIn('"color_shape": "repeat"', text)
             self.assertIn('"unknown_field": 123', text)
 
-    def test_color_grading_materialization_replaces_scalar_path(self) -> None:
+    def test_color_triplet_materialization_replaces_scalar_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             baseline_path = root / "state.json"
             baseline_path.write_text(BASELINE, encoding="utf-8")
-            proposal = parse_proposal_v1('{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, "overrides": {"params.color_grading": "basin_default"}}', "runtime-default-v1", "hash")
+            proposal = parse_proposal_v1(
+                '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+                '"overrides": {"params.color_signal": "iteration_count", "params.color_palette": "cyclic_escape", "params.color_grading": "escape_default"}}',
+                "runtime-default-v1",
+                "hash",
+            )
             output_path = root / "candidate.json"
             result = materialize_transport_candidate(baseline_path, proposal, output_path)
             self.assertFalse(result.byte_identical_to_baseline)
-            self.assertIn('"color_grading": "basin_default"', output_path.read_text(encoding="utf-8"))
+            text = output_path.read_text(encoding="utf-8")
+            self.assertIn('"color_signal": "iteration_count"', text)
+            self.assertIn('"color_palette": "cyclic_escape"', text)
+            self.assertIn('"color_grading": "escape_default"', text)
 
 
 if __name__ == "__main__":

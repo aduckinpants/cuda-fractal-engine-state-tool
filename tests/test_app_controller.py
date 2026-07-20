@@ -30,8 +30,11 @@ class AppControllerTests(unittest.TestCase):
             self.assertIn('"overrides": {}', controller.example_noop_proposal())
             self.assertIn('"params.color_shape": "repeat"', controller.example_color_proposal())
             self.assertIn('"params.color_grading": "basin_default"', controller.example_grading_proposal())
+            self.assertIn('"params.color_signal": "iteration_count"', controller.example_color_triplet_proposal())
             packet = controller.intake_packet()
             self.assertIn("params.color_shape", packet)
+            self.assertIn("params.color_signal", packet)
+            self.assertIn("params.color_palette", packet)
             self.assertIn("params.color_grading", packet)
             self.assertIn("schema provenance status: mismatched", packet)
 
