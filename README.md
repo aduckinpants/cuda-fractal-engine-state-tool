@@ -45,7 +45,13 @@ py -3 -m unittest discover -s tests
 Run the minimal UI:
 
 ```powershell
+./run_ui.cmd
+```
+
+Direct module launch (equivalent):
+
+```powershell
 $env:PYTHONPATH = "src"
-py -3 -m cuda_fractal_state_tool.app
+py -3.14 -m cuda_fractal_state_tool.app
 ```
 
