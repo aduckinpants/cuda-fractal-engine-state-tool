@@ -29,6 +29,7 @@ class WorkflowResult:
     working_state_dir: Path
     validation_run_dir: Path
     validation_run_manifest_path: Path
+    validation_runs_index_path: Path
     runtime_status: str
     transport_candidate_path: Path
     proven_state_path: Optional[Path]
@@ -54,6 +55,16 @@ def _write_json(path: Path, value: Any) -> None:
 def _write_json_with_stdlib(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _load_json_or_default(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return raw
+    except Exception:
+        return default
 
 
 def _copy_if_exists(source: Path, destination: Path) -> bool:
@@ -105,6 +116,30 @@ def _build_validation_run_manifest(
     }
 
 
+def _update_validation_runs_index(index_path: Path, manifest: dict[str, Any]) -> None:
+    root = _load_json_or_default(index_path, {"entries": []})
+    if not isinstance(root, dict):
+        root = {"entries": []}
+    entries = root.get("entries")
+    if not isinstance(entries, list):
+        entries = []
+    run_id = manifest.get("run_id")
+    if isinstance(run_id, str):
+        entries = [item for item in entries if not (isinstance(item, dict) and item.get("run_id") == run_id)]
+    entry = {
+        "run_id": manifest.get("run_id"),
+        "timestamp_utc": manifest.get("timestamp_utc"),
+        "status": manifest.get("status"),
+        "runtime_status": manifest.get("runtime_status"),
+        "baseline_id": manifest.get("baseline_id"),
+        "manifest_path": manifest.get("manifest_path"),
+        "working_state_dir": manifest.get("working_state_dir"),
+    }
+    entries.append(entry)
+    root["entries"] = entries
+    _write_json(index_path, root)
+
+
 def replay_transport_candidate(runtime_cmd_path: Path, candidate_path: Path, replay_dir: Path, timeout_seconds: float = 90.0) -> ProcessResult:
     runtime_cmd_path = runtime_cmd_path.resolve()
     replay_dir = replay_dir.resolve()
@@ -129,6 +164,7 @@ def execute_proposal_workflow(
     validation_run_dir = state_dir.parent.parent / "validation_runs" / state_id
     validation_run_dir.mkdir(parents=True, exist_ok=True)
     validation_run_manifest_path = validation_run_dir / "manifest.json"
+    validation_runs_index_path = validation_run_dir.parent / "index.json"
     replay_dir = state_dir / "replay"
     candidate_path = state_dir / "transport_candidate.json"
     proposal_path = state_dir / "proposal.json"
@@ -221,13 +257,16 @@ def execute_proposal_workflow(
         replay_result,
         runtime_cmd_path,
     )
+    validation_run_manifest["manifest_path"] = str(validation_run_manifest_path.resolve())
     _write_json_with_stdlib(validation_run_manifest_path, validation_run_manifest)
+    _update_validation_runs_index(validation_runs_index_path, validation_run_manifest)
 
     return WorkflowResult(
         status=status,
         working_state_dir=state_dir,
         validation_run_dir=validation_run_dir,
         validation_run_manifest_path=validation_run_manifest_path,
+        validation_runs_index_path=validation_runs_index_path,
         runtime_status=runtime_status,
         transport_candidate_path=candidate_path,
         proven_state_path=proven_state_path,
