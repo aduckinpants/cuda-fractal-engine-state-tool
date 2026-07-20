@@ -5,7 +5,7 @@ from typing import Any
 
 from .baseline import load_frozen_baseline
 from .json_utils import loads_no_duplicates
-from .proposal import PATH_SPECS
+from .proposal import ALLOWED_COLOR_TRIPLETS, PATH_SPECS
 
 
 def _format_allowed_paths() -> str:
@@ -19,6 +19,17 @@ def _format_allowed_paths() -> str:
         lines.append(f"  type/range source: {spec.type_range_source}")
         lines.append(f"  pipeline mapping source: {spec.pipeline_mapping_source}")
         lines.append(f"  provenance: {spec.runtime_or_source_provenance}")
+    return "\n".join(lines)
+
+
+def _format_allowed_color_triplets() -> str:
+    lines = [
+        "Color triplet coupling rule:",
+        "- If any of params.color_signal / params.color_palette / params.color_grading is present, all three must be present.",
+        "Allowed replay-proven triplets:",
+    ]
+    for signal, palette, grading in sorted(ALLOWED_COLOR_TRIPLETS):
+        lines.append(f"- {signal} + {palette} + {grading}")
     return "\n".join(lines)
 
 
@@ -63,12 +74,15 @@ def build_intake_packet(baseline_manifest_path: Path, replay_state_path: Path) -
             "6. Allowed override paths",
             _format_allowed_paths(),
             "",
-            "7. Output contract",
+            "7. Color triplet contract",
+            _format_allowed_color_triplets(),
+            "",
+            "8. Output contract",
             "Return JSON only.",
             "Preserve the exact base_state id and sha256.",
             "Do not add unlisted paths.",
             "",
-            "8. Proposal envelope",
+            "9. Proposal envelope",
             "{",
             '  "proposal_version": 1,',
             '  "base_state": {',
