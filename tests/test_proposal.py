@@ -75,6 +75,24 @@ class ProposalTests(unittest.TestCase):
                 "hash",
             )
 
+    def test_explaino_tone_map_triplet_is_accepted(self) -> None:
+        proposal = parse_proposal_v1(
+            '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+            '"overrides": {"params.color_signal": "root_proximity", "params.color_palette": "explaino_cmap", "params.color_grading": "tone_map_default"}}',
+            "runtime-default-v1",
+            "hash",
+        )
+        self.assertEqual(proposal.overrides["params.color_palette"], "explaino_cmap")
+
+    def test_explaino_bands_combo_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_proposal_v1(
+                '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+                '"overrides": {"params.color_signal": "root_proximity", "params.color_palette": "explaino_cmap", "params.color_grading": "bands_default"}}',
+                "runtime-default-v1",
+                "hash",
+            )
+
     def test_partial_color_triplet_override_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             parse_proposal_v1(
