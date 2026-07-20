@@ -43,12 +43,21 @@ Phase 1 supports useful bounded color overrides:
 	- `root_index + root_classic + basin_default`
 	- `iteration_count + cyclic_escape + escape_default`
 	- `smooth_escape + cyclic_escape + escape_default`
+	- `smooth_escape + explaino_cmap + escape_default`
 	- `root_index + joy + basin_default`
 	- `phase_angle + phase_wheel + phase_default`
 	- `iteration_bands + banded_escape + bands_default`
 	- `sdf_signed_distance + cyclic_escape + escape_default`
+	- `sdf_inside_outside + cyclic_escape + escape_default`
+	- `sdf_boundary_band + cyclic_escape + escape_default`
+	- `sdf_normal_angle + phase_wheel + phase_default`
+	- `sdf_curvature + cyclic_escape + escape_default`
+	- `lens_field_v2_distance + cyclic_escape + escape_default`
 	- `root_proximity + explaino_cmap + escape_default`
+	- `root_proximity + cyclic_escape + escape_default`
+	- `root_phase + phase_wheel + phase_default`
 	- `escape_magnitude + cyclic_escape + escape_default`
+	- `escape_magnitude + explaino_cmap + escape_default`
 	- `orbit_stripe + phase_wheel + phase_default`
 
 These paths are accepted because the serialized identifiers and replay behavior are grounded by source-backed ids plus direct replay evidence from the published runtime, while maintaining strict fail-closed validation.

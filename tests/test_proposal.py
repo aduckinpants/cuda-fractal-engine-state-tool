@@ -39,6 +39,24 @@ class ProposalTests(unittest.TestCase):
         )
         self.assertEqual(proposal.overrides["params.color_grading"], "escape_default")
 
+    def test_newly_proven_color_triplet_is_accepted(self) -> None:
+        proposal = parse_proposal_v1(
+            '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+            '"overrides": {"params.color_signal": "root_phase", "params.color_palette": "phase_wheel", "params.color_grading": "phase_default"}}',
+            "runtime-default-v1",
+            "hash",
+        )
+        self.assertEqual(proposal.overrides["params.color_signal"], "root_phase")
+
+    def test_non_allowlisted_color_triplet_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_proposal_v1(
+                '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+                '"overrides": {"params.color_signal": "root_phase", "params.color_palette": "cyclic_escape", "params.color_grading": "escape_default"}}',
+                "runtime-default-v1",
+                "hash",
+            )
+
     def test_partial_color_triplet_override_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             parse_proposal_v1(
