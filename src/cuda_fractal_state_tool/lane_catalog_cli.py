@@ -6,9 +6,12 @@ from pathlib import Path
 from typing import Optional
 
 from .lane_catalog import (
+    FunctionUnknownError,
+    LaneUnknownError,
     RuntimeMetadataUnavailableError,
     RuntimeMetadataShapeUnsupportedError,
     load_lane_catalog_from_describe_functions,
+    validate_lane_function_reference,
 )
 
 
@@ -29,7 +32,22 @@ def main(argv: Optional[list[str]] = None) -> int:
         epilog="Fail-closed: unsupported metadata shapes are rejected instead of inferred.",
     )
     parser.add_argument("--describe-functions", type=Path, required=True, help="Path to describe-functions.json")
+    parser.add_argument("--check-lane", type=str, default=None, help="Optional lane id to validate against metadata catalog")
+    parser.add_argument("--check-function", type=str, default=None, help="Optional function id to validate for --check-lane")
     args = parser.parse_args(argv)
+
+    if (args.check_lane is None) != (args.check_function is None):
+        print(
+            json.dumps(
+                {
+                    "status": "invalid_arguments",
+                    "error": "--check-lane and --check-function must be provided together",
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 2
 
     try:
         catalog = load_lane_catalog_from_describe_functions(args.describe_functions)
@@ -41,6 +59,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     entries = [{"lane_id": item.lane_id, "function_id": item.function_id} for item in catalog.entries]
+
+    if args.check_lane is not None and args.check_function is not None:
+        try:
+            validate_lane_function_reference(catalog, args.check_lane, args.check_function)
+        except LaneUnknownError as exc:
+            print(json.dumps({"status": "lane_unknown", "error": str(exc)}, indent=2, sort_keys=True))
+            return 2
+        except FunctionUnknownError as exc:
+            print(json.dumps({"status": "function_unknown", "error": str(exc)}, indent=2, sort_keys=True))
+            return 2
+
     payload = {
         "status": "ok",
         "shape": catalog.shape,
@@ -48,6 +77,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         "lane_count": len({item["lane_id"] for item in entries}),
         "lanes": _collect_lanes(entries),
         "entries": entries,
+        "validated_lane": args.check_lane,
+        "validated_function": args.check_function,
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0

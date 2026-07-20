@@ -3,10 +3,13 @@ from __future__ import annotations
 import unittest
 
 from cuda_fractal_state_tool.lane_catalog import (
+    FunctionUnknownError,
+    LaneUnknownError,
     RuntimeMetadataShapeUnsupportedError,
     lane_function_known,
     lane_known,
     parse_lane_catalog_payload,
+    validate_lane_function_reference,
 )
 
 
@@ -60,6 +63,28 @@ class LaneCatalogTests(unittest.TestCase):
     def test_unsupported_shape_fails_closed(self) -> None:
         with self.assertRaises(RuntimeMetadataShapeUnsupportedError):
             parse_lane_catalog_payload({"unexpected": {"x": 1}})
+
+    def test_validate_lane_function_reference_rejects_unknown_lane(self) -> None:
+        catalog = parse_lane_catalog_payload(
+            {
+                "lane_functions": [
+                    {"lane_id": "shape", "function_id": "identity"},
+                ]
+            }
+        )
+        with self.assertRaises(LaneUnknownError):
+            validate_lane_function_reference(catalog, "signal", "root_index")
+
+    def test_validate_lane_function_reference_rejects_unknown_function(self) -> None:
+        catalog = parse_lane_catalog_payload(
+            {
+                "lane_functions": [
+                    {"lane_id": "shape", "function_id": "identity"},
+                ]
+            }
+        )
+        with self.assertRaises(FunctionUnknownError):
+            validate_lane_function_reference(catalog, "shape", "repeat")
 
 
 if __name__ == "__main__":

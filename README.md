@@ -84,7 +84,13 @@ Inspect runtime metadata for lane/function catalog discovery (fail-closed parser
 ```powershell
 $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.lane_catalog_cli --describe-functions .local\runtime_probe\describe-functions.json
+py -3.14 -m cuda_fractal_state_tool.lane_catalog_cli --describe-functions .local\runtime_probe\describe-functions.json --check-lane shape --check-function identity
 ```
+
+When `--check-lane` and `--check-function` are provided, the CLI returns explicit fail-closed statuses for mismatch:
+
+- `lane_unknown`
+- `function_unknown`
 
 Run the minimal UI:
 

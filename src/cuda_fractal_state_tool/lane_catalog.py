@@ -31,6 +31,14 @@ class RuntimeMetadataShapeUnsupportedError(LaneCatalogError):
     pass
 
 
+class LaneUnknownError(LaneCatalogError):
+    pass
+
+
+class FunctionUnknownError(LaneCatalogError):
+    pass
+
+
 def _ensure_str(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise RuntimeMetadataShapeUnsupportedError(f"Expected non-empty string for {field_name}")
@@ -129,3 +137,10 @@ def lane_known(catalog: LaneCatalog, lane_id: str) -> bool:
 
 def lane_function_known(catalog: LaneCatalog, lane_id: str, function_id: str) -> bool:
     return any(entry.lane_id == lane_id and entry.function_id == function_id for entry in catalog.entries)
+
+
+def validate_lane_function_reference(catalog: LaneCatalog, lane_id: str, function_id: str) -> None:
+    if not lane_known(catalog, lane_id):
+        raise LaneUnknownError(f"lane_unknown: {lane_id}")
+    if not lane_function_known(catalog, lane_id, function_id):
+        raise FunctionUnknownError(f"function_unknown: lane={lane_id} function={function_id}")
