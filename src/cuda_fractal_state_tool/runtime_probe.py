@@ -180,22 +180,8 @@ def _run_and_record(name: str, command: list[str], cwd: Path, output_root: Path,
     return record
 
 
-def run_probe(runtime_cmd_path: Path, output_root: Path, timeout_seconds: float = 90.0) -> dict[str, Any]:
-    output_root = output_root.resolve()
-    output_root.mkdir(parents=True, exist_ok=True)
+def _run_fresh_probe(runtime_cmd_path: Path, output_root: Path, timeout_seconds: float, identity: dict[str, Any], cache_root: Path, cache_key: str, allow_cache: bool) -> dict[str, Any]:
     runtime_cwd = runtime_cmd_path.parent
-    identity = build_runtime_identity(runtime_cmd_path, runtime_cwd)
-    cache_key = runtime_identity_cache_key(identity)
-    cache_root = output_root.parent / "cache" / "runtime"
-    cache_dir = runtime_cache_dir(cache_root, identity)
-
-    if _cache_is_ready(cache_dir):
-        restore_probe_output(cache_dir, output_root)
-        commands = _load_command_records(output_root)
-        summary = _build_summary(output_root, commands, cache_hit=True, cache_key=cache_key)
-        _write_json(output_root / "summary.json", summary)
-        return summary
-
     resolution = asdict(resolve_launcher(runtime_cmd_path))
     _write_json(output_root / "launcher_resolution.json", resolution)
 
@@ -303,8 +289,33 @@ def run_probe(runtime_cmd_path: Path, output_root: Path, timeout_seconds: float 
 
     summary = _build_summary(output_root, commands, cache_hit=False, cache_key=cache_key)
     _write_json(output_root / "summary.json", summary)
-    cache_probe_output(cache_root, cache_key, output_root)
+    if allow_cache:
+        cache_probe_output(cache_root, cache_key, output_root)
     return summary
+
+
+def run_probe(runtime_cmd_path: Path, output_root: Path, timeout_seconds: float = 90.0, allow_cache: bool = True) -> dict[str, Any]:
+    output_root = output_root.resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    runtime_cwd = runtime_cmd_path.parent
+    identity = build_runtime_identity(runtime_cmd_path, runtime_cwd)
+    cache_key = runtime_identity_cache_key(identity)
+    cache_root = output_root.parent / "cache" / "runtime"
+    cache_dir = runtime_cache_dir(cache_root, identity)
+
+    if allow_cache and _cache_is_ready(cache_dir):
+        try:
+            restore_probe_output(cache_dir, output_root)
+            commands = _load_command_records(output_root)
+            summary = _build_summary(output_root, commands, cache_hit=True, cache_key=cache_key)
+            _write_json(output_root / "summary.json", summary)
+            return summary
+        except Exception:
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            shutil.rmtree(output_root, ignore_errors=True)
+            output_root.mkdir(parents=True, exist_ok=True)
+
+    return _run_fresh_probe(runtime_cmd_path, output_root, timeout_seconds, identity, cache_root, cache_key, allow_cache)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -312,8 +323,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--runtime-cmd", type=Path, default=DEFAULT_RUNTIME_CMD)
     parser.add_argument("--output-root", type=Path, default=WorkspaceLayout.from_repo_root().runtime_probe_root)
     parser.add_argument("--timeout-seconds", type=float, default=90.0)
+    parser.add_argument("--no-cache", action="store_true", help="Disable runtime metadata cache use and writes")
     args = parser.parse_args(argv)
-    summary = run_probe(args.runtime_cmd, args.output_root, args.timeout_seconds)
+    summary = run_probe(args.runtime_cmd, args.output_root, args.timeout_seconds, allow_cache=not args.no_cache)
     print(json.dumps(summary, indent=2))
     return 0
 
