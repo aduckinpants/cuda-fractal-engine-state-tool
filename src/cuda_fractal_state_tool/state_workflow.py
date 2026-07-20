@@ -13,11 +13,14 @@ from .json_utils import dumps_pretty, loads_no_duplicates
 from .materializer import materialize_transport_candidate
 from .process_utils import ProcessResult, run_command
 from .proposal import ProposalV1, parse_proposal_v1
+from .runtime_metadata_cache import restore_probe_output, runtime_cache_dir, runtime_identity_cache_key
 from .runtime_surface import (
     DEFAULT_RUNTIME_CMD,
+    build_runtime_command,
     build_detached_viewer_launch_command,
     build_replay_command,
     build_runtime_identity,
+    sha256_file,
 )
 from .state_compare import DocumentComparison, compare_json_documents
 from .workspace_layout import WorkspaceLayout
@@ -91,6 +94,95 @@ def _copy_if_exists(source: Path, destination: Path) -> bool:
     return True
 
 
+def _metadata_cache_root_from_working_root(working_states_root: Path) -> Path:
+    return working_states_root.resolve().parent / "cache" / "runtime"
+
+
+def _metadata_cache_is_ready(cache_dir: Path) -> bool:
+    return (
+        (cache_dir / "describe-parameter-surface.json").exists()
+        and (cache_dir / "describe-functions.json").exists()
+        and (cache_dir / "runtime_identity.json").exists()
+    )
+
+
+def _ensure_runtime_metadata_snapshot(runtime_cmd_path: Path, metadata_cache_root: Path, timeout_seconds: float) -> dict[str, Any]:
+    runtime_cmd_path = runtime_cmd_path.resolve()
+    runtime_cwd = runtime_cmd_path.parent
+    identity = build_runtime_identity(runtime_cmd_path, runtime_cwd)
+    cache_key = runtime_identity_cache_key(identity)
+    cache_dir = runtime_cache_dir(metadata_cache_root, identity)
+    metadata_cache_root.mkdir(parents=True, exist_ok=True)
+
+    if _metadata_cache_is_ready(cache_dir):
+        return {
+            "cache_hit": True,
+            "cache_key": cache_key,
+            "cache_dir": str(cache_dir.resolve()),
+            "describe_parameter_surface_path": str((cache_dir / "describe-parameter-surface.json").resolve()),
+            "describe_functions_path": str((cache_dir / "describe-functions.json").resolve()),
+            "runtime_identity_path": str((cache_dir / "runtime_identity.json").resolve()),
+            "commands": [],
+        }
+
+    temp_output = metadata_cache_root.parent / "runtime_metadata_probe_tmp" / cache_key
+    shutil.rmtree(temp_output, ignore_errors=True)
+    temp_output.mkdir(parents=True, exist_ok=True)
+
+    describe_surface_path = temp_output / "describe-parameter-surface.json"
+    describe_functions_path = temp_output / "describe-functions.json"
+    commands: list[dict[str, Any]] = []
+
+    for name, cmd in (
+        (
+            "describe_parameter_surface",
+            build_runtime_command(runtime_cmd_path, "--describe-parameter-surface-json", str(describe_surface_path)),
+        ),
+        (
+            "describe_functions",
+            build_runtime_command(runtime_cmd_path, "--describe-functions-json", str(describe_functions_path)),
+        ),
+    ):
+        result = run_command(cmd, cwd=runtime_cwd, timeout_seconds=timeout_seconds)
+        stdout_path = temp_output / f"{name}.stdout.txt"
+        stderr_path = temp_output / f"{name}.stderr.txt"
+        _write_text(stdout_path, result.stdout)
+        _write_text(stderr_path, result.stderr)
+        commands.append(
+            {
+                "name": name,
+                "command": cmd,
+                "exit_code": result.exit_code,
+                "timed_out": result.timed_out,
+                "elapsed_seconds": result.elapsed_seconds,
+                "stdout_path": str(stdout_path.resolve()),
+                "stderr_path": str(stderr_path.resolve()),
+            }
+        )
+
+    if describe_surface_path.exists():
+        identity["describe_parameter_surface_sha256"] = sha256_file(describe_surface_path)
+    if describe_functions_path.exists():
+        identity["describe_functions_sha256"] = sha256_file(describe_functions_path)
+    _write_json(temp_output / "runtime_identity.json", identity)
+
+    if _metadata_cache_is_ready(temp_output):
+        if cache_dir.exists():
+            shutil.rmtree(cache_dir, ignore_errors=True)
+        cache_dir.parent.mkdir(parents=True, exist_ok=True)
+        restore_probe_output(temp_output, cache_dir)
+
+    return {
+        "cache_hit": False,
+        "cache_key": cache_key,
+        "cache_dir": str(cache_dir.resolve()),
+        "describe_parameter_surface_path": str((cache_dir / "describe-parameter-surface.json").resolve()) if (cache_dir / "describe-parameter-surface.json").exists() else None,
+        "describe_functions_path": str((cache_dir / "describe-functions.json").resolve()) if (cache_dir / "describe-functions.json").exists() else None,
+        "runtime_identity_path": str((cache_dir / "runtime_identity.json").resolve()) if (cache_dir / "runtime_identity.json").exists() else None,
+        "commands": commands,
+    }
+
+
 def _build_validation_run_manifest(
     state_id: str,
     status: str,
@@ -108,6 +200,7 @@ def _build_validation_run_manifest(
     diff_result: Optional[DocumentComparison],
     replay_result: ProcessResult,
     runtime_cmd_path: Path,
+    metadata_cache: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "run_id": state_id,
@@ -129,6 +222,7 @@ def _build_validation_run_manifest(
         "validation_path": str(validation_path.resolve()),
         "candidate_replay_diff_path": str((state_dir / "candidate_replay_diff.json").resolve()) if diff_result else None,
         "runtime_identity": build_runtime_identity(runtime_cmd_path.resolve(), runtime_cmd_path.resolve().parent),
+        "runtime_metadata_cache": metadata_cache,
         "command": build_replay_command(runtime_cmd_path.resolve(), state_dir / "transport_candidate.json", state_dir / "replay"),
         "exit_code": replay_result.exit_code,
         "timed_out": replay_result.timed_out,
@@ -248,6 +342,9 @@ def execute_proposal_workflow(
     baseline = load_frozen_baseline(baseline_manifest_path)
     proposal = parse_proposal_v1(proposal_text, baseline.baseline_id, baseline.manifest["state_sha256"])
 
+    metadata_cache_root = _metadata_cache_root_from_working_root(working_states_root)
+    metadata_cache = _ensure_runtime_metadata_snapshot(runtime_cmd_path, metadata_cache_root, timeout_seconds)
+
     state_dir = working_states_root.resolve() / state_id
     validation_run_dir = state_dir.parent.parent / "validation_runs" / state_id
     validation_run_dir.mkdir(parents=True, exist_ok=True)
@@ -343,6 +440,7 @@ def execute_proposal_workflow(
         "stdout_path": str((state_dir / 'stdout.txt').resolve()),
         "stderr_path": str((state_dir / 'stderr.txt').resolve()),
         "candidate_replay_diff_path": str((state_dir / 'candidate_replay_diff.json').resolve()) if diff_result else None,
+        "runtime_metadata_cache": metadata_cache,
     }
     _write_json(validation_path, validation)
 
@@ -363,6 +461,7 @@ def execute_proposal_workflow(
         diff_result,
         replay_result,
         runtime_cmd_path,
+        metadata_cache,
     )
     validation_run_manifest["manifest_path"] = str(validation_run_manifest_path.resolve())
     _write_json_with_stdlib(validation_run_manifest_path, validation_run_manifest)
