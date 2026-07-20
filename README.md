@@ -61,6 +61,15 @@ py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_propo
 py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_proposal.json --promotion-profile none --launch-viewer-on-success
 ```
 
+Generate proposal examples (for workflow_cli input):
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3.14 -m cuda_fractal_state_tool.proposal_cli --example noop --out .local\proposal_noop.json
+py -3.14 -m cuda_fractal_state_tool.proposal_cli --example color-triplet --signal root_proximity --palette cyclic_escape --grading tone_map_default --out .local\proposal_triplet.json
+py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_triplet.json --promotion-profile none
+```
+
 Run the minimal UI:
 
 ```powershell
