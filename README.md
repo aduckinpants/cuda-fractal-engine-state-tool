@@ -86,6 +86,12 @@ $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.prompt_session_cli --pack .local\prompt_session_pack.json
 ```
 
+Current runtime note:
+
+- Real draft-lane prompt packs require runtime `describe-functions` metadata that includes lane/function catalog shape.
+- If runtime metadata lacks lane/function entries, draft cases fail closed with `runtime_metadata_shape_unsupported`.
+- Bounded scalar/triplet prompt packs run now and are suitable for immediate real-session harness validation.
+
 Example pack schema:
 
 ```json
@@ -103,6 +109,10 @@ Example pack schema:
 	]
 }
 ```
+
+Checked-in starter pack:
+
+- `tests/fixtures/prompt_session_pack.sample.json`
 
 The workflow CLI JSON payload now includes `runtime_metadata_cache` copied from the validation artifact.
 Use this field to verify cache hit/miss behavior and metadata provenance paths before lane-authoring decisions.
