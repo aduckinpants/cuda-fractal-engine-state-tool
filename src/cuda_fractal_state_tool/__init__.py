@@ -12,4 +12,5 @@ __all__ = [
     "runtime_probe",
     "validation_runs",
     "state_compare",
+    "workflow_cli",
 ]

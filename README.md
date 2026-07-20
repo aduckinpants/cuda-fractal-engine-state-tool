@@ -53,6 +53,13 @@ py -3.14 -m cuda_fractal_state_tool.validation_runs --latest --promotion-profile
 py -3.14 -m cuda_fractal_state_tool.validation_runs --list --since 2026-07-20T00:00:00+00:00 --until 2026-07-21T00:00:00+00:00
 ```
 
+Run a proposal workflow from a proposal file (non-UI path):
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_proposal.json --promotion-profile none
+```
+
 Run the minimal UI:
 
 ```powershell
