@@ -4,7 +4,8 @@ This repository hosts a small experimental Python tool for creating and validati
 
 Current status:
 
-- Phase 0 in progress: runtime authority probe
+- Phase 0 complete: runtime authority probe committed at `102c5bd`
+- Phase 1 in progress: minimal agent proposal loop
 - No main UI yet
 - Raw probe outputs live under ignored `.local/`
 - Stable conclusions are tracked in `docs/runtime_authority_probe.md`
@@ -33,3 +34,18 @@ Run the runtime probe:
 ```powershell
 py -3 -m cuda_fractal_state_tool.runtime_probe --runtime-cmd "D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd" --output-root ".local\runtime_probe"
 ```
+
+Run the Phase 1 integration workflow tests:
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3 -m unittest discover -s tests
+```
+
+Run the minimal UI:
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3 -m cuda_fractal_state_tool.app
+```
+

@@ -54,6 +54,26 @@ def process_exists(pid: int) -> bool:
     return completed.stdout.strip().lower() == "true"
 
 
+def find_processes_by_name(image_name: str) -> list[dict[str, str]]:
+    completed = subprocess.run(
+        _powershell(
+            "$procs = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq '%s' };"
+            "$procs | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Csv -NoTypeInformation"
+            % image_name
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0 or not completed.stdout.strip():
+        return []
+    rows: list[dict[str, str]] = []
+    reader = csv.DictReader(io.StringIO(completed.stdout))
+    for row in reader:
+        rows.append({k: (v or "").strip() for k, v in row.items()})
+    return rows
+
+
 def kill_process_tree(pid: int) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["taskkill", "/PID", str(pid), "/T", "/F"],

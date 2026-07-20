@@ -19,3 +19,4 @@ Rules:
 7. Preserve raw machine outputs under `.local/`; preserve stable conclusions in tracked docs.
 8. If a needed runtime fact cannot be established without patching the engine, record the limitation and stop or continue according to whether it blocks the current slice.
 9. Perform hostile self-review before closing a slice.
+10. Completion reports must make a firm closure determination. Do not append optional "natural next steps," menus of possible work, or offers to begin the already-approved next phase. Complete required work before closure; omit non-required suggestions; state the single next execution boundary only when needed.

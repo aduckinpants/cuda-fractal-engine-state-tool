@@ -34,6 +34,18 @@ class DocumentComparison:
     semantic_equal: bool
     differences: list[PathDifference]
 
+    @property
+    def has_unexplained_difference(self) -> bool:
+        return any(diff.classification == "unexplained_difference" for diff in self.differences)
+
+    @property
+    def has_stable_authoring_state_difference(self) -> bool:
+        return any(diff.classification == "stable_authoring_state_difference" for diff in self.differences)
+
+    @property
+    def has_disallowed_difference(self) -> bool:
+        return self.has_stable_authoring_state_difference or self.has_unexplained_difference
+
 
 def _flatten(value: Any, prefix: str = "") -> Iterable[tuple[str, Any]]:
     if isinstance(value, dict):
@@ -52,10 +64,14 @@ def _flatten(value: Any, prefix: str = "") -> Iterable[tuple[str, Any]]:
 def _classify_path(path: str) -> str:
     if path == "stats" or path.startswith("stats."):
         return "volatile_diagnostic_data"
+    if path == "color_pipeline_draft" or path.startswith("color_pipeline_draft."):
+        return "runtime_replay_artifact_enrichment"
+    if path == "sidecar_orientation" or path.startswith("sidecar_orientation."):
+        return "derived_runtime_state"
     top_level = path.split(".", 1)[0]
     if top_level not in LOADER_TOP_LEVEL_KEYS:
-        return "capture_metadata"
-    return "stable_authoring_state"
+        return "unexplained_difference"
+    return "stable_authoring_state_difference"
 
 
 def _semantic_subset(document: dict[str, Any]) -> dict[str, Any]:
