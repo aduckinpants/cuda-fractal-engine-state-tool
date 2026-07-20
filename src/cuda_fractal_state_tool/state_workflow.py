@@ -209,6 +209,8 @@ def _build_validation_run_manifest(
     replay_result: ProcessResult,
     runtime_cmd_path: Path,
     metadata_cache: dict[str, Any],
+    draft_override_present: bool,
+    draft_lane_count: int,
 ) -> dict[str, Any]:
     return {
         "run_id": state_id,
@@ -231,6 +233,8 @@ def _build_validation_run_manifest(
         "candidate_replay_diff_path": str((state_dir / "candidate_replay_diff.json").resolve()) if diff_result else None,
         "runtime_identity": build_runtime_identity(runtime_cmd_path.resolve(), runtime_cmd_path.resolve().parent),
         "runtime_metadata_cache": metadata_cache,
+        "draft_override_present": draft_override_present,
+        "draft_lane_count": draft_lane_count,
         "command": build_replay_command(runtime_cmd_path.resolve(), state_dir / "transport_candidate.json", state_dir / "replay"),
         "exit_code": replay_result.exit_code,
         "timed_out": replay_result.timed_out,
@@ -260,6 +264,8 @@ def _update_validation_runs_index(index_path: Path, manifest: dict[str, Any]) ->
         "manifest_path": manifest.get("manifest_path"),
         "working_state_dir": manifest.get("working_state_dir"),
         "promoted_state_path": manifest.get("promoted_state_path"),
+        "draft_override_present": manifest.get("draft_override_present"),
+        "draft_lane_count": manifest.get("draft_lane_count"),
     }
     entries.append(entry)
     root["entries"] = entries
@@ -354,6 +360,12 @@ def execute_proposal_workflow(
     metadata_cache = _ensure_runtime_metadata_snapshot(runtime_cmd_path, metadata_cache_root, timeout_seconds)
 
     draft_override = proposal.overrides.get("color_pipeline_draft")
+    draft_override_present = draft_override is not None
+    draft_lane_count = 0
+    if isinstance(draft_override, dict):
+        lanes = draft_override.get("lanes")
+        if isinstance(lanes, list):
+            draft_lane_count = len(lanes)
     if draft_override is not None:
         describe_functions_path = metadata_cache.get("describe_functions_path")
         if not isinstance(describe_functions_path, str) or not describe_functions_path:
@@ -472,6 +484,8 @@ def execute_proposal_workflow(
         "stderr_path": str((state_dir / 'stderr.txt').resolve()),
         "candidate_replay_diff_path": str((state_dir / 'candidate_replay_diff.json').resolve()) if diff_result else None,
         "runtime_metadata_cache": metadata_cache,
+        "draft_override_present": draft_override_present,
+        "draft_lane_count": draft_lane_count,
     }
     _write_json(validation_path, validation)
 
@@ -493,6 +507,8 @@ def execute_proposal_workflow(
         replay_result,
         runtime_cmd_path,
         metadata_cache,
+        draft_override_present,
+        draft_lane_count,
     )
     validation_run_manifest["manifest_path"] = str(validation_run_manifest_path.resolve())
     _write_json_with_stdlib(validation_run_manifest_path, validation_run_manifest)

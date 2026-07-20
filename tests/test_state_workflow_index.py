@@ -90,6 +90,10 @@ class StateWorkflowIndexTests(unittest.TestCase):
             manifest_paths = [entry["manifest_path"] for entry in index_obj["entries"]]
             self.assertIn(str(first.validation_run_manifest_path.resolve()), manifest_paths)
             self.assertIn(str(second.validation_run_manifest_path.resolve()), manifest_paths)
+            draft_flags = [entry.get("draft_override_present") for entry in index_obj["entries"]]
+            draft_lane_counts = [entry.get("draft_lane_count") for entry in index_obj["entries"]]
+            self.assertEqual(draft_flags, [False, False])
+            self.assertEqual(draft_lane_counts, [0, 0])
 
 
 if __name__ == "__main__":

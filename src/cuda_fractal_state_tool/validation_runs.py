@@ -144,6 +144,9 @@ def summarize_validation_runs(
     status_counts: dict[str, int] = {}
     runtime_status_counts: dict[str, int] = {}
     promotion_profile_counts: dict[str, int] = {}
+    draft_run_count = 0
+    draft_lane_total = 0
+    latest_draft_run: Optional[dict[str, Any]] = None
     for run in runs:
         status = str(run.get("status") or "unknown")
         runtime_status = str(run.get("runtime_status") or "unknown")
@@ -151,6 +154,11 @@ def summarize_validation_runs(
         status_counts[status] = status_counts.get(status, 0) + 1
         runtime_status_counts[runtime_status] = runtime_status_counts.get(runtime_status, 0) + 1
         promotion_profile_counts[profile] = promotion_profile_counts.get(profile, 0) + 1
+        if bool(run.get("draft_override_present")):
+            draft_run_count += 1
+            draft_lane_total += int(run.get("draft_lane_count") or 0)
+            if latest_draft_run is None:
+                latest_draft_run = run
     return {
         "index_path": str(path.resolve()),
         "run_count": len(runs),
@@ -164,6 +172,9 @@ def summarize_validation_runs(
         "status_counts": status_counts,
         "runtime_status_counts": runtime_status_counts,
         "promotion_profile_counts": promotion_profile_counts,
+        "draft_run_count": draft_run_count,
+        "draft_lane_total": draft_lane_total,
+        "latest_draft_run": latest_draft_run,
         "latest_run": runs[0] if runs else None,
     }
 

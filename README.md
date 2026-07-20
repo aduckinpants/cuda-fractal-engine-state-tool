@@ -55,6 +55,12 @@ py -3.14 -m cuda_fractal_state_tool.validation_runs --latest --promotion-profile
 py -3.14 -m cuda_fractal_state_tool.validation_runs --list --since 2026-07-20T00:00:00+00:00 --until 2026-07-21T00:00:00+00:00
 ```
 
+Summary output includes draft triage fields:
+
+- `draft_run_count`
+- `draft_lane_total`
+- `latest_draft_run`
+
 Run a proposal workflow from a proposal file (non-UI path):
 
 ```powershell

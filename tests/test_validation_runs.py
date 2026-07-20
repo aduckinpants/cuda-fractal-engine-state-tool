@@ -34,21 +34,27 @@ class ValidationRunsTests(unittest.TestCase):
       "run_id": "older",
       "timestamp_utc": "2026-07-20T10:00:00+00:00",
       "status": "runtime_proof_failed",
-      "runtime_status": "runtime_failure"
+      "runtime_status": "runtime_failure",
+      "draft_override_present": false,
+      "draft_lane_count": 0
     },
     {
       "run_id": "newer",
       "timestamp_utc": "2026-07-20T11:00:00+00:00",
       "status": "runtime_proof_succeeded",
       "runtime_status": "runtime_success",
-      "promotion_profile": "none"
+      "promotion_profile": "none",
+      "draft_override_present": true,
+      "draft_lane_count": 1
     },
     {
       "run_id": "newest-promo",
       "timestamp_utc": "2026-07-20T12:00:00+00:00",
       "status": "runtime_proof_succeeded",
       "runtime_status": "runtime_success",
-      "promotion_profile": "observed_runtime_enrichment_v1"
+      "promotion_profile": "observed_runtime_enrichment_v1",
+      "draft_override_present": true,
+      "draft_lane_count": 2
     }
   ]
 }
@@ -73,6 +79,10 @@ class ValidationRunsTests(unittest.TestCase):
             self.assertEqual(summary["runtime_status_counts"]["runtime_failure"], 1)
             self.assertEqual(summary["promotion_profile_counts"]["observed_runtime_enrichment_v1"], 1)
             self.assertEqual(summary["promotion_profile_counts"]["none"], 2)
+            self.assertEqual(summary["draft_run_count"], 2)
+            self.assertEqual(summary["draft_lane_total"], 3)
+            self.assertIsNotNone(summary["latest_draft_run"])
+            self.assertEqual(summary["latest_draft_run"]["run_id"], "newest-promo")
 
             filtered = filter_validation_runs(runs, promotion_profile="observed_runtime_enrichment_v1")
             self.assertEqual(len(filtered), 1)

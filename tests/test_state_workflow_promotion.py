@@ -8,7 +8,8 @@ from unittest.mock import patch
 from cuda_fractal_state_tool.json_utils import dumps_pretty
 from cuda_fractal_state_tool.proposal import build_noop_example
 from cuda_fractal_state_tool.runtime_surface import sha256_file
-from cuda_fractal_state_tool.state_workflow import execute_proposal_workflow
+from cuda_fractal_state_tool.state_compare import DocumentComparison, PathDifference
+from cuda_fractal_state_tool.state_workflow import _build_promoted_state, execute_proposal_workflow
 from cuda_fractal_state_tool.process_utils import ProcessResult
 
 
@@ -213,6 +214,74 @@ class StateWorkflowPromotionTests(unittest.TestCase):
             self.assertIn('"allowed_keys": [', report_text)
             self.assertIn('"sidecar_orientation"', report_text)
             self.assertNotIn('"color_pipeline_draft"', report_text)
+
+    def test_draft_promotion_allows_runtime_replay_artifact_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidate_path = root / "candidate.json"
+            replay_path = root / "replay.json"
+            promoted_path = root / "promoted.json"
+            candidate_path.write_text('{"state_version":3,"color_pipeline_draft":{"lanes":[{"lane_id":"shape","function_id":"identity"}]}}\n', encoding="utf-8")
+            replay_path.write_text('{"state_version":3,"color_pipeline_draft":{"lanes":[{"lane_id":"shape","function_id":"repeat"}]}}\n', encoding="utf-8")
+            diff = DocumentComparison(
+                raw_equal=False,
+                semantic_equal=False,
+                differences=[
+                    PathDifference(
+                        path="color_pipeline_draft.lanes[0].function_id",
+                        left="identity",
+                        right="repeat",
+                        classification="runtime_replay_artifact_enrichment",
+                    )
+                ],
+            )
+
+            _, report = _build_promoted_state(
+                candidate_path,
+                replay_path,
+                promoted_path,
+                "color_pipeline_draft_only_v1",
+                diff,
+            )
+
+            promoted_text = promoted_path.read_text(encoding="utf-8")
+            self.assertIn('"function_id": "repeat"', promoted_text)
+            self.assertEqual(report["blocked_keys"], {})
+            self.assertIn("color_pipeline_draft", report["applied_keys"])
+
+    def test_draft_promotion_blocks_disallowed_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidate_path = root / "candidate.json"
+            replay_path = root / "replay.json"
+            promoted_path = root / "promoted.json"
+            candidate_path.write_text('{"state_version":3,"color_pipeline_draft":{"lanes":[{"lane_id":"shape","function_id":"identity"}]}}\n', encoding="utf-8")
+            replay_path.write_text('{"state_version":3,"color_pipeline_draft":{"lanes":[{"lane_id":"shape","function_id":"repeat"}]}}\n', encoding="utf-8")
+            diff = DocumentComparison(
+                raw_equal=False,
+                semantic_equal=False,
+                differences=[
+                    PathDifference(
+                        path="color_pipeline_draft.lanes[0].function_id",
+                        left="identity",
+                        right="repeat",
+                        classification="stable_authoring_state_difference",
+                    )
+                ],
+            )
+
+            _, report = _build_promoted_state(
+                candidate_path,
+                replay_path,
+                promoted_path,
+                "color_pipeline_draft_only_v1",
+                diff,
+            )
+
+            promoted_text = promoted_path.read_text(encoding="utf-8")
+            self.assertIn('"function_id": "identity"', promoted_text)
+            self.assertIn("color_pipeline_draft", report["blocked_keys"])
+            self.assertEqual(report["blocked_keys"]["color_pipeline_draft"], ["stable_authoring_state_difference"])
 
 
 if __name__ == "__main__":
