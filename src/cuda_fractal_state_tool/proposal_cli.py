@@ -48,7 +48,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         description="Generate bounded proposal_v1 JSON examples from the frozen baseline",
         epilog=(
             "Contract note: proposal_v1 currently accepts only bounded scalar overrides and replay-proven "
-            "coupled color triplets. color_pipeline_draft authoring is Phase 3 work and is currently out of scope."
+            "coupled color triplets, plus bounded full color_pipeline_draft replacement payloads. "
+            "Lane/function validity is enforced during workflow execution against runtime metadata catalog."
         ),
     )
     parser.add_argument(

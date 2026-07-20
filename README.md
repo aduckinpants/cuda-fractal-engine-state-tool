@@ -7,7 +7,7 @@ Current status:
 - Phase 0 complete: runtime authority probe committed at `102c5bd`
 - Phase 1 complete: bounded proposal loop, replay proof workflow, and slim desktop UI
 - Phase 2 complete (bounded scope): replay-proven color triplet coverage expansion, promotion profile controls, and CLI-first execution/reporting paths
-- Phase 3 in progress (preflight): runtime metadata-cache wiring is active in workflow execution; draft/lane authoring contract slices are next
+- Phase 3 in progress: runtime metadata-cache wiring plus fail-closed lane/function metadata validation is active; bounded full `color_pipeline_draft` replacement is available in proposal_v1
 - Raw probe outputs live under ignored `.local/`
 - Stable conclusions are tracked in `docs/runtime_authority_probe.md`
 - Phase 2 closure summary is tracked in `docs/phase2_closure.md`
@@ -77,7 +77,7 @@ py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_trip
 ```
 
 Proposal CLI intentionally remains bounded: it emits scalar and replay-proven triplet examples only.
-Arbitrary `color_pipeline_draft` authoring is not yet accepted in `proposal_v1`.
+Bounded `color_pipeline_draft` full replacement payloads are accepted in `proposal_v1` and validated during workflow execution.
 
 Inspect runtime metadata for lane/function catalog discovery (fail-closed parser):
 
@@ -91,6 +91,28 @@ When `--check-lane` and `--check-function` are provided, the CLI returns explici
 
 - `lane_unknown`
 - `function_unknown`
+
+Example bounded draft override payload in proposal_v1:
+
+```json
+{
+	"proposal_version": 1,
+	"base_state": {
+		"id": "runtime-default-v1",
+		"sha256": "<baseline sha256>"
+	},
+	"overrides": {
+		"color_pipeline_draft": {
+			"lanes": [
+				{
+					"lane_id": "shape",
+					"function_id": "identity"
+				}
+			]
+		}
+	}
+}
+```
 
 Run the minimal UI:
 

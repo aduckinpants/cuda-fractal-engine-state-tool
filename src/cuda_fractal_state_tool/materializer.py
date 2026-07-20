@@ -41,6 +41,9 @@ def materialize_transport_candidate(baseline_path: Path, proposal: ProposalV1, o
     if not isinstance(baseline_document, dict):
         raise ValueError("Frozen baseline must be a JSON object")
     for path, value in proposal.overrides.items():
+        if path == "color_pipeline_draft":
+            baseline_document[path] = value
+            continue
         _set_exact_path(baseline_document, path, value)
     output_path.write_text(json.dumps(baseline_document, indent=2) + "\n", encoding="utf-8")
     return MaterializationResult(output_path=output_path, byte_identical_to_baseline=False)

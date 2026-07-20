@@ -70,6 +70,25 @@ class MaterializerTests(unittest.TestCase):
             self.assertIn('"color_palette": "cyclic_escape"', text)
             self.assertIn('"color_grading": "escape_default"', text)
 
+    def test_color_pipeline_draft_materialization_sets_top_level_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            baseline_path = root / "state.json"
+            baseline_path.write_text(BASELINE, encoding="utf-8")
+            proposal = parse_proposal_v1(
+                '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+                '"overrides": {"color_pipeline_draft": {"lanes": [{"lane_id": "shape", "function_id": "repeat"}]}}}',
+                "runtime-default-v1",
+                "hash",
+            )
+            output_path = root / "candidate.json"
+            result = materialize_transport_candidate(baseline_path, proposal, output_path)
+            self.assertFalse(result.byte_identical_to_baseline)
+            text = output_path.read_text(encoding="utf-8")
+            self.assertIn('"color_pipeline_draft"', text)
+            self.assertIn('"lane_id": "shape"', text)
+            self.assertIn('"function_id": "repeat"', text)
+
 
 if __name__ == "__main__":
     unittest.main()

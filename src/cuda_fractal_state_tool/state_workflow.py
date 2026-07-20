@@ -10,6 +10,14 @@ from typing import Any, Optional
 
 from .baseline import FrozenBaseline, load_frozen_baseline
 from .json_utils import dumps_pretty, loads_no_duplicates
+from .lane_catalog import (
+    FunctionUnknownError,
+    LaneUnknownError,
+    RuntimeMetadataShapeUnsupportedError,
+    RuntimeMetadataUnavailableError,
+    load_lane_catalog_from_describe_functions,
+    validate_lane_function_reference,
+)
 from .materializer import materialize_transport_candidate
 from .process_utils import ProcessResult, run_command
 from .proposal import ProposalV1, parse_proposal_v1
@@ -344,6 +352,29 @@ def execute_proposal_workflow(
 
     metadata_cache_root = _metadata_cache_root_from_working_root(working_states_root)
     metadata_cache = _ensure_runtime_metadata_snapshot(runtime_cmd_path, metadata_cache_root, timeout_seconds)
+
+    draft_override = proposal.overrides.get("color_pipeline_draft")
+    if draft_override is not None:
+        describe_functions_path = metadata_cache.get("describe_functions_path")
+        if not isinstance(describe_functions_path, str) or not describe_functions_path:
+            raise ValueError("runtime_metadata_unavailable: describe-functions path missing")
+        try:
+            catalog = load_lane_catalog_from_describe_functions(Path(describe_functions_path))
+            lanes = draft_override.get("lanes") if isinstance(draft_override, dict) else None
+            if not isinstance(lanes, list):
+                raise ValueError("color_pipeline_draft.lanes must be an array")
+            for lane in lanes:
+                if not isinstance(lane, dict):
+                    raise ValueError("color_pipeline_draft lane entries must be objects")
+                validate_lane_function_reference(catalog, str(lane.get("lane_id")), str(lane.get("function_id")))
+        except RuntimeMetadataUnavailableError as exc:
+            raise ValueError(f"runtime_metadata_unavailable: {exc}") from exc
+        except RuntimeMetadataShapeUnsupportedError as exc:
+            raise ValueError(f"runtime_metadata_shape_unsupported: {exc}") from exc
+        except LaneUnknownError as exc:
+            raise ValueError(str(exc)) from exc
+        except FunctionUnknownError as exc:
+            raise ValueError(str(exc)) from exc
 
     state_dir = working_states_root.resolve() / state_id
     validation_run_dir = state_dir.parent.parent / "validation_runs" / state_id

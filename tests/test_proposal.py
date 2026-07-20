@@ -123,6 +123,24 @@ class ProposalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_proposal_v1('{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, "overrides": {"params": 1, "params.max_iter": 2}}', "runtime-default-v1", "hash")
 
+    def test_color_pipeline_draft_override_is_accepted(self) -> None:
+        proposal = parse_proposal_v1(
+            '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+            '"overrides": {"color_pipeline_draft": {"lanes": [{"lane_id": "shape", "function_id": "identity"}]}}}',
+            "runtime-default-v1",
+            "hash",
+        )
+        self.assertIn("color_pipeline_draft", proposal.overrides)
+
+    def test_color_pipeline_draft_with_invalid_lane_shape_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_proposal_v1(
+                '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "sha256": "hash"}, '
+                '"overrides": {"color_pipeline_draft": {"lanes": [{"lane_id": "shape"}]}}}',
+                "runtime-default-v1",
+                "hash",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

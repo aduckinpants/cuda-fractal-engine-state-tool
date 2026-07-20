@@ -94,6 +94,29 @@ def _validate_color_palette(value: Any) -> None:
         raise ValueError("params.color_palette contains an unsupported value for proposal_v1")
 
 
+def _validate_color_pipeline_draft(value: Any) -> None:
+    if not isinstance(value, dict):
+        raise ValueError("color_pipeline_draft must be an object")
+    actual_keys = set(value.keys())
+    if actual_keys != {"lanes"}:
+        raise ValueError("color_pipeline_draft must contain only: lanes")
+    lanes = value.get("lanes")
+    if not isinstance(lanes, list):
+        raise ValueError("color_pipeline_draft.lanes must be an array")
+    for index, lane in enumerate(lanes):
+        if not isinstance(lane, dict):
+            raise ValueError(f"color_pipeline_draft.lanes[{index}] must be an object")
+        lane_keys = set(lane.keys())
+        if lane_keys != {"lane_id", "function_id"}:
+            raise ValueError(
+                f"color_pipeline_draft.lanes[{index}] must contain only lane_id and function_id"
+            )
+        if not isinstance(lane["lane_id"], str) or not lane["lane_id"].strip():
+            raise ValueError(f"color_pipeline_draft.lanes[{index}].lane_id must be a non-empty string")
+        if not isinstance(lane["function_id"], str) or not lane["function_id"].strip():
+            raise ValueError(f"color_pipeline_draft.lanes[{index}].function_id must be a non-empty string")
+
+
 COLOR_TRIPLET_PATHS = {
     "params.color_signal",
     "params.color_palette",
@@ -183,6 +206,17 @@ ALLOWED_COLOR_TRIPLETS = {
 
 
 PATH_SPECS: dict[str, ProposalPathSpec] = {
+    "color_pipeline_draft": ProposalPathSpec(
+        path="color_pipeline_draft",
+        value_kind="object",
+        accepted_values=None,
+        validator=_validate_color_pipeline_draft,
+        provenance="replay artifact path",
+        accepted_values_source="Runtime metadata catalog (describe-functions) plus replay-authoritative validation.",
+        type_range_source="Runtime describe-functions metadata shape parsed by fail-closed lane catalog helpers.",
+        pipeline_mapping_source="Direct full replacement of color_pipeline_draft payload.",
+        runtime_or_source_provenance="runtime-authoritative: cached describe-functions metadata",
+    ),
     "params.max_iter": ProposalPathSpec(
         path="params.max_iter",
         value_kind="int",
@@ -354,7 +388,7 @@ def parse_proposal_v1(text: str, expected_baseline_id: str, expected_baseline_sh
             raise ValueError(f"Unsupported override path: {path}")
         if override_value is None:
             raise ValueError(f"Override path {path} may not be null")
-        if isinstance(override_value, (dict, list)):
+        if path != "color_pipeline_draft" and isinstance(override_value, (dict, list)):
             raise ValueError(f"Override path {path} does not support object or array replacement in proposal_v1")
         PATH_SPECS[path].validator(override_value)
 
