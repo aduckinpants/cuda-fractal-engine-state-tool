@@ -5,10 +5,12 @@ This repository hosts a small experimental Python tool for creating and validati
 Current status:
 
 - Phase 0 complete: runtime authority probe committed at `102c5bd`
-- Phase 1 in progress: minimal agent proposal loop
-- No main UI yet
+- Phase 1 complete: bounded proposal loop, replay proof workflow, and slim desktop UI
+- Phase 2 complete (bounded scope): replay-proven color triplet coverage expansion, promotion profile controls, and CLI-first execution/reporting paths
+- Phase 3 decision pending: whether to keep the bounded scalar+triplet contract or begin `color_pipeline_draft` authoring work
 - Raw probe outputs live under ignored `.local/`
 - Stable conclusions are tracked in `docs/runtime_authority_probe.md`
+- Phase 2 closure summary is tracked in `docs/phase2_closure.md`
 
 ## Phase 0 goals
 
