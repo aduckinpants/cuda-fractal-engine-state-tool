@@ -7,7 +7,7 @@ Current status:
 - Phase 0 complete: runtime authority probe committed at `102c5bd`
 - Phase 1 complete: bounded proposal loop, replay proof workflow, and slim desktop UI
 - Phase 2 complete (bounded scope): replay-proven color triplet coverage expansion, promotion profile controls, and CLI-first execution/reporting paths
-- Phase 3 decision pending: whether to keep the bounded scalar+triplet contract or begin `color_pipeline_draft` authoring work
+- Phase 3 in progress (preflight): runtime metadata-cache wiring is active in workflow execution; draft/lane authoring contract slices are next
 - Raw probe outputs live under ignored `.local/`
 - Stable conclusions are tracked in `docs/runtime_authority_probe.md`
 - Phase 2 closure summary is tracked in `docs/phase2_closure.md`
@@ -63,6 +63,9 @@ py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_propo
 py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_proposal.json --promotion-profile none --launch-viewer-on-success
 ```
 
+The workflow CLI JSON payload now includes `runtime_metadata_cache` copied from the validation artifact.
+Use this field to verify cache hit/miss behavior and metadata provenance paths before lane-authoring decisions.
+
 Generate proposal examples (for workflow_cli input):
 
 ```powershell
@@ -72,6 +75,9 @@ py -3.14 -m cuda_fractal_state_tool.proposal_cli --example color-triplet --signa
 py -3.14 -m cuda_fractal_state_tool.proposal_cli --list-color-triplets
 py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_triplet.json --promotion-profile none
 ```
+
+Proposal CLI intentionally remains bounded: it emits scalar and replay-proven triplet examples only.
+Arbitrary `color_pipeline_draft` authoring is not yet accepted in `proposal_v1`.
 
 Run the minimal UI:
 

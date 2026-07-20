@@ -16,6 +16,18 @@ class WorkflowCliTests(unittest.TestCase):
     def _make_result(self, root: Path, status: str) -> WorkflowResult:
         run_dir = root / "working" / "run"
         validation_dir = root / "validation_runs" / "run"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "validation.json").write_text(
+            json.dumps(
+                {
+                    "runtime_metadata_cache": {
+                        "cache_hit": True,
+                        "cache_key": "abc",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
         return WorkflowResult(
             status=status,
             working_state_dir=run_dir,
@@ -59,6 +71,8 @@ class WorkflowCliTests(unittest.TestCase):
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["status"], "runtime_proof_succeeded")
             self.assertIsNotNone(payload["proven_state_path"])
+            self.assertIsNotNone(payload["runtime_metadata_cache"])
+            self.assertTrue(payload["runtime_metadata_cache"]["cache_hit"])
 
     def test_cli_uses_nonzero_exit_code_for_failed_proof(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -86,6 +100,7 @@ class WorkflowCliTests(unittest.TestCase):
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["status"], "runtime_proof_failed")
             self.assertIsNone(payload["proven_state_path"])
+            self.assertEqual(payload["runtime_metadata_cache"]["cache_key"], "abc")
 
     def test_cli_launches_viewer_on_success_when_requested(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

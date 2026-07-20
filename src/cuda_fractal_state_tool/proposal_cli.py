@@ -44,7 +44,13 @@ def _build_triplet_text(
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate proposal_v1 JSON examples from the frozen baseline")
+    parser = argparse.ArgumentParser(
+        description="Generate bounded proposal_v1 JSON examples from the frozen baseline",
+        epilog=(
+            "Contract note: proposal_v1 currently accepts only bounded scalar overrides and replay-proven "
+            "coupled color triplets. color_pipeline_draft authoring is Phase 3 work and is currently out of scope."
+        ),
+    )
     parser.add_argument(
         "--example",
         choices=["noop", "max-iter", "color-shape", "color-grading", "color-triplet"],

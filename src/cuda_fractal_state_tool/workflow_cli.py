@@ -27,7 +27,13 @@ def _default_state_id() -> str:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Execute a proposal workflow from a proposal JSON file")
+    parser = argparse.ArgumentParser(
+        description="Execute bounded proposal_v1 workflow with runtime replay proof",
+        epilog=(
+            "Scope note: this CLI executes bounded proposal_v1 overrides only. "
+            "General color_pipeline_draft lane authoring remains out of scope until Phase 3 contract slices land."
+        ),
+    )
     parser.add_argument("--proposal", type=Path, required=True, help="Path to proposal JSON")
     parser.add_argument("--repo-root", type=Path, default=None, help="Optional repository root for default paths")
     parser.add_argument("--baseline-manifest", type=Path, default=None, help="Baseline manifest path")
@@ -54,6 +60,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         promotion_profile=args.promotion_profile,
     )
 
+    metadata_cache = None
+    if result.validation_path.exists():
+        try:
+            validation_payload = json.loads(result.validation_path.read_text(encoding="utf-8"))
+            value = validation_payload.get("runtime_metadata_cache") if isinstance(validation_payload, dict) else None
+            if isinstance(value, dict):
+                metadata_cache = value
+        except Exception:
+            metadata_cache = None
+
     launched_viewer_pid: Optional[int] = None
     if args.launch_viewer_on_success and result.status == "runtime_proof_succeeded" and result.proven_state_path is not None:
         launched = launch_proven_candidate(args.runtime_cmd, result.proven_state_path)
@@ -73,6 +89,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "promotion_report_path": str(result.promotion_report_path.resolve()) if result.promotion_report_path else None,
         "replay_state_path": str(result.replay_state_path.resolve()) if result.replay_state_path else None,
         "validation_path": str(result.validation_path.resolve()),
+        "runtime_metadata_cache": metadata_cache,
         "launched_viewer_pid": launched_viewer_pid,
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
