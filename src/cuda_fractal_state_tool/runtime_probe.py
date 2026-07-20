@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from .json_utils import dumps_pretty
+from .json_utils import dumps_pretty, loads_no_duplicates
+from .runtime_metadata_cache import cache_probe_output, restore_probe_output, runtime_cache_dir, runtime_identity_cache_key
 from .process_utils import run_command
 from .runtime_surface import (
     DEFAULT_RUNTIME_CMD,
@@ -16,6 +18,16 @@ from .runtime_surface import (
     sha256_file,
 )
 from .state_compare import compare_json_documents
+
+
+_COMMAND_NAMES = (
+    "describe_parameter_surface",
+    "describe_functions",
+    "capture_one",
+    "capture_two",
+    "invalid_json_capture",
+    "replay_one",
+)
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -30,6 +42,85 @@ def _write_text(path: Path, text: str) -> None:
 
 def _sanitize_command(command: list[str]) -> list[str]:
     return command
+
+
+def _load_json(path: Path) -> Any:
+    return loads_no_duplicates(path.read_text(encoding="utf-8"))
+
+
+def _rewrite_cached_record(record: dict[str, Any], output_root: Path) -> dict[str, Any]:
+    rewritten = dict(record)
+    old_root: Optional[Path] = None
+    stdout_path = record.get("stdout_path")
+    if isinstance(stdout_path, str):
+        old_root = Path(stdout_path).parent
+    name = rewritten.get("name")
+    if isinstance(name, str):
+        rewritten["stdout_path"] = str((output_root / f"{name}.stdout.txt").resolve())
+        rewritten["stderr_path"] = str((output_root / f"{name}.stderr.txt").resolve())
+    if old_root is not None and isinstance(rewritten.get("command"), list):
+        old_root_text = str(old_root)
+        old_root_posix = old_root.as_posix()
+        new_root_text = str(output_root.resolve())
+        new_root_posix = output_root.resolve().as_posix()
+        rewritten["command"] = [
+            arg.replace(old_root_posix, new_root_posix).replace(old_root_text, new_root_text) if isinstance(arg, str) else arg
+            for arg in rewritten["command"]
+        ]
+    return rewritten
+
+
+def _load_command_records(output_root: Path) -> list[dict[str, Any]]:
+    commands: list[dict[str, Any]] = []
+    for name in _COMMAND_NAMES:
+        record_path = output_root / f"{name}.json"
+        if not record_path.exists():
+            continue
+        record = _load_json(record_path)
+        if not isinstance(record, dict):
+            continue
+        rewritten = _rewrite_cached_record(record, output_root)
+        _write_json(record_path, rewritten)
+        commands.append(rewritten)
+    return commands
+
+
+def _build_summary(output_root: Path, commands: list[dict[str, Any]], cache_hit: bool, cache_key: str) -> dict[str, Any]:
+    comparison_path = output_root / "capture_comparison.json"
+    return {
+        "runtime_identity_path": str((output_root / "runtime_identity.json").resolve()),
+        "launcher_resolution_path": str((output_root / "launcher_resolution.json").resolve()),
+        "commands": commands,
+        "capture_comparison_path": str(comparison_path.resolve()) if comparison_path.exists() else None,
+        "capture_one_state_exists": (output_root / "capture_one" / "state.json").exists(),
+        "capture_two_state_exists": (output_root / "capture_two" / "state.json").exists(),
+        "replay_one_state_exists": (output_root / "replay_one" / "state.json").exists(),
+        "cache_hit": cache_hit,
+        "cache_key": cache_key,
+        "cache_path": str((output_root.parent / "cache" / "runtime" / cache_key).resolve()),
+    }
+
+
+def _cache_is_ready(cache_dir: Path) -> bool:
+    required_files = [
+        "launcher_resolution.json",
+        "runtime_identity.json",
+        "describe_parameter_surface.json",
+        "describe_functions.json",
+        "capture_one.json",
+        "capture_two.json",
+        "invalid_json_capture.json",
+        "replay_one.json",
+        "summary.json",
+    ]
+    if not all((cache_dir / file_name).exists() for file_name in required_files):
+        return False
+    required_dirs = [
+        cache_dir / "capture_one",
+        cache_dir / "capture_two",
+        cache_dir / "replay_one",
+    ]
+    return all(directory.exists() for directory in required_dirs)
 
 
 def _run_and_record(name: str, command: list[str], cwd: Path, output_root: Path, timeout_seconds: float) -> dict[str, Any]:
@@ -57,6 +148,16 @@ def run_probe(runtime_cmd_path: Path, output_root: Path, timeout_seconds: float 
     output_root.mkdir(parents=True, exist_ok=True)
     runtime_cwd = runtime_cmd_path.parent
     identity = build_runtime_identity(runtime_cmd_path, runtime_cwd)
+    cache_key = runtime_identity_cache_key(identity)
+    cache_root = output_root.parent / "cache" / "runtime"
+    cache_dir = runtime_cache_dir(cache_root, identity)
+
+    if _cache_is_ready(cache_dir):
+        restore_probe_output(cache_dir, output_root)
+        commands = _load_command_records(output_root)
+        summary = _build_summary(output_root, commands, cache_hit=True, cache_key=cache_key)
+        _write_json(output_root / "summary.json", summary)
+        return summary
 
     resolution = asdict(resolve_launcher(runtime_cmd_path))
     _write_json(output_root / "launcher_resolution.json", resolution)
@@ -163,16 +264,9 @@ def run_probe(runtime_cmd_path: Path, output_root: Path, timeout_seconds: float 
         }
         _write_json(output_root / "capture_comparison.json", comparison)
 
-    summary = {
-        "runtime_identity_path": str((output_root / "runtime_identity.json").resolve()),
-        "launcher_resolution_path": str((output_root / "launcher_resolution.json").resolve()),
-        "commands": commands,
-        "capture_comparison_path": str((output_root / "capture_comparison.json").resolve()) if comparison else None,
-        "capture_one_state_exists": capture_one_state.exists(),
-        "capture_two_state_exists": capture_two_state.exists(),
-        "replay_one_state_exists": (replay_one_dir / "state.json").exists(),
-    }
+    summary = _build_summary(output_root, commands, cache_hit=False, cache_key=cache_key)
     _write_json(output_root / "summary.json", summary)
+    cache_probe_output(cache_root, cache_key, output_root)
     return summary
 
 

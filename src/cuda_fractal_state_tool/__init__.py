@@ -4,6 +4,7 @@ __all__ = [
     "intake",
     "json_utils",
     "materializer",
+    "runtime_metadata_cache",
     "proposal",
     "process_utils",
     "runtime_surface",
