@@ -11,6 +11,7 @@ Current status:
 - Raw probe outputs live under ignored `.local/`
 - Stable conclusions are tracked in `docs/runtime_authority_probe.md`
 - Phase 2 closure summary is tracked in `docs/phase2_closure.md`
+- Phase 3 start checkpoint is tracked in `docs/phase3_start_checkpoint.md`
 
 ## Phase 0 goals
 
