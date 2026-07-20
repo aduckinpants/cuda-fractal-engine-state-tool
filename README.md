@@ -50,6 +50,7 @@ py -3.14 -m cuda_fractal_state_tool.validation_runs
 py -3.14 -m cuda_fractal_state_tool.validation_runs --list --status runtime_proof_succeeded
 py -3.14 -m cuda_fractal_state_tool.validation_runs --list --status runtime_proof_succeeded --limit 5
 py -3.14 -m cuda_fractal_state_tool.validation_runs --latest --promotion-profile observed_runtime_enrichment_v1
+py -3.14 -m cuda_fractal_state_tool.validation_runs --list --since 2026-07-20T00:00:00+00:00 --until 2026-07-21T00:00:00+00:00
 ```
 
 Run the minimal UI:

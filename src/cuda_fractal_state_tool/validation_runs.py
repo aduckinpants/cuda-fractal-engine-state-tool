@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -35,13 +36,43 @@ def list_validation_runs(path: Path) -> list[dict[str, Any]]:
     return normalized
 
 
-def _matches_filter(run: dict[str, Any], status: Optional[str], runtime_status: Optional[str], promotion_profile: Optional[str]) -> bool:
+def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
+    if value is None:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _matches_filter(
+    run: dict[str, Any],
+    status: Optional[str],
+    runtime_status: Optional[str],
+    promotion_profile: Optional[str],
+    since: Optional[str],
+    until: Optional[str],
+) -> bool:
     if status is not None and str(run.get("status") or "") != status:
         return False
     if runtime_status is not None and str(run.get("runtime_status") or "") != runtime_status:
         return False
     if promotion_profile is not None and str(run.get("promotion_profile") or "") != promotion_profile:
         return False
+    if since is not None or until is not None:
+        run_ts = _parse_timestamp(run.get("timestamp_utc"))
+        if run_ts is None:
+            return False
+        since_ts = _parse_timestamp(since)
+        until_ts = _parse_timestamp(until)
+        if since is not None and since_ts is None:
+            raise ValueError(f"Invalid --since timestamp: {since}")
+        if until is not None and until_ts is None:
+            raise ValueError(f"Invalid --until timestamp: {until}")
+        if since_ts is not None and run_ts < since_ts:
+            return False
+        if until_ts is not None and run_ts > until_ts:
+            return False
     return True
 
 
@@ -51,11 +82,20 @@ def filter_validation_runs(
     status: Optional[str] = None,
     runtime_status: Optional[str] = None,
     promotion_profile: Optional[str] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     return [
         run
         for run in runs
-        if _matches_filter(run, status=status, runtime_status=runtime_status, promotion_profile=promotion_profile)
+        if _matches_filter(
+            run,
+            status=status,
+            runtime_status=runtime_status,
+            promotion_profile=promotion_profile,
+            since=since,
+            until=until,
+        )
     ]
 
 
@@ -70,12 +110,16 @@ def latest_filtered_validation_run(
     status: Optional[str] = None,
     runtime_status: Optional[str] = None,
     promotion_profile: Optional[str] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     runs = filter_validation_runs(
         list_validation_runs(path),
         status=status,
         runtime_status=runtime_status,
         promotion_profile=promotion_profile,
+        since=since,
+        until=until,
     )
     return runs[0] if runs else None
 
@@ -86,12 +130,16 @@ def summarize_validation_runs(
     status: Optional[str] = None,
     runtime_status: Optional[str] = None,
     promotion_profile: Optional[str] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
 ) -> dict[str, Any]:
     runs = filter_validation_runs(
         list_validation_runs(path),
         status=status,
         runtime_status=runtime_status,
         promotion_profile=promotion_profile,
+        since=since,
+        until=until,
     )
     status_counts: dict[str, int] = {}
     runtime_status_counts: dict[str, int] = {}
@@ -110,6 +158,8 @@ def summarize_validation_runs(
             "status": status,
             "runtime_status": runtime_status,
             "promotion_profile": promotion_profile,
+            "since": since,
+            "until": until,
         },
         "status_counts": status_counts,
         "runtime_status_counts": runtime_status_counts,
@@ -128,6 +178,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--status", type=str, default=None, help="Filter by validation status")
     parser.add_argument("--runtime-status", type=str, default=None, help="Filter by runtime status")
     parser.add_argument("--promotion-profile", type=str, default=None, help="Filter by promotion profile")
+    parser.add_argument("--since", type=str, default=None, help="Include runs at or after this ISO timestamp")
+    parser.add_argument("--until", type=str, default=None, help="Include runs at or before this ISO timestamp")
     args = parser.parse_args(argv)
 
     index_path = args.index.resolve() if args.index else validation_index_path(args.repo_root)
@@ -137,6 +189,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             status=args.status,
             runtime_status=args.runtime_status,
             promotion_profile=args.promotion_profile,
+            since=args.since,
+            until=args.until,
         )
         if args.limit is not None:
             runs = runs[: max(args.limit, 0)]
@@ -149,6 +203,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             status=args.status,
             runtime_status=args.runtime_status,
             promotion_profile=args.promotion_profile,
+            since=args.since,
+            until=args.until,
         )
         print(json.dumps(latest, indent=2, sort_keys=True))
         return 0
@@ -158,6 +214,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         status=args.status,
         runtime_status=args.runtime_status,
         promotion_profile=args.promotion_profile,
+        since=args.since,
+        until=args.until,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0

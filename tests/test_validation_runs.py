@@ -87,6 +87,15 @@ class ValidationRunsTests(unittest.TestCase):
             self.assertEqual(summary_filtered["status_counts"]["runtime_proof_succeeded"], 1)
             self.assertEqual(summary_filtered["filters"]["promotion_profile"], "observed_runtime_enrichment_v1")
 
+            summary_window = summarize_validation_runs(path, since="2026-07-20T11:30:00+00:00")
+            self.assertEqual(summary_window["run_count"], 1)
+            self.assertEqual(summary_window["latest_run"]["run_id"], "newest-promo")
+            self.assertEqual(summary_window["filters"]["since"], "2026-07-20T11:30:00+00:00")
+
+            latest_window = latest_filtered_validation_run(path, until="2026-07-20T11:30:00+00:00")
+            self.assertIsNotNone(latest_window)
+            self.assertEqual(latest_window["run_id"], "newer")
+
     def test_list_limit_returns_only_first_n_sorted_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "index.json"
@@ -125,6 +134,13 @@ class ValidationRunsTests(unittest.TestCase):
             # Smoke the CLI path with --list --limit to ensure it parses and exits.
             exit_code = main(["--index", str(path), "--list", "--limit", "1"])
             self.assertEqual(exit_code, 0)
+
+        def test_invalid_since_timestamp_is_rejected(self) -> None:
+          with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "index.json"
+            path.write_text('{"entries": []}', encoding="utf-8")
+            with self.assertRaises(ValueError):
+              summarize_validation_runs(path, since="not-a-timestamp")
 
 
 if __name__ == "__main__":
