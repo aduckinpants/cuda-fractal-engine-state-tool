@@ -29,6 +29,7 @@ class WorkflowResult:
     working_state_dir: Path
     validation_run_dir: Path
     validation_run_manifest_path: Path
+    runtime_status: str
     transport_candidate_path: Path
     proven_state_path: Optional[Path]
     replay_state_path: Optional[Path]
@@ -66,6 +67,7 @@ def _copy_if_exists(source: Path, destination: Path) -> bool:
 def _build_validation_run_manifest(
     state_id: str,
     status: str,
+    runtime_status: str,
     baseline: FrozenBaseline,
     proposal: ProposalV1,
     state_dir: Path,
@@ -80,6 +82,7 @@ def _build_validation_run_manifest(
     return {
         "run_id": state_id,
         "status": status,
+        "runtime_status": runtime_status,
         "timestamp_utc": _utc_now(),
         "baseline_id": baseline.baseline_id,
         "baseline_sha256": baseline.manifest["state_sha256"],
@@ -165,6 +168,17 @@ def execute_proposal_workflow(
     else:
         status = "runtime_proof_succeeded"
 
+    if replay_result.timed_out:
+        runtime_status = "runtime_timeout"
+    elif replay_result.exit_code not in (0, None):
+        runtime_status = "runtime_failure"
+    elif not replay_state_path.exists():
+        runtime_status = "runtime_failure"
+    elif diff_result is not None and diff_result.has_disallowed_difference:
+        runtime_status = "runtime_replay_failure"
+    else:
+        runtime_status = "runtime_success"
+
     proven_state_path: Optional[Path] = None
     if status == "runtime_proof_succeeded":
         proven_state_path = state_dir / "state.json"
@@ -195,6 +209,7 @@ def execute_proposal_workflow(
     validation_run_manifest = _build_validation_run_manifest(
         state_id,
         status,
+        runtime_status,
         baseline,
         proposal,
         state_dir,
@@ -213,6 +228,7 @@ def execute_proposal_workflow(
         working_state_dir=state_dir,
         validation_run_dir=validation_run_dir,
         validation_run_manifest_path=validation_run_manifest_path,
+        runtime_status=runtime_status,
         transport_candidate_path=candidate_path,
         proven_state_path=proven_state_path,
         replay_state_path=replay_state_path if replay_state_path.exists() else None,

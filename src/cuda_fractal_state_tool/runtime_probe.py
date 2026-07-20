@@ -45,6 +45,22 @@ def _sanitize_command(command: list[str]) -> list[str]:
     return command
 
 
+def _classify_command_record(record: dict[str, Any]) -> str:
+    name = record.get("name")
+    exit_code = record.get("exit_code")
+    timed_out = bool(record.get("timed_out"))
+    replay_state_exists = bool(record.get("replay_state_exists"))
+    if timed_out:
+        return "runtime_timeout"
+    if exit_code not in (0, None):
+        if name == "invalid_json_capture":
+            return "runtime_rejected_input"
+        return "runtime_failure"
+    if name in {"capture_one", "capture_two", "replay_one"} and not replay_state_exists:
+        return "runtime_failure"
+    return "runtime_success"
+
+
 def _load_json(path: Path) -> Any:
     return loads_no_duplicates(path.read_text(encoding="utf-8"))
 
@@ -68,6 +84,14 @@ def _rewrite_cached_record(record: dict[str, Any], output_root: Path) -> dict[st
             arg.replace(old_root_posix, new_root_posix).replace(old_root_text, new_root_text) if isinstance(arg, str) else arg
             for arg in rewritten["command"]
         ]
+    name = rewritten.get("name")
+    if name in {"capture_one", "capture_two"}:
+        rewritten["replay_state_exists"] = (output_root / str(name) / "state.json").exists()
+    elif name == "replay_one":
+        rewritten["replay_state_exists"] = (output_root / "replay_one" / "state.json").exists()
+    else:
+        rewritten["replay_state_exists"] = False
+    rewritten["status"] = _classify_command_record(rewritten)
     return rewritten
 
 
@@ -88,10 +112,15 @@ def _load_command_records(output_root: Path) -> list[dict[str, Any]]:
 
 def _build_summary(output_root: Path, commands: list[dict[str, Any]], cache_hit: bool, cache_key: str) -> dict[str, Any]:
     comparison_path = output_root / "capture_comparison.json"
+    command_status_counts: dict[str, int] = {}
+    for record in commands:
+        status = str(record.get("status") or "runtime_unknown")
+        command_status_counts[status] = command_status_counts.get(status, 0) + 1
     return {
         "runtime_identity_path": str((output_root / "runtime_identity.json").resolve()),
         "launcher_resolution_path": str((output_root / "launcher_resolution.json").resolve()),
         "commands": commands,
+        "command_status_counts": command_status_counts,
         "capture_comparison_path": str(comparison_path.resolve()) if comparison_path.exists() else None,
         "capture_one_state_exists": (output_root / "capture_one" / "state.json").exists(),
         "capture_two_state_exists": (output_root / "capture_two" / "state.json").exists(),
@@ -140,6 +169,13 @@ def _run_and_record(name: str, command: list[str], cwd: Path, output_root: Path,
     }
     _write_text(output_root / f"{name}.stdout.txt", result.stdout)
     _write_text(output_root / f"{name}.stderr.txt", result.stderr)
+    if name in {"capture_one", "capture_two"}:
+        record["replay_state_exists"] = (output_root / name / "state.json").exists()
+    elif name == "replay_one":
+        record["replay_state_exists"] = (output_root / "replay_one" / "state.json").exists()
+    else:
+        record["replay_state_exists"] = False
+    record["status"] = _classify_command_record(record)
     _write_json(output_root / f"{name}.json", record)
     return record
 
