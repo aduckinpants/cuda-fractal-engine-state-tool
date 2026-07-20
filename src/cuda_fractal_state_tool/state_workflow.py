@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .baseline import FrozenBaseline, load_frozen_baseline
-from .json_utils import dumps_pretty
+from .json_utils import dumps_pretty, loads_no_duplicates
 from .materializer import materialize_transport_candidate
 from .process_utils import ProcessResult, run_command
 from .proposal import ProposalV1, parse_proposal_v1
@@ -23,6 +23,13 @@ from .state_compare import DocumentComparison, compare_json_documents
 from .workspace_layout import WorkspaceLayout
 
 
+PROMOTION_PROFILES: dict[str, set[str]] = {
+    "none": set(),
+    # Observed replay enrichments from probe evidence; applied as an explicit side artifact.
+    "observed_runtime_enrichment_v1": {"color_pipeline_draft", "sidecar_orientation"},
+}
+
+
 @dataclass
 class WorkflowResult:
     status: str
@@ -31,6 +38,9 @@ class WorkflowResult:
     validation_run_manifest_path: Path
     validation_runs_index_path: Path
     runtime_status: str
+    promotion_profile: str
+    promoted_state_path: Optional[Path]
+    promotion_report_path: Optional[Path]
     transport_candidate_path: Path
     proven_state_path: Optional[Path]
     replay_state_path: Optional[Path]
@@ -79,6 +89,7 @@ def _build_validation_run_manifest(
     state_id: str,
     status: str,
     runtime_status: str,
+    promotion_profile: str,
     baseline: FrozenBaseline,
     proposal: ProposalV1,
     state_dir: Path,
@@ -86,6 +97,8 @@ def _build_validation_run_manifest(
     replay_state_path: Path,
     replay_frame_path: Path,
     proven_state_path: Optional[Path],
+    promoted_state_path: Optional[Path],
+    promotion_report_path: Optional[Path],
     diff_result: Optional[DocumentComparison],
     replay_result: ProcessResult,
     runtime_cmd_path: Path,
@@ -94,6 +107,7 @@ def _build_validation_run_manifest(
         "run_id": state_id,
         "status": status,
         "runtime_status": runtime_status,
+        "promotion_profile": promotion_profile,
         "timestamp_utc": _utc_now(),
         "baseline_id": baseline.baseline_id,
         "baseline_sha256": baseline.manifest["state_sha256"],
@@ -102,6 +116,8 @@ def _build_validation_run_manifest(
         "working_state_dir": str(state_dir.resolve()),
         "transport_candidate_path": str((state_dir / "transport_candidate.json").resolve()),
         "proven_state_path": str(proven_state_path) if proven_state_path else None,
+        "promoted_state_path": str(promoted_state_path) if promoted_state_path else None,
+        "promotion_report_path": str(promotion_report_path) if promotion_report_path else None,
         "replay_state_path": str(replay_state_path) if replay_state_path.exists() else None,
         "replay_frame_path": str(replay_frame_path) if replay_frame_path.exists() else None,
         "validation_path": str(validation_path.resolve()),
@@ -131,9 +147,11 @@ def _update_validation_runs_index(index_path: Path, manifest: dict[str, Any]) ->
         "timestamp_utc": manifest.get("timestamp_utc"),
         "status": manifest.get("status"),
         "runtime_status": manifest.get("runtime_status"),
+        "promotion_profile": manifest.get("promotion_profile"),
         "baseline_id": manifest.get("baseline_id"),
         "manifest_path": manifest.get("manifest_path"),
         "working_state_dir": manifest.get("working_state_dir"),
+        "promoted_state_path": manifest.get("promoted_state_path"),
     }
     entries.append(entry)
     root["entries"] = entries
@@ -149,6 +167,40 @@ def replay_transport_candidate(runtime_cmd_path: Path, candidate_path: Path, rep
     return run_command(command, cwd=runtime_cwd, timeout_seconds=timeout_seconds)
 
 
+def _build_promoted_state(candidate_path: Path, replay_state_path: Path, promoted_state_path: Path, promotion_profile: str) -> tuple[Path, dict[str, Any]]:
+    allowed_keys = PROMOTION_PROFILES[promotion_profile]
+    candidate = loads_no_duplicates(candidate_path.read_text(encoding="utf-8"))
+    replay = loads_no_duplicates(replay_state_path.read_text(encoding="utf-8"))
+    if not isinstance(candidate, dict) or not isinstance(replay, dict):
+        raise ValueError("Candidate and replay state must be JSON objects for promotion")
+
+    promoted: dict[str, Any] = dict(candidate)
+    applied_keys: list[str] = []
+    missing_keys: list[str] = []
+    unchanged_keys: list[str] = []
+    for key in sorted(allowed_keys):
+        if key not in replay:
+            missing_keys.append(key)
+            continue
+        previous = promoted.get(key)
+        promoted[key] = replay[key]
+        if previous == replay[key]:
+            unchanged_keys.append(key)
+        else:
+            applied_keys.append(key)
+
+    promoted_state_path.parent.mkdir(parents=True, exist_ok=True)
+    promoted_state_path.write_text(json.dumps(promoted, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    report = {
+        "promotion_profile": promotion_profile,
+        "allowed_keys": sorted(allowed_keys),
+        "applied_keys": applied_keys,
+        "unchanged_keys": unchanged_keys,
+        "missing_keys": missing_keys,
+    }
+    return promoted_state_path, report
+
+
 def execute_proposal_workflow(
     proposal_text: str,
     baseline_manifest_path: Path,
@@ -156,7 +208,11 @@ def execute_proposal_workflow(
     state_id: str,
     runtime_cmd_path: Path = DEFAULT_RUNTIME_CMD,
     timeout_seconds: float = 90.0,
+    promotion_profile: str = "none",
 ) -> WorkflowResult:
+    if promotion_profile not in PROMOTION_PROFILES:
+        raise ValueError(f"Unknown promotion profile: {promotion_profile}")
+
     baseline = load_frozen_baseline(baseline_manifest_path)
     proposal = parse_proposal_v1(proposal_text, baseline.baseline_id, baseline.manifest["state_sha256"])
 
@@ -216,9 +272,21 @@ def execute_proposal_workflow(
         runtime_status = "runtime_success"
 
     proven_state_path: Optional[Path] = None
+    promoted_state_path: Optional[Path] = None
+    promotion_report_path: Optional[Path] = None
     if status == "runtime_proof_succeeded":
         proven_state_path = state_dir / "state.json"
         shutil.copyfile(candidate_path, proven_state_path)
+        if promotion_profile != "none" and replay_state_path.exists():
+            promoted_state_path = state_dir / "promoted_state.json"
+            promotion_report_path = state_dir / "promotion_report.json"
+            _, promotion_report = _build_promoted_state(
+                candidate_path,
+                replay_state_path,
+                promoted_state_path,
+                promotion_profile,
+            )
+            _write_json(promotion_report_path, promotion_report)
 
     validation = {
         "status": status,
@@ -236,6 +304,9 @@ def execute_proposal_workflow(
         "exit_code": replay_result.exit_code,
         "timed_out": replay_result.timed_out,
         "elapsed_seconds": replay_result.elapsed_seconds,
+        "promotion_profile": promotion_profile,
+        "promoted_state_path": str(promoted_state_path) if promoted_state_path else None,
+        "promotion_report_path": str(promotion_report_path) if promotion_report_path else None,
         "stdout_path": str((state_dir / 'stdout.txt').resolve()),
         "stderr_path": str((state_dir / 'stderr.txt').resolve()),
         "candidate_replay_diff_path": str((state_dir / 'candidate_replay_diff.json').resolve()) if diff_result else None,
@@ -246,6 +317,7 @@ def execute_proposal_workflow(
         state_id,
         status,
         runtime_status,
+        promotion_profile,
         baseline,
         proposal,
         state_dir,
@@ -253,6 +325,8 @@ def execute_proposal_workflow(
         replay_state_path,
         replay_frame_path,
         proven_state_path,
+        promoted_state_path,
+        promotion_report_path,
         diff_result,
         replay_result,
         runtime_cmd_path,
@@ -268,6 +342,9 @@ def execute_proposal_workflow(
         validation_run_manifest_path=validation_run_manifest_path,
         validation_runs_index_path=validation_runs_index_path,
         runtime_status=runtime_status,
+        promotion_profile=promotion_profile,
+        promoted_state_path=promoted_state_path,
+        promotion_report_path=promotion_report_path,
         transport_candidate_path=candidate_path,
         proven_state_path=proven_state_path,
         replay_state_path=replay_state_path if replay_state_path.exists() else None,
