@@ -4,7 +4,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cuda_fractal_state_tool.validation_runs import latest_validation_run, list_validation_runs, load_validation_index, summarize_validation_runs
+from cuda_fractal_state_tool.validation_runs import (
+  filter_validation_runs,
+  latest_filtered_validation_run,
+  latest_validation_run,
+  list_validation_runs,
+  load_validation_index,
+  summarize_validation_runs,
+)
 
 
 class ValidationRunsTests(unittest.TestCase):
@@ -32,7 +39,15 @@ class ValidationRunsTests(unittest.TestCase):
       "run_id": "newer",
       "timestamp_utc": "2026-07-20T11:00:00+00:00",
       "status": "runtime_proof_succeeded",
-      "runtime_status": "runtime_success"
+      "runtime_status": "runtime_success",
+      "promotion_profile": "none"
+    },
+    {
+      "run_id": "newest-promo",
+      "timestamp_utc": "2026-07-20T12:00:00+00:00",
+      "status": "runtime_proof_succeeded",
+      "runtime_status": "runtime_success",
+      "promotion_profile": "observed_runtime_enrichment_v1"
     }
   ]
 }
@@ -41,19 +56,33 @@ class ValidationRunsTests(unittest.TestCase):
             )
 
             runs = list_validation_runs(path)
-            self.assertEqual(runs[0]["run_id"], "newer")
-            self.assertEqual(runs[1]["run_id"], "older")
+            self.assertEqual(runs[0]["run_id"], "newest-promo")
+            self.assertEqual(runs[1]["run_id"], "newer")
+            self.assertEqual(runs[2]["run_id"], "older")
 
             latest = latest_validation_run(path)
             self.assertIsNotNone(latest)
-            self.assertEqual(latest["run_id"], "newer")
+            self.assertEqual(latest["run_id"], "newest-promo")
 
             summary = summarize_validation_runs(path)
-            self.assertEqual(summary["run_count"], 2)
-            self.assertEqual(summary["status_counts"]["runtime_proof_succeeded"], 1)
+            self.assertEqual(summary["run_count"], 3)
+            self.assertEqual(summary["status_counts"]["runtime_proof_succeeded"], 2)
             self.assertEqual(summary["status_counts"]["runtime_proof_failed"], 1)
-            self.assertEqual(summary["runtime_status_counts"]["runtime_success"], 1)
+            self.assertEqual(summary["runtime_status_counts"]["runtime_success"], 2)
             self.assertEqual(summary["runtime_status_counts"]["runtime_failure"], 1)
+
+            filtered = filter_validation_runs(runs, promotion_profile="observed_runtime_enrichment_v1")
+            self.assertEqual(len(filtered), 1)
+            self.assertEqual(filtered[0]["run_id"], "newest-promo")
+
+            latest_filtered = latest_filtered_validation_run(path, promotion_profile="none")
+            self.assertIsNotNone(latest_filtered)
+            self.assertEqual(latest_filtered["run_id"], "newer")
+
+            summary_filtered = summarize_validation_runs(path, promotion_profile="observed_runtime_enrichment_v1")
+            self.assertEqual(summary_filtered["run_count"], 1)
+            self.assertEqual(summary_filtered["status_counts"]["runtime_proof_succeeded"], 1)
+            self.assertEqual(summary_filtered["filters"]["promotion_profile"], "observed_runtime_enrichment_v1")
 
 
 if __name__ == "__main__":

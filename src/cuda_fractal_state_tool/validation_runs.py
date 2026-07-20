@@ -35,13 +35,64 @@ def list_validation_runs(path: Path) -> list[dict[str, Any]]:
     return normalized
 
 
+def _matches_filter(run: dict[str, Any], status: Optional[str], runtime_status: Optional[str], promotion_profile: Optional[str]) -> bool:
+    if status is not None and str(run.get("status") or "") != status:
+        return False
+    if runtime_status is not None and str(run.get("runtime_status") or "") != runtime_status:
+        return False
+    if promotion_profile is not None and str(run.get("promotion_profile") or "") != promotion_profile:
+        return False
+    return True
+
+
+def filter_validation_runs(
+    runs: list[dict[str, Any]],
+    *,
+    status: Optional[str] = None,
+    runtime_status: Optional[str] = None,
+    promotion_profile: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    return [
+        run
+        for run in runs
+        if _matches_filter(run, status=status, runtime_status=runtime_status, promotion_profile=promotion_profile)
+    ]
+
+
 def latest_validation_run(path: Path) -> Optional[dict[str, Any]]:
     runs = list_validation_runs(path)
     return runs[0] if runs else None
 
 
-def summarize_validation_runs(path: Path) -> dict[str, Any]:
-    runs = list_validation_runs(path)
+def latest_filtered_validation_run(
+    path: Path,
+    *,
+    status: Optional[str] = None,
+    runtime_status: Optional[str] = None,
+    promotion_profile: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    runs = filter_validation_runs(
+        list_validation_runs(path),
+        status=status,
+        runtime_status=runtime_status,
+        promotion_profile=promotion_profile,
+    )
+    return runs[0] if runs else None
+
+
+def summarize_validation_runs(
+    path: Path,
+    *,
+    status: Optional[str] = None,
+    runtime_status: Optional[str] = None,
+    promotion_profile: Optional[str] = None,
+) -> dict[str, Any]:
+    runs = filter_validation_runs(
+        list_validation_runs(path),
+        status=status,
+        runtime_status=runtime_status,
+        promotion_profile=promotion_profile,
+    )
     status_counts: dict[str, int] = {}
     runtime_status_counts: dict[str, int] = {}
     for run in runs:
@@ -52,9 +103,14 @@ def summarize_validation_runs(path: Path) -> dict[str, Any]:
     return {
         "index_path": str(path.resolve()),
         "run_count": len(runs),
+        "filters": {
+            "status": status,
+            "runtime_status": runtime_status,
+            "promotion_profile": promotion_profile,
+        },
         "status_counts": status_counts,
         "runtime_status_counts": runtime_status_counts,
-        "latest_run": latest_validation_run(path),
+        "latest_run": runs[0] if runs else None,
     }
 
 
@@ -62,16 +118,40 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Inspect validation-run index artifacts")
     parser.add_argument("--repo-root", type=Path, default=None)
     parser.add_argument("--index", type=Path, default=None, help="Override index path")
+    parser.add_argument("--list", action="store_true", help="Print filtered run entries")
     parser.add_argument("--latest", action="store_true", help="Print only the latest run entry")
+    parser.add_argument("--status", type=str, default=None, help="Filter by validation status")
+    parser.add_argument("--runtime-status", type=str, default=None, help="Filter by runtime status")
+    parser.add_argument("--promotion-profile", type=str, default=None, help="Filter by promotion profile")
     args = parser.parse_args(argv)
 
     index_path = args.index.resolve() if args.index else validation_index_path(args.repo_root)
+    if args.list:
+        runs = filter_validation_runs(
+            list_validation_runs(index_path),
+            status=args.status,
+            runtime_status=args.runtime_status,
+            promotion_profile=args.promotion_profile,
+        )
+        print(json.dumps(runs, indent=2, sort_keys=True))
+        return 0
+
     if args.latest:
-        latest = latest_validation_run(index_path)
+        latest = latest_filtered_validation_run(
+            index_path,
+            status=args.status,
+            runtime_status=args.runtime_status,
+            promotion_profile=args.promotion_profile,
+        )
         print(json.dumps(latest, indent=2, sort_keys=True))
         return 0
 
-    summary = summarize_validation_runs(index_path)
+    summary = summarize_validation_runs(
+        index_path,
+        status=args.status,
+        runtime_status=args.runtime_status,
+        promotion_profile=args.promotion_profile,
+    )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 
