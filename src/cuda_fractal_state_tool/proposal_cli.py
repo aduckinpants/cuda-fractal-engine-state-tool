@@ -42,6 +42,29 @@ def _build_triplet_text(
         }
     )
 
+def _build_color_pipeline_draft_text(
+    baseline_id: str,
+    baseline_sha256: str,
+    lane_id: str,
+    function_id: str,
+) -> str:
+    return dumps_pretty(
+        {
+            "proposal_version": 1,
+            "base_state": {"id": baseline_id, "sha256": baseline_sha256},
+            "overrides": {
+                "color_pipeline_draft": {
+                    "lanes": [
+                        {
+                            "lane_id": lane_id,
+                            "function_id": function_id,
+                        }
+                    ]
+                }
+            },
+        }
+    )
+
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
@@ -54,9 +77,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument(
         "--example",
-        choices=["noop", "max-iter", "color-shape", "color-grading", "color-triplet"],
+        choices=["noop", "max-iter", "color-shape", "color-grading", "color-triplet", "color-pipeline-draft"],
         default="noop",
     )
+    parser.add_argument("--draft-lane", type=str, default="shape", help="Lane id for color-pipeline-draft example")
+    parser.add_argument("--draft-function", type=str, default="identity", help="Function id for color-pipeline-draft example")
     parser.add_argument("--repo-root", type=Path, default=None, help="Optional repository root for default paths")
     parser.add_argument("--baseline-manifest", type=Path, default=None, help="Baseline manifest path")
     parser.add_argument("--out", type=Path, default=None, help="Output file path (default: stdout)")
@@ -108,6 +133,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         proposal_text = build_color_shape_example(baseline_sha)
     elif args.example == "color-grading":
         proposal_text = build_color_grading_example(baseline_sha)
+    elif args.example == "color-pipeline-draft":
+        proposal_text = _build_color_pipeline_draft_text(
+            baseline_id,
+            baseline_sha,
+            args.draft_lane,
+            args.draft_function,
+        )
     else:
         proposal_text = _build_triplet_text(baseline_id, baseline_sha, args.signal, args.palette, args.grading)
 

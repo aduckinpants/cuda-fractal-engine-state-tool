@@ -96,6 +96,32 @@ class ProposalCliTests(unittest.TestCase):
         self.assertGreater(payload["count"], 0)
         self.assertIsInstance(payload["triplets"], list)
 
+    def test_color_pipeline_draft_example_can_write_to_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = self._make_baseline_manifest(root)
+            out_path = root / "proposal_draft.json"
+            exit_code = main(
+                [
+                    "--example",
+                    "color-pipeline-draft",
+                    "--draft-lane",
+                    "shape",
+                    "--draft-function",
+                    "identity",
+                    "--baseline-manifest",
+                    str(manifest_path),
+                    "--out",
+                    str(out_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            lanes = payload["overrides"]["color_pipeline_draft"]["lanes"]
+            self.assertEqual(len(lanes), 1)
+            self.assertEqual(lanes[0]["lane_id"], "shape")
+            self.assertEqual(lanes[0]["function_id"], "identity")
+
 
 if __name__ == "__main__":
     unittest.main()
