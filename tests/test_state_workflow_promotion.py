@@ -89,6 +89,10 @@ class StateWorkflowPromotionTests(unittest.TestCase):
             self.assertIn('"sidecar_orientation"', promoted_text)
             self.assertIn('"applied_keys"', report_text)
             self.assertIn('"color_pipeline_draft"', report_text)
+            self.assertIn('"allowed_classifications"', report_text)
+            self.assertIn('"runtime_replay_artifact_enrichment"', report_text)
+            self.assertIn('"derived_runtime_state"', report_text)
+            self.assertIn('"blocked_keys": {}', report_text)
 
     def test_unknown_promotion_profile_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

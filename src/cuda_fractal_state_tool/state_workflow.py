@@ -29,6 +29,8 @@ PROMOTION_PROFILES: dict[str, set[str]] = {
     "observed_runtime_enrichment_v1": {"color_pipeline_draft", "sidecar_orientation"},
 }
 
+PROMOTION_ALLOWED_CLASSIFICATIONS = {"runtime_replay_artifact_enrichment", "derived_runtime_state"}
+
 
 @dataclass
 class WorkflowResult:
@@ -167,7 +169,17 @@ def replay_transport_candidate(runtime_cmd_path: Path, candidate_path: Path, rep
     return run_command(command, cwd=runtime_cwd, timeout_seconds=timeout_seconds)
 
 
-def _build_promoted_state(candidate_path: Path, replay_state_path: Path, promoted_state_path: Path, promotion_profile: str) -> tuple[Path, dict[str, Any]]:
+def _top_level_path(path: str) -> str:
+    return path.split(".", 1)[0].split("[", 1)[0]
+
+
+def _build_promoted_state(
+    candidate_path: Path,
+    replay_state_path: Path,
+    promoted_state_path: Path,
+    promotion_profile: str,
+    diff_result: Optional[DocumentComparison],
+) -> tuple[Path, dict[str, Any]]:
     allowed_keys = PROMOTION_PROFILES[promotion_profile]
     candidate = loads_no_duplicates(candidate_path.read_text(encoding="utf-8"))
     replay = loads_no_duplicates(replay_state_path.read_text(encoding="utf-8"))
@@ -178,9 +190,23 @@ def _build_promoted_state(candidate_path: Path, replay_state_path: Path, promote
     applied_keys: list[str] = []
     missing_keys: list[str] = []
     unchanged_keys: list[str] = []
+    blocked_keys: dict[str, list[str]] = {}
+
+    key_classifications: dict[str, set[str]] = {key: set() for key in allowed_keys}
+    if diff_result is not None:
+        for diff in diff_result.differences:
+            top = _top_level_path(diff.path)
+            if top in key_classifications:
+                key_classifications[top].add(diff.classification)
+
     for key in sorted(allowed_keys):
         if key not in replay:
             missing_keys.append(key)
+            continue
+        classifications = key_classifications.get(key, set())
+        disallowed = sorted(classification for classification in classifications if classification not in PROMOTION_ALLOWED_CLASSIFICATIONS)
+        if disallowed:
+            blocked_keys[key] = disallowed
             continue
         previous = promoted.get(key)
         promoted[key] = replay[key]
@@ -194,9 +220,11 @@ def _build_promoted_state(candidate_path: Path, replay_state_path: Path, promote
     report = {
         "promotion_profile": promotion_profile,
         "allowed_keys": sorted(allowed_keys),
+        "allowed_classifications": sorted(PROMOTION_ALLOWED_CLASSIFICATIONS),
         "applied_keys": applied_keys,
         "unchanged_keys": unchanged_keys,
         "missing_keys": missing_keys,
+        "blocked_keys": blocked_keys,
     }
     return promoted_state_path, report
 
@@ -285,6 +313,7 @@ def execute_proposal_workflow(
                 replay_state_path,
                 promoted_state_path,
                 promotion_profile,
+                diff_result,
             )
             _write_json(promotion_report_path, promotion_report)
 
