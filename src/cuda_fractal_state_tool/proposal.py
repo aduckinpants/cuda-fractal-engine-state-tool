@@ -45,8 +45,16 @@ def _validate_color_grading(value: Any) -> None:
         "escape_default",
         "phase_default",
         "bands_default",
+        "neutral_default",
+        "tone_map_default",
+        "glow_default",
+        "balance_void_default",
     }:
-        raise ValueError("params.color_grading must be one of: basin_default, escape_default, phase_default, bands_default")
+        raise ValueError(
+            "params.color_grading must be one of: "
+            "basin_default, escape_default, phase_default, bands_default, "
+            "neutral_default, tone_map_default, glow_default, balance_void_default"
+        )
 
 
 def _validate_color_signal(value: Any) -> None:
@@ -96,10 +104,22 @@ COLOR_TRIPLET_PATHS = {
 ALLOWED_COLOR_TRIPLETS = {
     ("root_index", "root_classic", "basin_default"),
     ("iteration_count", "cyclic_escape", "escape_default"),
+    ("iteration_count", "cyclic_escape", "neutral_default"),
+    ("iteration_count", "cyclic_escape", "tone_map_default"),
+    ("iteration_count", "cyclic_escape", "glow_default"),
+    ("iteration_count", "cyclic_escape", "balance_void_default"),
     ("smooth_escape", "cyclic_escape", "escape_default"),
+    ("smooth_escape", "cyclic_escape", "neutral_default"),
+    ("smooth_escape", "cyclic_escape", "tone_map_default"),
+    ("smooth_escape", "cyclic_escape", "glow_default"),
+    ("smooth_escape", "cyclic_escape", "balance_void_default"),
     ("root_index", "joy", "basin_default"),
     ("phase_angle", "phase_wheel", "phase_default"),
+    ("phase_angle", "phase_wheel", "neutral_default"),
+    ("phase_angle", "phase_wheel", "balance_void_default"),
     ("iteration_bands", "banded_escape", "bands_default"),
+    ("iteration_bands", "banded_escape", "neutral_default"),
+    ("iteration_bands", "banded_escape", "balance_void_default"),
     ("sdf_signed_distance", "cyclic_escape", "escape_default"),
     ("sdf_inside_outside", "cyclic_escape", "escape_default"),
     ("sdf_boundary_band", "cyclic_escape", "escape_default"),
@@ -109,10 +129,18 @@ ALLOWED_COLOR_TRIPLETS = {
     ("root_proximity", "explaino_cmap", "escape_default"),
     ("root_proximity", "cyclic_escape", "escape_default"),
     ("root_phase", "phase_wheel", "phase_default"),
+    ("root_phase", "phase_wheel", "neutral_default"),
+    ("root_phase", "phase_wheel", "balance_void_default"),
     ("escape_magnitude", "cyclic_escape", "escape_default"),
+    ("escape_magnitude", "cyclic_escape", "neutral_default"),
+    ("escape_magnitude", "cyclic_escape", "tone_map_default"),
+    ("escape_magnitude", "cyclic_escape", "glow_default"),
+    ("escape_magnitude", "cyclic_escape", "balance_void_default"),
     ("smooth_escape", "explaino_cmap", "escape_default"),
     ("escape_magnitude", "explaino_cmap", "escape_default"),
     ("orbit_stripe", "phase_wheel", "phase_default"),
+    ("orbit_stripe", "phase_wheel", "neutral_default"),
+    ("orbit_stripe", "phase_wheel", "balance_void_default"),
 }
 
 
@@ -187,7 +215,16 @@ PATH_SPECS: dict[str, ProposalPathSpec] = {
     "params.color_grading": ProposalPathSpec(
         path="params.color_grading",
         value_kind="enum",
-        accepted_values=("basin_default", "escape_default", "phase_default", "bands_default"),
+        accepted_values=(
+            "basin_default",
+            "escape_default",
+            "phase_default",
+            "bands_default",
+            "neutral_default",
+            "tone_map_default",
+            "glow_default",
+            "balance_void_default",
+        ),
         validator=_validate_color_grading,
         provenance="baseline serialized path",
         accepted_values_source="Runtime parameter-surface metadata and source grading ids.",
