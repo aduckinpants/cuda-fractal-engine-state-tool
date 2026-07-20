@@ -67,6 +67,8 @@ Phase 1 supports useful bounded color overrides:
 	- `sdf_boundary_band + cyclic_escape + glow_default`
 	- `sdf_boundary_band + cyclic_escape + balance_void_default`
 	- `sdf_normal_angle + phase_wheel + phase_default`
+	- `sdf_normal_angle + phase_wheel + neutral_default`
+	- `sdf_normal_angle + phase_wheel + balance_void_default`
 	- `sdf_curvature + cyclic_escape + escape_default`
 	- `sdf_curvature + cyclic_escape + neutral_default`
 	- `sdf_curvature + cyclic_escape + tone_map_default`
@@ -83,6 +85,10 @@ Phase 1 supports useful bounded color overrides:
 	- `root_proximity + explaino_cmap + glow_default`
 	- `root_proximity + explaino_cmap + balance_void_default`
 	- `root_proximity + cyclic_escape + escape_default`
+	- `root_proximity + cyclic_escape + neutral_default`
+	- `root_proximity + cyclic_escape + tone_map_default`
+	- `root_proximity + cyclic_escape + glow_default`
+	- `root_proximity + cyclic_escape + balance_void_default`
 	- `root_phase + phase_wheel + phase_default`
 	- `root_phase + phase_wheel + neutral_default`
 	- `root_phase + phase_wheel + balance_void_default`
