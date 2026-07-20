@@ -79,6 +79,13 @@ py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_trip
 Proposal CLI intentionally remains bounded: it emits scalar and replay-proven triplet examples only.
 Arbitrary `color_pipeline_draft` authoring is not yet accepted in `proposal_v1`.
 
+Inspect runtime metadata for lane/function catalog discovery (fail-closed parser):
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3.14 -m cuda_fractal_state_tool.lane_catalog_cli --describe-functions .local\runtime_probe\describe-functions.json
+```
+
 Run the minimal UI:
 
 ```powershell
