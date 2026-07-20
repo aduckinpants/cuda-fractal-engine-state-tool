@@ -67,6 +67,7 @@ Generate proposal examples (for workflow_cli input):
 $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.proposal_cli --example noop --out .local\proposal_noop.json
 py -3.14 -m cuda_fractal_state_tool.proposal_cli --example color-triplet --signal root_proximity --palette cyclic_escape --grading tone_map_default --out .local\proposal_triplet.json
+py -3.14 -m cuda_fractal_state_tool.proposal_cli --list-color-triplets
 py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_triplet.json --promotion-profile none
 ```
 

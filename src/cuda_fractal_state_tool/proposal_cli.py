@@ -7,6 +7,7 @@ from typing import Optional
 from .baseline import BASELINE_ID, load_frozen_baseline
 from .json_utils import dumps_pretty
 from .proposal import (
+    ALLOWED_COLOR_TRIPLETS,
     build_color_grading_example,
     build_color_shape_example,
     build_color_triplet_example,
@@ -56,7 +57,30 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--signal", type=str, default="iteration_count", help="Signal id for color-triplet example")
     parser.add_argument("--palette", type=str, default="cyclic_escape", help="Palette id for color-triplet example")
     parser.add_argument("--grading", type=str, default="escape_default", help="Grading id for color-triplet example")
+    parser.add_argument(
+        "--list-color-triplets",
+        action="store_true",
+        help="Print replay-proven color triplets and exit",
+    )
     args = parser.parse_args(argv)
+
+    if args.list_color_triplets:
+        print(
+            dumps_pretty(
+                {
+                    "count": len(ALLOWED_COLOR_TRIPLETS),
+                    "triplets": [
+                        {
+                            "signal": signal,
+                            "palette": palette,
+                            "grading": grading,
+                        }
+                        for signal, palette, grading in sorted(ALLOWED_COLOR_TRIPLETS)
+                    ],
+                }
+            )
+        )
+        return 0
 
     baseline_manifest = args.baseline_manifest.resolve() if args.baseline_manifest else _default_baseline_manifest(args.repo_root)
     baseline = load_frozen_baseline(baseline_manifest)

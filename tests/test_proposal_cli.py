@@ -85,6 +85,17 @@ class ProposalCliTests(unittest.TestCase):
             self.assertEqual(payload["overrides"]["params.color_palette"], "cyclic_escape")
             self.assertEqual(payload["overrides"]["params.color_grading"], "tone_map_default")
 
+    def test_list_color_triplets_mode_prints_catalog(self) -> None:
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = main(["--list-color-triplets"])
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertIn("count", payload)
+        self.assertIn("triplets", payload)
+        self.assertGreater(payload["count"], 0)
+        self.assertIsInstance(payload["triplets"], list)
+
 
 if __name__ == "__main__":
     unittest.main()
