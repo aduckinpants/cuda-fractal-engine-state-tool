@@ -66,4 +66,4 @@ The final focused Slice 2 set passes 24 tests. The complete Python 3.14 reposito
 
 ## Boundary
 
-This slice does not invoke the runtime, classify engine normalization, capture candidate frames, prove action-free replay, create proof receipts, or enable launch. The proposal-oriented desktop UI remains active only until the approved atomic Slice 4 cutover. Slice 3 is the next approved implementation boundary.
+This slice did not invoke the runtime, classify engine normalization, capture candidate frames, prove action-free replay, create proof receipts, or enable launch. Those boundaries were completed in later slices. The proposal-oriented desktop UI described at this historical checkpoint was removed by the atomic Slice 4 cutover.

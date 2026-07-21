@@ -92,8 +92,8 @@ during this implementation slice.
 
 ## Validation and next boundary
 
-Focused proof, Packet V6, state-override, and asynchronous ownership tests pass.
-The complete Python 3.14 suite passes 152 tests. The next approved boundary is
-the atomic UI cutover: expose the override editor, candidate preview, explicit
-Accept/Revision controls, and launch gating while deleting the active proposal
-orchestration surface.
+At this Slice 3 checkpoint, focused proof, Packet V6, state-override, and
+asynchronous ownership tests passed and the then-current complete Python 3.14
+suite passed 152 tests. The later atomic UI cutover exposed the override editor,
+candidate preview, explicit Accept/Revision controls, and launch gating while
+deleting the active proposal orchestration surface and its obsolete tests.

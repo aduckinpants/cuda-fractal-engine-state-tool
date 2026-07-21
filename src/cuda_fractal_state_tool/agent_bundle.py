@@ -727,7 +727,7 @@ def _packet_markdown(
             "Discuss ideas normally until the user explicitly asks to make, apply, or return a concrete change, or",
             "unambiguously accepts a specific immediately preceding change. If intent is ambiguous, ask one concise question.",
             "When triggered, return exactly one fenced `json` block containing one sparse state-shaped object. Include only",
-            "properties to change. Do not return a complete state, proposal version, IDs, hashes, capability profiles, actions,",
+            "properties to change. Do not return a complete state, IDs, hashes, capability profiles, actions,",
             "or receipt metadata. Objects merge recursively; scalars replace; arrays replace completely. `null`, duplicates,",
             "unknown paths, absent paths, and read-only fields are rejected.",
             "For view changes, return each ordinary value and its required serialized companion in the same override:",

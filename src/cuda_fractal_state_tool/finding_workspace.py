@@ -11,12 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from .proposal import ProposalV1
 from .workspace_layout import initialize_workspace_root
 
 
 FINDING_KEY_SCHEMA = "finding-key-v1"
-PROPOSAL_KEY_SCHEMA = "proposal-key-v1"
 WORKSPACE_MANIFEST_SCHEMA_VERSION = 1
 FINDINGS_INDEX_FILENAME = "findings_index.json"
 WORKSPACE_LOCK_FILENAME = ".workspace-import.lock"
@@ -125,9 +123,7 @@ class SourceCaptureImporter:
 
         with _workspace_lock(self.workspace_root):
             source_dir.mkdir(parents=True, exist_ok=True)
-            proposals_dir = finding_dir / "proposals"
             packets_dir = finding_dir / "packets"
-            proposals_dir.mkdir(parents=True, exist_ok=True)
             packets_dir.mkdir(parents=True, exist_ok=True)
 
             self._copy_required_source_artifacts(resolved, source_dir)
@@ -365,7 +361,13 @@ class SourceCaptureImporter:
             "paths": {
                 "source_dir": "source",
                 "packets_dir": "packets",
-                "proposals_dir": "proposals",
+                "proofs_dir": "proofs",
+                **(
+                    {"legacy_proposals_dir": (previous.get("paths") or {}).get("proposals_dir")}
+                    if isinstance(previous.get("paths"), dict)
+                    and isinstance((previous.get("paths") or {}).get("proposals_dir"), str)
+                    else {}
+                ),
             },
             "source_aliases": deduped_aliases,
         }
@@ -409,28 +411,3 @@ def compute_finding_id(
         "primary_frame_sha256": primary_frame_sha256,
     }
     return _sha256_bytes(_canonical_json_bytes(payload))
-
-
-def canonical_validated_override_map(overrides: dict[str, Any]) -> dict[str, Any]:
-    # Normalize through JSON to ensure deterministic typing and recursive key ordering.
-    return json.loads(_canonical_json_bytes(overrides).decode("utf-8"))
-
-
-def compute_proposal_id(
-    proposal: ProposalV1,
-    finding_id: str,
-    authoring_base_state_sha256: str,
-) -> str:
-    payload = {
-        "key_schema": PROPOSAL_KEY_SCHEMA,
-        "finding_id": finding_id,
-        "authoring_base_state_sha256": authoring_base_state_sha256,
-        "proposal_version": proposal.proposal_version,
-        "overrides": canonical_validated_override_map(dict(proposal.overrides)),
-    }
-    return _sha256_bytes(_canonical_json_bytes(payload))
-
-
-def build_validation_run_id() -> str:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-    return f"{stamp}_{uuid.uuid4().hex[:8]}"
