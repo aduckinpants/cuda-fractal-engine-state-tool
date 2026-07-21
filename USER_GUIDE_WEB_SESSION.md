@@ -49,6 +49,19 @@ The right side is agent output moving inward:
 The session states are `EMPTY`, `FINDING_READY`, `PACKET_READY`,
 `PROPOSAL_DIRTY`, `PROVING`, `PROVEN`, and `REJECTED`.
 
+## Agent behavioral contract
+
+The packet's first section keeps exploratory questions in discussion mode,
+including “What would you try?”, “Show me a good alternative”, and “Could root
+proximity help?”. Proposal output begins only when the user explicitly asks for
+a proposal, asks to apply/try/do a specific change, or unambiguously accepts a
+specific immediately preceding change. Ambiguous intent requires one concise
+clarification and no JSON.
+
+Once triggered, the agent returns a short rationale and exactly one fenced
+`json` block containing a `proposal_version: 1` object. `proposal_v1` is the
+object contract name, not the code-fence language.
+
 ## Packet and preview safety
 
 - Packet payloads contain the exact captured engine `state.json`, optional exact
@@ -69,6 +82,8 @@ The session states are `EMPTY`, `FINDING_READY`, `PACKET_READY`,
   generated applicability projection.
 - Applicability is not counterfactual sensitivity proof. Conditional controls
   retain their exact visibility surface and `visible_if` metadata in the packet.
+  Relationships among applicable values remain hypotheses unless engine help or
+  a proven comparison supports them.
 - The exact copied packet is persisted with a manifest under the mirrored
   finding.
 - The active capability profile is `finding-color-first-row-v1`; proof receipts

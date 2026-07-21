@@ -190,6 +190,13 @@ published runtime's parameter-surface descriptor with its deployed UI schema,
 including current values and parameter properties. The proposal editor starts
 empty.
 
+The packet begins with a compact behavioral contract before the evidence
+appendix. It fixes the evidence order, keeps questions and requests for ideas in
+discussion mode, defines the exact proposal trigger, requires one fenced `json`
+block containing a `proposal_version: 1` object, and keeps relationships among
+applicable values hypothetical until engine help or comparative proof supports
+them.
+
 `Validate & Replay Prove` binds the exact packet and proposal text, applies
 scalar overrides, lowers bounded Color Pipeline row-0 selections through the
 engine action seam, captures the engine-emitted candidate, and replays that

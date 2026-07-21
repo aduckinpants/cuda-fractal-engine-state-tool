@@ -21,7 +21,7 @@ from .runtime_surface import DEFAULT_RUNTIME_CMD, build_runtime_identity, resolv
 
 
 CAPABILITY_PROFILE = "finding-color-first-row-v1"
-PACKET_VERSION = 3
+PACKET_VERSION = 4
 
 
 class SessionState(str, Enum):
@@ -438,6 +438,25 @@ def build_finding_intake_packet(
         [
             "# CUDA Fractal Finding — Agent Exploration Packet",
             "",
+            "## Behavioral contract — read first",
+            "",
+            "- This interaction is exploration-first. Discuss the finding before turning it into configuration work.",
+            "- Evidence order: attached frame for visual observations; engine-generated parameter projection for",
+            "  applicability and parameter properties; `fractal-state.json` for capture-time review values and Color",
+            "  Pipeline context; `state.json` for the exact replay base. Engine help or proven comparisons are needed",
+            "  for causal claims.",
+            "- Do not emit proposal JSON for questions, observations, requests for ideas/options, or exploratory prompts",
+            "  such as 'What would you try?', 'Show me a good alternative', or 'Could root proximity help?'. Discuss",
+            "  those normally and ask what direction the user wants to take.",
+            "- Emit a proposal only when the user explicitly asks to make/generate/return one, asks to apply/try/do a",
+            "  specific change, or unambiguously accepts a specific immediately preceding change ('Let's do that').",
+            "- If proposal intent is ambiguous, ask one concise clarification question and emit no JSON.",
+            "- When triggered, give a short rationale followed by exactly one fenced `json` block containing one object",
+            "  whose `proposal_version` is `1`. Do not use `proposal_v1` as the fence language. Do not return a complete",
+            "  `state.json`.",
+            "- Applicability, co-occurrence, symmetry among values, and suggestive parameter names are not causal proof.",
+            "  Keep relationships hypothetical unless engine help text or a proven comparison supports them.",
+            "",
             "## What this session is for",
             "",
             "You are helping the user explore the attached CUDA fractal render.",
@@ -451,13 +470,16 @@ def build_finding_intake_packet(
             "Offer a few promising things to inspect or wonder about and ask questions that help the user choose",
             "where to look next. Discuss interesting regions and possible changes normally with the user; a proposal",
             "is optional until the user wants to try a concrete change.",
-            "You may suggest parameter and Color Pipeline directions during that discussion. When the user asks",
-            "for a concrete proposal, give a short rationale followed by exactly one `proposal_v1` JSON code block.",
-            "Do not return a complete state.json.",
+            "You may suggest parameter and Color Pipeline directions during that discussion. Follow the behavioral",
+            "contract above for the exact transition from discussion to proposal output.",
             "The desktop tool applies the bounded proposal to the exact captured state below and proves the result",
             "through the CUDA engine's existing state loader, Color Pipeline action seam, and action-free replay.",
             "",
             "Attach the finding frame to this conversation separately; the image is not embedded in this text packet.",
+            "",
+            "## Authoritative evidence appendix",
+            "",
+            "The remaining sections provide audit and execution authority. They do not change the behavioral contract.",
             "",
             "## State interpretation warning — read this before discussing the math",
             "",
@@ -482,6 +504,9 @@ def build_finding_intake_packet(
             "under its current value, mode, gate, authority choice, or downstream pipeline selection. Do not translate",
             "a suggestive identifier into undocumented mathematics; describe causal influence only when engine help",
             "text, current gating metadata, or a proven comparison supports it.",
+            "A relationship among applicable values—such as conjugate roots, real coefficients, or matching defaults—",
+            "may be worth exploring but must remain a hypothesis about the visible frame until that relationship is",
+            "documented by the engine or isolated by a comparison.",
             "",
             "Phrase conclusions at the right confidence level:",
             "- serialized fact: the field or sidecar reports a value;",

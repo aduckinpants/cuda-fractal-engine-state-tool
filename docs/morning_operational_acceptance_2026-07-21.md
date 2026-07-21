@@ -25,7 +25,7 @@ The operational capture used finding
 with authoring base
 `6d68b95d89445deef0ee1300150acb4c5283e4493212b1bb98b814e3ab72c7ef`.
 
-The UI automatically generated a 58,200-byte agent exploration packet. It
+The UI automatically generated a 60,033-byte agent exploration packet. It
 contains the exact captured `state.json`, exact engine-captured
 `fractal-state.json` review sidecar, and a 22-control `explaino_all` applicability
 projection generated from the published runtime's parameter-surface descriptor
@@ -38,6 +38,13 @@ finding/render context, UI-Salt descriptions, three parser-accepted proposal
 examples, and closing binding metadata. The incoming proposal editor was empty
 at packet readiness.
 
+The first packet section is now a compact behavioral contract. It fixes evidence
+order, keeps exploratory questions and option requests in discussion mode,
+defines explicit/specific/unambiguous proposal triggers, requires clarification
+for ambiguous intent, and removes the code-fence ambiguity by requiring one
+fenced `json` block containing a `proposal_version: 1` object. No separate
+packet-validation mode flag was added.
+
 Accepted proposal:
 
 ```text
@@ -49,7 +56,7 @@ action-free replay both exited successfully. Their encoded frame SHA-256 was
 `0eda5672a61336c91ef66b72e95ae27cbad9f01d6564cc56fc862f91d8096ffc`;
 decoded RGBA hashes also matched exactly at 4096×2560. Candidate/replay state
 differed only at volatile `stats.last_render_ms`. Candidate SHA-256 was
-`c256c95fcdb2428856f9057ccf70e37c23e48977d31456b2a44881af99eb24e7`,
+`ec24cb09c306c3e2a78fd8efdb1143f21a6c50b7300930fb5f609fac2c895c23`,
 and the immediate launch-readiness audit returned no errors.
 
 An invalid `shape:0=definitely_missing` proposal was rejected before an engine
@@ -68,8 +75,8 @@ Raw screenshots, the manifest, and exact receipt handles are under
 
 ## Qualification ledger
 
-- Focused parameter-authority and workflow suite: 27 tests passed in 9.705 seconds.
-- Full local suite: 119 tests passed in 27.429 seconds.
+- Focused behavioral-contract, parameter-authority, and workflow suite: 15 tests passed in 9.087 seconds.
+- Full local suite: 119 tests passed in 27.708 seconds.
 - Exact packet rebinding and proposal whitespace edits invalidate readiness.
 - Runtime, compiled-contract, persisted-packet, and candidate-state tampering
   are rejected before launch.
@@ -115,6 +122,6 @@ owned worker process; Tk opens only the cached derivative.
 - Full-resolution navigation remains an explicit OS `Open Full Frame` action.
 - Repair packets are available only for actionable proposal/binding errors, not
   runtime infrastructure failure.
-- The two exact state artifacts, generated parameter projection, and function catalog make the exploration
+- The behavioral contract, two exact state artifacts, generated parameter projection, and function catalog make the exploration
   packet materially larger than the rejected receipt packet; the measured real
-  packet is about 58 KB.
+  packet is about 60 KB.
