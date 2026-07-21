@@ -55,6 +55,7 @@ class UserWorkflowApp:
         self.state_var = tk.StringVar(value=SessionState.EMPTY.value)
         self.status_var = tk.StringVar(value=self.session.status_text)
         self.binding_var = tk.StringVar(value="No packet binding yet.")
+        self.packet_info_var = tk.StringVar(value="Packet is generated automatically after finding import.")
         self.preview_status_var = tk.StringVar(value="No finding frame loaded.")
 
         self._configure_root()
@@ -103,8 +104,8 @@ class UserWorkflowApp:
         tk = self.tk
         from tkinter.scrolledtext import ScrolledText
         self.left.columnconfigure(0, weight=1)
-        self.left.rowconfigure(2, weight=3)
-        self.left.rowconfigure(3, weight=2)
+        self.left.rowconfigure(2, weight=2)
+        self.left.rowconfigure(3, weight=4)
 
         source = ttk.LabelFrame(self.left, text="1. Finding intake", padding=8)
         source.grid(row=0, column=0, sticky="ew", pady=(0, 8))
@@ -153,11 +154,12 @@ class UserWorkflowApp:
         packet_actions = ttk.Frame(packet)
         packet_actions.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         packet_actions.columnconfigure(0, weight=1)
-        self.build_packet_button = ttk.Button(packet_actions, text="Build Exact Intake Packet", command=self.build_packet)
+        self.build_packet_button = ttk.Button(packet_actions, text="Refresh", command=self.build_packet)
         self.build_packet_button.grid(row=0, column=0, sticky="w")
+        ttk.Label(packet_actions, textvariable=self.packet_info_var).grid(row=0, column=1, sticky="e", padx=(8, 8))
         self.copy_packet_button = ttk.Button(packet_actions, text="Copy Packet", command=self.copy_packet)
-        self.copy_packet_button.grid(row=0, column=1, sticky="e")
-        self.packet_text = ScrolledText(packet, height=10, wrap="word", state="disabled")
+        self.copy_packet_button.grid(row=0, column=2, sticky="e")
+        self.packet_text = ScrolledText(packet, height=20, wrap="word", state="disabled")
         self.packet_text.grid(row=1, column=0, sticky="nsew")
 
     def _build_proposal_side(self) -> None:
@@ -302,6 +304,7 @@ class UserWorkflowApp:
             )
         else:
             self.preview_status_var.set("Finding has no primary frame; packet work remains available.")
+        self.build_packet()
         self._render()
 
     def _preview_loaded(self, outcome: JobOutcome) -> None:
@@ -380,6 +383,9 @@ class UserWorkflowApp:
         self.binding_var.set(
             f"Packet {packet.packet_id}\nSHA-256 {packet.packet_sha256}\nProfile {packet.capability_profile}"
         )
+        self.packet_info_var.set(
+            f"{len(packet.packet_text.encode('utf-8')):,} bytes · contract {packet.ui_salt_contract_sha256[:12]}…"
+        )
         self._render()
 
     def copy_packet(self) -> None:
@@ -432,6 +438,7 @@ class UserWorkflowApp:
         self._set_text(self.summary_text, "")
         self._set_text(self.packet_text, "")
         self.binding_var.set("No packet binding yet.")
+        self.packet_info_var.set("Packet is generated automatically after finding import.")
         self.preview_status_var.set("No finding frame loaded.")
         self.preview_label.configure(image="", text="No preview")
         self._preview_photo = None

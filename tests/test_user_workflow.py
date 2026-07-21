@@ -55,10 +55,39 @@ class UserWorkflowTests(unittest.TestCase):
                 {
                     "function_library": {
                         "lanes": [
-                            {"id": "source", "default": "root_index", "functions": [{"id": "root_index"}]},
-                            {"id": "shape", "default": "identity", "functions": [{"id": "identity"}, {"id": "repeat"}]},
-                            {"id": "palette", "default": "joy_root_palette", "functions": [{"id": "joy_root_palette"}]},
-                            {"id": "grading", "default": "basin_default", "functions": [{"id": "basin_default"}]},
+                            {
+                                "id": "source",
+                                "label": "Source",
+                                "default": "root_index",
+                                "functions": [
+                                    {"id": "root_index", "label": "Root Index", "description": "Use the resolved root classification."}
+                                ],
+                            },
+                            {
+                                "id": "shape",
+                                "label": "Shape",
+                                "default": "identity",
+                                "functions": [
+                                    {"id": "identity", "label": "Identity", "description": "Keep the source signal unchanged."},
+                                    {"id": "repeat", "label": "Repeat", "description": "Tile the signal into repeating bands."},
+                                ],
+                            },
+                            {
+                                "id": "palette",
+                                "label": "Palette",
+                                "default": "joy_root_palette",
+                                "functions": [
+                                    {"id": "joy_root_palette", "label": "Joy Root", "description": "Use the joy-basins palette lineage."}
+                                ],
+                            },
+                            {
+                                "id": "grading",
+                                "label": "Grading",
+                                "default": "basin_default",
+                                "functions": [
+                                    {"id": "basin_default", "label": "Basin Default", "description": "Preserve basin grading defaults."}
+                                ],
+                            },
                         ]
                     }
                 }
@@ -80,6 +109,13 @@ class UserWorkflowTests(unittest.TestCase):
             manifest = json.loads(packet.manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["packet_sha256"], packet.packet_sha256)
             self.assertEqual(manifest["finding_id"], finding.finding_id)
+            self.assertIn("# CUDA Fractal Finding — Agent Exploration Packet", packet.packet_text)
+            self.assertIn("Discuss its visual structure", packet.packet_text)
+            self.assertIn('"fractal_type": "explaino_all"', packet.packet_text)
+            self.assertIn("`repeat` (Repeat): Tile the signal into repeating bands.", packet.packet_text)
+            self.assertIn('"color_pipeline_draft": {', packet.packet_text)
+            self.assertIn("These examples were generated and accepted", packet.packet_text)
+            self.assertNotIn("Return one proposal_v1 JSON object only", packet.packet_text)
             self.assertNotIn(str(capture), packet.packet_text)
             self.assertNotIn(str(root / "workspace"), packet.packet_text)
 

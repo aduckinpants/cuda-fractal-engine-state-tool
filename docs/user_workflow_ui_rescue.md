@@ -49,6 +49,25 @@ the active branch. Git history and the archive tag are the sole recovery path.
 5. Run the complete operational acceptance workflow and stop for final user
    acceptance.
 
+## Renewed execution boundary — 2026-07-21
+
+The user replaced the Slice 2 pause with one continuous execution boundary
+through a morning operational review. The two-column direction remains stable,
+but interaction acceptance was not granted to the receipt-like packet. Work now
+continues through packet repair, operational proof wiring, real workflow
+evidence, screenshots, and clean checkpoints before the next user review.
+
+`state.json` is the engine's established serialized state contract. The rescue
+must carry the exact captured payload and use the engine's existing model load,
+Color Pipeline action, serialization, and replay behavior. It must not create a
+replacement schema, reduced surrogate state, or new normalization theory.
+
+The outgoing artifact is an agent exploration packet, not a validation receipt.
+Its primary content is the session purpose, finding/render context, exact
+authoritative `state.json`, deployed UI-Salt semantics, and parser-validated
+proposal guidance. Packet hashes and runtime provenance close the packet as
+binding metadata; they do not replace its working context.
+
 ## Interaction contract
 
 The only session states are `EMPTY`, `FINDING_READY`, `PACKET_READY`,

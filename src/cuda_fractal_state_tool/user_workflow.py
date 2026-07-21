@@ -14,11 +14,12 @@ from .finding_workspace import ImportResult, SourceCaptureImporter
 from .json_utils import loads_no_duplicates
 from .lane_catalog import load_lane_catalog_from_ui_salt_contract
 from .preview_service import PreviewResult
+from .proposal import ALLOWED_COLOR_TRIPLETS, parse_proposal_v1
 from .runtime_surface import DEFAULT_RUNTIME_CMD, build_runtime_identity, resolve_launcher, sha256_file
 
 
 CAPABILITY_PROFILE = "finding-color-first-row-v1"
-PACKET_VERSION = 1
+PACKET_VERSION = 2
 
 
 class SessionState(str, Enum):
@@ -88,7 +89,7 @@ class UserWorkflowSession:
         self.packet = None
         self.preview = None
         self.state = SessionState.PROPOSAL_DIRTY if self.proposal_text.strip() else SessionState.FINDING_READY
-        self.status_text = "Finding ready. Build its exact intake packet."
+        self.status_text = "Finding ready. Building its agent exploration packet…"
 
     def accept_preview(self, preview: PreviewResult) -> None:
         self.preview = preview
@@ -110,7 +111,7 @@ class UserWorkflowSession:
             self.status_text = "Exact intake packet ready to copy."
         elif self.finding is not None:
             self.state = SessionState.FINDING_READY
-            self.status_text = "Finding ready. Build its exact intake packet."
+            self.status_text = "Finding ready. Building its agent exploration packet…"
         else:
             self.state = SessionState.EMPTY
             self.status_text = "Choose a captured finding to begin."
@@ -208,6 +209,95 @@ def _atomic_write_text(path: Path, text: str) -> None:
     os.replace(str(temp_path), str(path))
 
 
+def _proposal_example(finding: FindingContext, overrides: dict[str, Any]) -> str:
+    text = json.dumps(
+        {
+            "proposal_version": 1,
+            "base_state": {
+                "finding_id": finding.finding_id,
+                "sha256": finding.authoring_base_sha256,
+            },
+            "overrides": overrides,
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
+    parse_proposal_v1(text, finding.finding_id, finding.authoring_base_sha256)
+    return text
+
+
+def _contract_authoring_lines(contract_path: Path, lane_ids: tuple[str, ...]) -> list[str]:
+    payload = _load_object(contract_path, "Deployed UI-Salt contract")
+    library = payload.get("function_library")
+    lanes = library.get("lanes") if isinstance(library, dict) else None
+    if not isinstance(lanes, list):
+        raise ValueError("Deployed UI-Salt contract is missing function_library.lanes")
+
+    by_id: dict[str, dict[str, Any]] = {}
+    for lane in lanes:
+        if isinstance(lane, dict) and isinstance(lane.get("id"), str):
+            by_id[lane["id"]] = lane
+
+    lines = [
+        "The pipeline runs in this order: source -> shape -> palette -> grading.",
+        "This capability profile may select row 0 only, at most once per shipped lane.",
+        "Parameters, extra rows, recipes, and graph restructuring are not accepted.",
+    ]
+    for lane_id in lane_ids:
+        lane = by_id.get(lane_id)
+        if lane is None:
+            raise ValueError(f"Deployed UI-Salt contract is missing lane: {lane_id}")
+        label = lane.get("label")
+        default = lane.get("default")
+        functions = lane.get("functions")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(f"Deployed UI-Salt lane {lane_id} has no authoritative label")
+        if not isinstance(default, str) or not default.strip():
+            raise ValueError(f"Deployed UI-Salt lane {lane_id} has no default function")
+        if not isinstance(functions, list) or not functions:
+            raise ValueError(f"Deployed UI-Salt lane {lane_id} has no functions")
+        lines.extend(("", f"{label} lane (`{lane_id}`; contract default `{default}`)"))
+        for function in functions:
+            if not isinstance(function, dict):
+                raise ValueError(f"Deployed UI-Salt lane {lane_id} contains an invalid function")
+            function_id = function.get("id")
+            function_label = function.get("label")
+            description = function.get("description")
+            if not isinstance(function_id, str) or not function_id.strip():
+                raise ValueError(f"Deployed UI-Salt lane {lane_id} contains a function without an id")
+            if not isinstance(function_label, str) or not function_label.strip():
+                raise ValueError(f"Deployed UI-Salt function {lane_id}/{function_id} has no label")
+            if not isinstance(description, str) or not description.strip():
+                raise ValueError(f"Deployed UI-Salt function {lane_id}/{function_id} has no description")
+            lines.append(f"- `{function_id}` ({function_label}): {description}")
+    return lines
+
+
+def _serialized_draft_lines(state: dict[str, Any]) -> list[str]:
+    draft = state.get("color_pipeline_draft")
+    if not isinstance(draft, dict):
+        return [
+            "No explicit `color_pipeline_draft` is serialized in this capture.",
+            "On load, the engine rebuilds its live Color Pipeline model from the serialized fractal and parameter state.",
+        ]
+    lanes = draft.get("lanes")
+    if not isinstance(lanes, list):
+        raise ValueError("Serialized color_pipeline_draft.lanes must be an array")
+    lines = ["The capture serializes these row-0 selections:"]
+    for lane in lanes:
+        if not isinstance(lane, dict):
+            raise ValueError("Serialized color_pipeline_draft lane must be an object")
+        lane_id = lane.get("lane_id")
+        rows = lane.get("rows")
+        if not isinstance(lane_id, str) or not isinstance(rows, list) or not rows:
+            raise ValueError("Serialized color_pipeline_draft lane is missing its id or rows")
+        row = rows[0]
+        if not isinstance(row, dict) or not isinstance(row.get("function_id"), str):
+            raise ValueError(f"Serialized Color Pipeline lane {lane_id} has no valid row 0")
+        lines.append(f"- `{lane_id}` row 0: `{row['function_id']}`")
+    return lines
+
+
 def build_finding_intake_packet(
     finding: FindingContext,
     runtime_cmd_path: Path = DEFAULT_RUNTIME_CMD,
@@ -220,6 +310,12 @@ def build_finding_intake_packet(
     contract_path = Path(resolution.ui_salt_contract_path)
     catalog = load_lane_catalog_from_ui_salt_contract(contract_path)
     contract_sha256 = sha256_file(contract_path)
+    state_text = finding.authoring_base_state_path.read_bytes().decode("utf-8")
+    state = loads_no_duplicates(state_text)
+    if not isinstance(state, dict):
+        raise ValueError("Authoritative finding state.json must be an object")
+    if sha256_file(finding.authoring_base_state_path) != finding.authoring_base_sha256:
+        raise ValueError("Authoritative finding state.json changed before packet generation")
     runtime_summary = {
         "launcher_sha256": runtime_identity.get("launcher_sha256"),
         "resolved_executable_sha256": runtime_identity.get("resolved_executable_sha256"),
@@ -227,50 +323,125 @@ def build_finding_intake_packet(
     }
     runtime_identity_sha256 = _canonical_sha256(runtime_summary)
     packet_id = str(uuid.uuid4())
-    lane_lines = [
-        f"- {lane.lane_id}: {', '.join(lane.function_ids)}"
-        for lane in catalog.lanes
+    lane_ids = tuple(lane.lane_id for lane in catalog.lanes)
+    authoring_lines = _contract_authoring_lines(contract_path, lane_ids)
+    render = state.get("render") if isinstance(state.get("render"), dict) else {}
+    params = state.get("params") if isinstance(state.get("params"), dict) else {}
+    view = state.get("view") if isinstance(state.get("view"), dict) else {}
+    current_max_iter = params.get("max_iter")
+    if not isinstance(current_max_iter, int) or isinstance(current_max_iter, bool) or current_max_iter < 1:
+        raise ValueError("Authoritative finding state has no valid params.max_iter")
+    shape_lane = next((lane for lane in catalog.lanes if lane.lane_id == "shape"), None)
+    if shape_lane is None or not shape_lane.function_ids:
+        raise ValueError("Deployed UI-Salt contract has no Shape lane functions")
+    current_shape = params.get("color_shape")
+    example_shape = next(
+        (function_id for function_id in shape_lane.function_ids if function_id != current_shape),
+        shape_lane.function_ids[0],
+    )
+    max_iter_example = _proposal_example(finding, {"params.max_iter": current_max_iter + 100})
+    lane_example = _proposal_example(
+        finding,
+        {"color_pipeline_draft": {"lanes": [{"lane_id": "shape", "function_id": example_shape}]}},
+    )
+    combined_example = _proposal_example(
+        finding,
+        {
+            "params.max_iter": current_max_iter + 100,
+            "color_pipeline_draft": {"lanes": [{"lane_id": "shape", "function_id": example_shape}]},
+        },
+    )
+    allowed_triplet_lines = [
+        f"- `{signal}` + `{palette}` + `{grading}`"
+        for signal, palette, grading in sorted(ALLOWED_COLOR_TRIPLETS)
     ]
+    draft_lines = _serialized_draft_lines(state)
     packet_text = "\n".join(
         [
-            "CUDA Fractal Finding Intake Packet",
+            "# CUDA Fractal Finding — Agent Exploration Packet",
             "",
-            f"packet_version: {PACKET_VERSION}",
-            f"packet_id: {packet_id}",
-            f"capability_profile: {CAPABILITY_PROFILE}",
+            "## What this session is for",
             "",
-            "Exact binding",
-            f"- finding_id: {finding.finding_id}",
-            f"- authoring_base_sha256: {finding.authoring_base_sha256}",
-            f"- runtime_identity_sha256: {runtime_identity_sha256}",
-            f"- ui_salt_contract_sha256: {contract_sha256}",
+            "You are helping the user explore the attached CUDA fractal render.",
+            "Discuss its visual structure, interesting regions, and possible changes normally with the user.",
+            "Do not propose changes until the user is ready. When asked for a concrete proposal, give a short",
+            "rationale followed by exactly one `proposal_v1` JSON code block. Do not return a complete state.json.",
+            "The desktop tool applies the bounded proposal to the exact captured state below and proves the result",
+            "through the CUDA engine's existing state loader, Color Pipeline action seam, and action-free replay.",
             "",
-            "Task",
-            "Return one proposal_v1 JSON object only. Do not return a full engine state.",
-            "Keep base_state.finding_id and base_state.sha256 exactly equal to this packet binding.",
+            "Attach the finding frame to this conversation separately; the image is not embedded in this text packet.",
             "",
-            "Supported Color Pipeline authoring",
-            "Use color_pipeline_draft.lanes only for first-row function selections.",
-            "Each lane may appear at most once and contain only lane_id and function_id.",
-            "Parameters, row operations, recipes, and arbitrary graph editing are unsupported.",
-            *lane_lines,
+            "## Current finding",
             "",
-            "Existing bounded overrides",
-            "- params.max_iter",
-            "- params.color_shape",
-            "- coupled params.color_signal + params.color_palette + params.color_grading",
+            f"- Fractal family: `{state.get('fractal_type', 'unknown')}`",
+            f"- Render: `{render.get('width', '?')} × {render.get('height', '?')}` on device `{render.get('device_id', '?')}`",
+            f"- Iterations: `{current_max_iter}`",
+            f"- Automatic iteration adjustment: `{view.get('auto_max_iter', 'not serialized')}`",
+            f"- Serialized color tuple: `{params.get('color_signal', '?')} -> {params.get('color_shape', '?')} -> {params.get('color_palette', '?')} -> {params.get('color_grading', '?')}`",
             "",
-            "Required envelope",
-            "{",
-            '  "proposal_version": 1,',
-            '  "base_state": {',
-            f'    "finding_id": "{finding.finding_id}",',
-            f'    "sha256": "{finding.authoring_base_sha256}"',
-            "  },",
-            '  "overrides": {}',
-            "}",
+            "### Serialized Color Pipeline state",
             "",
-            "The desktop shell can receive this proposal, but proof execution remains disabled until interaction-model acceptance.",
+            *draft_lines,
+            "",
+            "## Exact authoritative engine state",
+            "",
+            "The JSON below is the exact UTF-8 `state.json` captured by the engine and bound by this packet.",
+            "It is the base state, not a proposal and not a Python reconstruction.",
+            "",
+            "```json",
+            state_text.rstrip("\r\n"),
+            "```",
+            "",
+            "## What a proposal may change",
+            "",
+            f"- `params.max_iter`: positive integer; current value `{current_max_iter}`.",
+            f"- `params.color_shape`: `identity` or `repeat`; current value `{params.get('color_shape', '?')}`.",
+            "- `params.color_signal`, `params.color_palette`, and `params.color_grading`: all three must be supplied together as one replay-proven tuple.",
+            "- `color_pipeline_draft.lanes`: one optional `{lane_id, function_id}` row-0 selection per shipped lane.",
+            "- Scalar overrides are applied to the captured base before Color Pipeline row-0 selection actions.",
+            "",
+            "Replay-proven scalar color tuples:",
+            *allowed_triplet_lines,
+            "",
+            "## Color Pipeline functions",
+            "",
+            *authoring_lines,
+            "",
+            "## Exact proposal schema",
+            "",
+            "Return the JSON object inside one code block. The desktop proposal editor receives the JSON itself.",
+            "`base_state.finding_id` and `base_state.sha256` must remain exactly as shown.",
+            "`overrides` may contain only the bounded paths described above.",
+            "",
+            "### Example A — iteration change",
+            "```json",
+            max_iter_example,
+            "```",
+            "",
+            "### Example B — one Color Pipeline row-0 selection",
+            "```json",
+            lane_example,
+            "```",
+            "",
+            "### Example C — combined scalar and Color Pipeline change",
+            "```json",
+            combined_example,
+            "```",
+            "",
+            "These examples were generated and accepted by the same `proposal_v1` parser used by the desktop tool.",
+            "",
+            "## Exact machine binding and provenance",
+            "",
+            f"- packet_version: `{PACKET_VERSION}`",
+            f"- packet_id: `{packet_id}`",
+            f"- capability_profile: `{CAPABILITY_PROFILE}`",
+            f"- finding_id: `{finding.finding_id}`",
+            f"- authoring_base_sha256: `{finding.authoring_base_sha256}`",
+            f"- runtime_identity_sha256: `{runtime_identity_sha256}`",
+            f"- ui_salt_contract_sha256: `{contract_sha256}`",
+            "",
+            "The exact copied packet payload is hashed and retained by the desktop tool. A later proof request must",
+            "bind this packet, this base state, this runtime and contract identity, and the exact pasted proposal text.",
         ]
     )
     packet_sha256 = hashlib.sha256(packet_text.encode("utf-8")).hexdigest()

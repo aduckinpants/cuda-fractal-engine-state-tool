@@ -70,12 +70,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     app.open_finding_path(args.capture_source, args.workspace_root)
     _wait(
         root,
-        lambda: app.session.finding is not None and "preview" not in app._busy_kinds,
+        lambda: (
+            app.session.finding is not None
+            and app.session.packet is not None
+            and "preview" not in app._busy_kinds
+            and "packet" not in app._busy_kinds
+        ),
         45,
-        "real finding import and preview",
+        "real finding import, preview, and automatic exploration packet",
     )
-    app.build_packet()
-    _wait(root, lambda: app.session.packet is not None and "packet" not in app._busy_kinds, 30, "exact packet")
     artifacts["packet_ready"] = _capture(root, args.out / "02_packet_ready.png")
     finding = app.session.finding
     assert finding is not None
