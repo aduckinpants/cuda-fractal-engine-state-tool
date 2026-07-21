@@ -112,6 +112,102 @@ class AppControllerTests(unittest.TestCase):
             self.assertEqual(controller.available_promotion_profiles()[0], "none")
             self.assertEqual(mock_execute.call_args.kwargs["promotion_profile"], "color_pipeline_draft_only_v1")
 
+    def test_imported_finding_workflow_methods(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            probe = self._make_probe_root(root)
+            paths = Phase1Paths(
+                root,
+                probe,
+                root / "baselines",
+                root / "baselines" / "runtime-default-v1" / "manifest.json",
+                root / "working_states",
+                root / "validation_runs",
+            )
+            controller = Phase1Controller(paths, runtime_cmd_path=Path(r"D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd"))
+
+            workspace_root = root / "findings_workspace"
+            imported = controller.import_finding(probe / "capture_one", workspace_root)
+            self.assertTrue(imported.finding_id)
+            self.assertIn(imported.finding_id, controller.imported_finding_status_text())
+
+            proposal_text = controller.example_imported_finding_noop_proposal()
+            parsed = parse_proposal_v1(proposal_text, imported.finding_id, imported.authoring_base_state_sha256)
+            self.assertEqual(parsed.base_state_id, imported.finding_id)
+
+    def test_replay_prove_imported_finding_uses_shared_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            probe = self._make_probe_root(root)
+            paths = Phase1Paths(
+                root,
+                probe,
+                root / "baselines",
+                root / "baselines" / "runtime-default-v1" / "manifest.json",
+                root / "working_states",
+                root / "validation_runs",
+            )
+            controller = Phase1Controller(paths, runtime_cmd_path=Path(r"D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd"))
+
+            workspace_root = root / "findings_workspace"
+            imported = controller.import_finding(probe / "capture_one", workspace_root)
+            proposal_text = controller.example_imported_finding_noop_proposal()
+
+            result = WorkflowResult(
+                status="runtime_proof_succeeded",
+                working_state_dir=root / "ws" / "run",
+                validation_run_dir=root / "ws" / "run" / "validation",
+                validation_run_manifest_path=root / "ws" / "run" / "validation" / "manifest.json",
+                validation_runs_index_path=root / "ws" / "run" / "validation" / "index.json",
+                runtime_status="runtime_success",
+                promotion_profile="none",
+                promoted_state_path=None,
+                promotion_report_path=None,
+                transport_candidate_path=root / "ws" / "run" / "transport_candidate.json",
+                proven_state_path=root / "ws" / "run" / "state.json",
+                replay_state_path=root / "ws" / "run" / "replay" / "state.json",
+                diff=None,
+                validation_path=root / "ws" / "run" / "validation.json",
+            )
+
+            with patch("cuda_fractal_state_tool.app.execute_imported_finding_workflow", return_value=result) as mock_execute:
+                received = controller.replay_prove_imported_finding(
+                    source_capture_path=probe / "capture_one",
+                    workspace_root=workspace_root,
+                    proposal_text=proposal_text,
+                    promotion_profile="none",
+                )
+
+            self.assertEqual(received.status, "runtime_proof_succeeded")
+            self.assertEqual(controller.last_workflow_result, result)
+            self.assertEqual(mock_execute.call_args.kwargs["workspace_root"], workspace_root)
+            self.assertEqual(mock_execute.call_args.kwargs["source_capture_path"], probe / "capture_one")
+            self.assertIn(imported.finding_id, proposal_text)
+
+    def test_imported_finding_intake_packet_is_actionable_and_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            probe = self._make_probe_root(root)
+            paths = Phase1Paths(
+                root,
+                probe,
+                root / "baselines",
+                root / "baselines" / "runtime-default-v1" / "manifest.json",
+                root / "working_states",
+                root / "validation_runs",
+            )
+            controller = Phase1Controller(paths, runtime_cmd_path=Path(r"D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd"))
+            imported = controller.import_finding(probe / "capture_one", root / "findings_workspace")
+
+            packet = controller.imported_finding_intake_packet()
+
+            self.assertIn("Return JSON only.", packet)
+            self.assertIn(f'"finding_id": "{imported.finding_id}"', packet)
+            self.assertIn(f'"sha256": "{imported.authoring_base_state_sha256}"', packet)
+            self.assertIn("Allowed override paths (bounded)", packet)
+            self.assertIn("- params.max_iter", packet)
+            self.assertIn("- Do not output unknown override paths.", packet)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .baseline import BASELINE_ID, freeze_phase0_baseline, load_frozen_baseline
+from .finding_workflow import execute_imported_finding_workflow
+from .finding_workspace import ImportResult, SourceCaptureImporter
 from .intake import build_intake_packet
 from .json_utils import dumps_pretty, loads_no_duplicates
 from .materializer import materialize_transport_candidate
@@ -54,6 +56,7 @@ class Phase1Controller:
         self.runtime_cmd_path = runtime_cmd_path.resolve()
         self.last_workflow_result: Optional[WorkflowResult] = None
         self.last_materialized_candidate: Optional[Path] = None
+        self.last_import_result: Optional[ImportResult] = None
         self._ensure_baseline()
 
     def _ensure_baseline(self) -> None:
@@ -117,6 +120,102 @@ class Phase1Controller:
             raise ValueError("No replay-proven candidate is available to launch")
         process = launch_proven_candidate(self.runtime_cmd_path, self.last_workflow_result.proven_state_path)
         return process.pid
+
+    @staticmethod
+    def default_findings_workspace_root() -> Path:
+        return Path(r"D:/salt-fractal/cuda-fractal-engine-state-tool")
+
+    def import_finding(self, source_capture_path: Path, workspace_root: Path) -> ImportResult:
+        importer = SourceCaptureImporter(workspace_root)
+        result = importer.import_capture(source_capture_path)
+        self.last_import_result = result
+        return result
+
+    def imported_finding_status_text(self) -> str:
+        if self.last_import_result is None:
+            return "No imported finding selected yet."
+        return (
+            f"Imported finding: {self.last_import_result.finding_id} | "
+            f"base sha256: {self.last_import_result.authoring_base_state_sha256}"
+        )
+
+    def example_imported_finding_noop_proposal(self) -> str:
+        if self.last_import_result is None:
+            raise ValueError("Import a finding first to build a finding-bound proposal")
+        return dumps_pretty(
+            {
+                "proposal_version": 1,
+                "base_state": {
+                    "finding_id": self.last_import_result.finding_id,
+                    "sha256": self.last_import_result.authoring_base_state_sha256,
+                },
+                "overrides": {},
+            }
+        )
+
+    def replay_prove_imported_finding(
+        self,
+        source_capture_path: Path,
+        workspace_root: Path,
+        proposal_text: str,
+        promotion_profile: str = "none",
+    ) -> WorkflowResult:
+        import_result = self.import_finding(source_capture_path, workspace_root)
+        self.last_workflow_result = execute_imported_finding_workflow(
+            source_capture_path=source_capture_path,
+            proposal_text=proposal_text,
+            workspace_root=workspace_root,
+            runtime_cmd_path=self.runtime_cmd_path,
+            promotion_profile=promotion_profile,
+        )
+        self.last_import_result = import_result
+        return self.last_workflow_result
+
+    def imported_finding_intake_packet(self) -> str:
+        if self.last_import_result is None:
+            raise ValueError("Open a finding first so intake packet can bind to finding_id and authoring base hash")
+
+        finding_id = self.last_import_result.finding_id
+        authoring_base_sha256 = self.last_import_result.authoring_base_state_sha256
+        allowed_paths = sorted(PATH_SPECS.keys())
+
+        lines: list[str] = [
+            "External Agent Intake Packet",
+            "",
+            "Return JSON only. Do not include markdown, prose, or code fences.",
+            "proposal_version must be 1.",
+            "",
+            "Binding (must match exactly)",
+            f"- finding_id: {finding_id}",
+            f"- authoring_base_sha256: {authoring_base_sha256}",
+            "",
+            "Required envelope (use this shape exactly)",
+            "{",
+            '  "proposal_version": 1,',
+            '  "base_state": {',
+            f'    "finding_id": "{finding_id}",',
+            f'    "sha256": "{authoring_base_sha256}"',
+            "  },",
+            '  "overrides": {',
+            '    "params.max_iter": 700',
+            "  }",
+            "}",
+            "",
+            "Allowed override paths (bounded)",
+        ]
+        lines.extend([f"- {path}" for path in allowed_paths])
+        lines.extend(
+            [
+                "",
+                "Hard constraints",
+                "- Do not output unknown override paths.",
+                "- Do not output null values.",
+                "- Keep overrides sparse: only changed values.",
+                "- If any of params.color_signal / params.color_palette / params.color_grading is present, all three must be present.",
+                "- base_state.finding_id and base_state.sha256 must match the Binding section exactly.",
+            ]
+        )
+        return "\n".join(lines)
 
     def save_proposal_for_session(self, proposal_text: str, proposal_path: Path) -> Path:
         proposal = parse_proposal_v1(proposal_text, self.baseline.baseline_id, self.baseline.manifest["state_sha256"])
@@ -192,11 +291,16 @@ class Phase1Controller:
             "local_baseline_group": str(self.paths.baselines_root.resolve()),
             "next_working_state_subfolder": str((self.paths.working_states_root / state_id).resolve()),
             "next_validation_run_subfolder": str((self.paths.validation_runs_root / state_id).resolve()),
+            "finding_workspace_root": str(self.default_findings_workspace_root().resolve()),
         }
 
         if self.last_workflow_result is not None:
             groups["last_working_state_subfolder"] = str(self.last_workflow_result.working_state_dir.resolve())
             groups["last_validation_run_subfolder"] = str(self.last_workflow_result.validation_run_dir.resolve())
+
+        if self.last_import_result is not None:
+            groups["last_imported_finding_folder"] = str(self.last_import_result.finding_dir.resolve())
+            groups["last_imported_workspace_manifest"] = str(self.last_import_result.workspace_manifest_path.resolve())
 
         return groups
 
@@ -263,40 +367,116 @@ class Phase1App:
 
     def _build(self) -> None:
         ttk = self._ttk
+        self.root.minsize(1100, 760)
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(3, weight=3)
-        self.root.rowconfigure(4, weight=2)
-        self.root.rowconfigure(5, weight=2)
+        self.root.rowconfigure(2, weight=1)
 
         import tkinter as tk
 
         self.baseline_status = tk.StringVar(value=self.controller.baseline_status_text())
-        ttk.Label(self.root, textvariable=self.baseline_status).grid(row=0, column=0, sticky="ew", padx=8, pady=8)
-
-        controls_row = ttk.Frame(self.root)
-        controls_row.grid(row=1, column=0, sticky="ew", padx=8)
-        controls_row.columnconfigure(1, weight=1)
-        controls_row.columnconfigure(3, weight=1)
-        ttk.Label(controls_row, text="Promotion profile:").grid(row=0, column=0, sticky="w", padx=(0, 6), pady=2)
         self.promotion_profile = tk.StringVar(value="none")
         profile_options = self.controller.available_promotion_profiles()
+        self.state_id_var = tk.StringVar(value=datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_web"))
+        self.finding_workspace_root_var = tk.StringVar(value=str(self.controller.default_findings_workspace_root()))
+
+        notebook = ttk.Notebook(self.root)
+        notebook.grid(row=2, column=0, sticky="nsew", padx=8, pady=8)
+
+        user_tab = ttk.Frame(notebook)
+        debug_tab = ttk.Frame(notebook)
+        notebook.add(user_tab, text="User Workflow")
+        notebook.add(debug_tab, text="Debug Surface")
+
+        user_tab.columnconfigure(0, weight=1)
+        user_tab.rowconfigure(3, weight=3)
+        user_tab.rowconfigure(4, weight=2)
+
+        step_row = ttk.LabelFrame(user_tab, text="Workflow Steps")
+        step_row.grid(row=0, column=0, sticky="ew", padx=0, pady=(0, 8))
+        for column in range(5):
+            step_row.columnconfigure(column, weight=1)
+        self.step_finding_var = tk.StringVar(value="Finding Loaded: pending")
+        self.step_packet_var = tk.StringVar(value="Packet Ready: pending")
+        self.step_proposal_var = tk.StringVar(value="Awaiting Proposal: pending")
+        self.step_replay_var = tk.StringVar(value="Replay: pending")
+        self.step_launch_var = tk.StringVar(value="Launch: pending")
+        ttk.Label(step_row, textvariable=self.step_finding_var).grid(row=0, column=0, sticky="w", padx=8, pady=8)
+        ttk.Label(step_row, textvariable=self.step_packet_var).grid(row=0, column=1, sticky="w", padx=8, pady=8)
+        ttk.Label(step_row, textvariable=self.step_proposal_var).grid(row=0, column=2, sticky="w", padx=8, pady=8)
+        ttk.Label(step_row, textvariable=self.step_replay_var).grid(row=0, column=3, sticky="w", padx=8, pady=8)
+        ttk.Label(step_row, textvariable=self.step_launch_var).grid(row=0, column=4, sticky="w", padx=8, pady=8)
+
+        user_row = ttk.LabelFrame(user_tab, text="Inputs")
+        user_row.grid(row=1, column=0, sticky="ew", padx=0, pady=(0, 8))
+        user_row.columnconfigure(1, weight=1)
+        ttk.Label(user_row, text="Finding source (folder/state.json/finding.json/frame):").grid(row=0, column=0, sticky="w", padx=(8, 6), pady=(6, 6))
+        default_capture_source = self.controller.paths.probe_root / "capture_one"
+        self.finding_source_var = tk.StringVar(value=str(default_capture_source.resolve()))
+        self.finding_source_entry = ttk.Entry(user_row, textvariable=self.finding_source_var)
+        self.finding_source_entry.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=(6, 6))
+
+        action_row = ttk.LabelFrame(user_tab, text="Actions")
+        action_row.grid(row=2, column=0, sticky="ew", padx=0, pady=(0, 8))
+        for column in range(4):
+            action_row.columnconfigure(column, weight=1)
+        ttk.Button(action_row, text="Open Finding", command=self._open_finding_user).grid(row=0, column=0, sticky="ew", padx=8, pady=8)
+        ttk.Button(action_row, text="Copy Intake Packet", command=self._copy_user_intake_packet).grid(row=0, column=1, sticky="ew", padx=2, pady=8)
+        ttk.Button(action_row, text="Validate & Prove", command=self._validate_and_prove_user).grid(row=0, column=2, sticky="ew", padx=2, pady=8)
+        ttk.Button(action_row, text="Copy Repair Packet", command=self._copy_user_repair_packet).grid(row=0, column=3, sticky="ew", padx=(2, 8), pady=8)
+        ttk.Button(action_row, text="Open Viewer", command=self._launch).grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
+        ttk.Button(action_row, text="Reset Session", command=self._reset_user_session).grid(row=1, column=1, sticky="ew", padx=2, pady=(0, 8))
+        ttk.Button(action_row, text="Open Working Folder", command=self._open_user_working_folder).grid(row=1, column=2, sticky="ew", padx=2, pady=(0, 8))
+        ttk.Button(action_row, text="Open Finding Folder", command=self._open_last_imported_finding_folder).grid(row=1, column=3, sticky="ew", padx=(2, 8), pady=(0, 8))
+
+        self.finding_status = tk.StringVar(value=self.controller.imported_finding_status_text())
+        ttk.Label(action_row, textvariable=self.finding_status).grid(row=2, column=0, columnspan=4, sticky="ew", padx=8, pady=(0, 8))
+
+        proposal_panel = ttk.LabelFrame(user_tab, text="Proposal JSON (Step 2 loads a finding-bound template here)")
+        proposal_panel.grid(row=3, column=0, sticky="nsew", padx=0, pady=(0, 8))
+        proposal_panel.columnconfigure(0, weight=1)
+        proposal_panel.rowconfigure(0, weight=1)
+        self.proposal_text = tk.Text(proposal_panel, height=16, width=120)
+        self.proposal_text.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+
+        status_panel = ttk.LabelFrame(user_tab, text="Status Log")
+        status_panel.grid(row=4, column=0, sticky="nsew", padx=0, pady=(0, 8))
+        status_panel.columnconfigure(0, weight=1)
+        status_panel.rowconfigure(0, weight=1)
+        self.status_text = tk.Text(status_panel, height=10, width=120)
+        self.status_text.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        self.status_text.insert("1.0", self._quick_start_status_text())
+        self.status_text.configure(state="disabled")
+
+        debug_tab.columnconfigure(0, weight=1)
+        debug_tab.rowconfigure(2, weight=1)
+
+        debug_top = ttk.LabelFrame(debug_tab, text="Runtime And Advanced Controls")
+        debug_top.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
+        debug_top.columnconfigure(1, weight=1)
+        debug_top.columnconfigure(3, weight=1)
+
+        ttk.Label(debug_top, textvariable=self.baseline_status).grid(row=0, column=0, columnspan=4, sticky="ew", padx=8, pady=(8, 6))
+        ttk.Label(debug_top, text="Promotion profile:").grid(row=1, column=0, sticky="w", padx=(8, 6), pady=2)
         self.promotion_combo = ttk.Combobox(
-            controls_row,
+            debug_top,
             textvariable=self.promotion_profile,
             values=profile_options,
             state="readonly",
         )
-        self.promotion_combo.grid(row=0, column=1, sticky="ew", pady=2)
+        self.promotion_combo.grid(row=1, column=1, sticky="ew", pady=2)
         if profile_options:
             self.promotion_combo.current(0)
 
-        ttk.Label(controls_row, text="State id:").grid(row=0, column=2, sticky="e", padx=(12, 6), pady=2)
-        self.state_id_var = tk.StringVar(value=datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_web"))
-        self.state_id_entry = ttk.Entry(controls_row, textvariable=self.state_id_var)
-        self.state_id_entry.grid(row=0, column=3, sticky="ew", pady=2)
+        ttk.Label(debug_top, text="State id:").grid(row=1, column=2, sticky="e", padx=(12, 6), pady=2)
+        self.state_id_entry = ttk.Entry(debug_top, textvariable=self.state_id_var)
+        self.state_id_entry.grid(row=1, column=3, sticky="ew", pady=2)
 
-        button_row = ttk.Frame(self.root)
-        button_row.grid(row=2, column=0, sticky="ew", padx=8)
+        ttk.Label(debug_top, text="Workspace root:").grid(row=2, column=0, sticky="w", padx=(8, 6), pady=(2, 8))
+        self.finding_workspace_root_entry = ttk.Entry(debug_top, textvariable=self.finding_workspace_root_var)
+        self.finding_workspace_root_entry.grid(row=2, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=(2, 8))
+
+        button_row = ttk.Frame(debug_tab)
+        button_row.grid(row=1, column=0, sticky="ew", padx=8, pady=(4, 4))
         for column in range(6):
             button_row.columnconfigure(column, weight=1)
 
@@ -307,8 +487,8 @@ class Phase1App:
         ttk.Button(button_row, text="Materialize", command=self._materialize).grid(row=0, column=4, sticky="ew", padx=2, pady=2)
         ttk.Button(button_row, text="Run Now (Replay + Proof)", command=self._replay).grid(row=0, column=5, sticky="ew", padx=2, pady=2)
 
-        web_row = ttk.LabelFrame(self.root, text="Web Session Workflow")
-        web_row.grid(row=4, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        web_row = ttk.LabelFrame(debug_tab, text="Debug Utilities")
+        web_row.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 8))
         web_row.columnconfigure(1, weight=1)
         web_row.columnconfigure(5, weight=1)
 
@@ -318,7 +498,7 @@ class Phase1App:
         self.proposal_file_entry = ttk.Entry(web_row, textvariable=self.proposal_file_var)
         self.proposal_file_entry.grid(row=0, column=1, columnspan=5, sticky="ew", padx=(0, 8), pady=(6, 2))
 
-        ttk.Label(web_row, text="Captured state.json path:").grid(row=2, column=0, sticky="w", padx=(8, 6), pady=(2, 6))
+        ttk.Label(web_row, text="Debug captured state.json path:").grid(row=2, column=0, sticky="w", padx=(8, 6), pady=(2, 6))
         default_captured_state = self.controller.paths.probe_root / "capture_one" / "state.json"
         self.capture_state_file_var = tk.StringVar(value=str(default_captured_state.resolve()))
         self.capture_state_file_entry = ttk.Entry(web_row, textvariable=self.capture_state_file_var)
@@ -332,8 +512,8 @@ class Phase1App:
         ttk.Button(web_row, text="Copy Intake Packet", command=self._copy_intake).grid(row=1, column=4, sticky="ew", padx=2, pady=4)
         ttk.Button(web_row, text="Launch New Viewer", command=self._launch).grid(row=1, column=5, sticky="ew", padx=(2, 8), pady=4)
 
-        output_row = ttk.LabelFrame(self.root, text="Output Folder Map (Concept Bridge)")
-        output_row.grid(row=5, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        output_row = ttk.LabelFrame(debug_tab, text="Output Folder Map (Concept Bridge)")
+        output_row.grid(row=3, column=0, sticky="nsew", padx=8, pady=(0, 8))
         output_row.columnconfigure(0, weight=1)
         output_row.rowconfigure(1, weight=1)
 
@@ -360,25 +540,24 @@ class Phase1App:
         self._artifact_descriptions: dict[str, str] = {}
         self._artifact_paths: dict[str, Path] = {}
 
-        self.proposal_text = tk.Text(self.root, height=18, width=120)
-        self.proposal_text.grid(row=3, column=0, sticky="nsew", padx=8, pady=8)
-
-        self.status_text = tk.Text(self.root, height=14, width=120)
-        self.status_text.grid(row=6, column=0, sticky="nsew", padx=8, pady=(0, 8))
-        self.status_text.insert("1.0", self._quick_start_status_text())
-        self.status_text.configure(state="disabled")
-
-        self._load_noop()
+        self.proposal_text.insert(
+            "1.0",
+            "Open Finding to load a finding-bound proposal template.\n"
+            "Then edit overrides as needed and run Validate & Prove.\n",
+        )
         self._refresh_output_map()
 
     def _quick_start_status_text(self) -> str:
         return (
-            "Quick Start (web-session copy/paste)\n"
-            "1. Click 'Example: No-Op' (already loaded by default).\n"
-            "2. Set Promotion profile and State id.\n"
-            "3. In Web Session Workflow: click 'Step 1: Save Proposal'.\n"
-            "4. Click 'Step 2: Copy Commands' and run them in terminal/web session.\n"
-            "5. After run, click 'Step 3: Copy Evidence' and paste results back.\n\n"
+            "User Workflow\n"
+            "1. Set Finding source.\n"
+            "2. Click Open Finding.\n"
+            "3. Click Copy Intake Packet and send to external agent if needed.\n"
+            "4. Edit proposal JSON in the proposal box.\n"
+            "5. Click Validate & Prove.\n"
+            "6. If replay fails, click Copy Repair Packet.\n"
+            "7. If replay succeeds, click Open Viewer.\n\n"
+            "Advanced controls (workspace root, promotion profile, debug tools) are in the Debug Surface tab.\n\n"
         )
 
     def _set_status(self, text: str) -> None:
@@ -404,13 +583,11 @@ class Phase1App:
         return "\n".join(lines) + "\n"
 
     def _refresh_output_map(self) -> None:
-        rendered = self._render_output_map_text()
         self._rebuild_artifact_tree()
         self._set_artifact_detail(
             "Select an artifact row above to see what it means. "
             "Use Build Proposal From state.json to convert a captured full engine state into a bounded proposal."
         )
-        self._append_status(f"Output map refreshed.\n{rendered}\n")
 
     def _rebuild_artifact_tree(self) -> None:
         tree = self.artifact_tree
@@ -588,6 +765,145 @@ class Phase1App:
         self.proposal_text.insert("1.0", self.controller.example_noop_proposal())
         self._set_status("Loaded no-op proposal example.\n")
 
+    def _set_user_step_states(
+        self,
+        finding: str,
+        packet: str,
+        proposal: str,
+        replay: str,
+        launch: str,
+    ) -> None:
+        self.step_finding_var.set(f"Finding Loaded: {finding}")
+        self.step_packet_var.set(f"Packet Ready: {packet}")
+        self.step_proposal_var.set(f"Awaiting Proposal: {proposal}")
+        self.step_replay_var.set(f"Replay: {replay}")
+        self.step_launch_var.set(f"Launch: {launch}")
+
+    def _open_finding_user(self) -> None:
+        self._import_finding()
+        if self.controller.last_import_result is None:
+            return
+        self._load_imported_noop()
+
+    def _copy_user_intake_packet(self) -> None:
+        if self.controller.last_import_result is None:
+            self._set_status("Copy intake packet failed: open a finding first.\n")
+            return
+        try:
+            packet = self.controller.imported_finding_intake_packet()
+        except Exception as exc:
+            self._set_status(f"Copy intake packet failed: {exc}\n")
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(packet)
+        self._set_user_step_states("done", "done", "ready", "pending", "pending")
+        self._append_status("Copied finding intake packet to clipboard.\n\n")
+
+    def _validate_and_prove_user(self) -> None:
+        self._replay_imported_finding()
+
+    def _copy_user_repair_packet(self) -> None:
+        self._copy_last_evidence()
+
+    def _open_user_working_folder(self) -> None:
+        if self.controller.last_workflow_result is not None:
+            path = self.controller.last_workflow_result.working_state_dir.resolve()
+            path.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(path))
+            self._append_status(f"Opened working folder: {path}\n\n")
+            return
+        if self.controller.last_import_result is not None:
+            path = self.controller.last_import_result.finding_dir.resolve()
+            path.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(path))
+            self._append_status(f"Opened finding folder (no run yet): {path}\n\n")
+            return
+        self._set_status("Open working folder failed: open a finding first.\n")
+
+    def _reset_user_session(self) -> None:
+        self.controller.last_import_result = None
+        self.controller.last_workflow_result = None
+        self.finding_status.set(self.controller.imported_finding_status_text())
+        self.proposal_text.delete("1.0", "end")
+        self.proposal_text.insert(
+            "1.0",
+            "Open Finding to load a finding-bound proposal template.\n"
+            "Then edit overrides as needed and run Validate & Prove.\n",
+        )
+        self._set_status(self._quick_start_status_text())
+        self._set_user_step_states("pending", "pending", "pending", "pending", "pending")
+        self._refresh_output_map()
+
+    def _import_finding(self) -> None:
+        source_capture = Path(self.finding_source_var.get())
+        workspace_root = Path(self.finding_workspace_root_var.get())
+        try:
+            imported = self.controller.import_finding(source_capture, workspace_root)
+        except Exception as exc:
+            self._set_status(f"Import finding failed: {exc}\n")
+            return
+        self.finding_status.set(self.controller.imported_finding_status_text())
+        self._set_user_step_states("done", "ready", "pending", "pending", "pending")
+        self._append_status(
+            "Imported finding.\n"
+            f"finding_id: {imported.finding_id}\n"
+            f"finding_dir: {imported.finding_dir.resolve()}\n"
+            f"workspace_manifest: {imported.workspace_manifest_path.resolve()}\n\n"
+        )
+        self._refresh_output_map()
+
+    def _load_imported_noop(self) -> None:
+        try:
+            proposal = self.controller.example_imported_finding_noop_proposal()
+        except Exception as exc:
+            self._set_status(f"Load imported finding no-op failed: {exc}\n")
+            return
+        self.proposal_text.delete("1.0", "end")
+        self.proposal_text.insert("1.0", proposal)
+        self._set_user_step_states("done", "ready", "ready", "pending", "pending")
+        self._append_status("Loaded imported-finding no-op proposal template.\n\n")
+
+    def _replay_imported_finding(self) -> None:
+        source_capture = Path(self.finding_source_var.get())
+        workspace_root = Path(self.finding_workspace_root_var.get())
+        try:
+            result = self.controller.replay_prove_imported_finding(
+                source_capture_path=source_capture,
+                workspace_root=workspace_root,
+                proposal_text=self.proposal_text.get("1.0", "end"),
+                promotion_profile="none",
+            )
+        except Exception as exc:
+            self._set_status(f"Imported finding replay/proof failed: {exc}\n")
+            return
+        self.finding_status.set(self.controller.imported_finding_status_text())
+        if result.status == "runtime_proof_succeeded":
+            self._set_user_step_states("done", "done", "done", "succeeded", "ready")
+        else:
+            self._set_user_step_states("done", "done", "done", "failed", "blocked")
+        self._append_status(
+            "\n".join(
+                [
+                    "Imported finding replay/proof complete.",
+                    f"Status: {result.status}",
+                    f"Runtime status: {result.runtime_status}",
+                    f"Working state: {result.working_state_dir}",
+                    f"Validation record: {result.validation_path}",
+                    "",
+                ]
+            )
+        )
+        self._refresh_output_map()
+
+    def _open_last_imported_finding_folder(self) -> None:
+        if self.controller.last_import_result is None:
+            self._set_status("Open imported finding folder failed: no finding imported yet.\n")
+            return
+        finding_dir = self.controller.last_import_result.finding_dir.resolve()
+        finding_dir.mkdir(parents=True, exist_ok=True)
+        os.startfile(str(finding_dir))
+        self._append_status(f"Opened imported finding folder: {finding_dir}\n\n")
+
     def _load_color(self) -> None:
         self.proposal_text.delete("1.0", "end")
         self.proposal_text.insert("1.0", self.controller.example_color_proposal())
@@ -732,6 +1048,7 @@ class Phase1App:
         except Exception as exc:
             self._set_status(f"Viewer launch failed: {exc}\n")
             return
+        self._set_user_step_states("done", "done", "done", "succeeded", "done")
         self._append_status(f"Launched a new viewer process from the replay-proven candidate. PID: {pid}\n\n")
 
 
