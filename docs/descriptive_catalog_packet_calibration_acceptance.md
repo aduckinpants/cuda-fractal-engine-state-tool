@@ -2,10 +2,13 @@
 
 ## Current boundary
 
-Left-side descriptive-catalog integration and packet-calibration implementation
-is acceptance-ready. Manual downstream acceptance is pending the user's four
-temporary sessions. Returned-proposal operational behavior was not advanced by
-this campaign.
+Left-side descriptive-catalog integration and packet calibration have been
+reviewed through two capable Codex 5.6 sessions plus two diagnostic basic
+Windows Copilot sessions. The user accepted proposal suppression and
+exploration-first behavior as successful, explicitly excluded Copilot
+remediation from the product target, and authorized final left-side hardening
+before separate returned-proposal testing. Returned-proposal operational
+behavior was not advanced by this campaign.
 
 ## Engine handoff
 
@@ -110,13 +113,31 @@ What would you try?
 
 ## Manual result ledger
 
-| Fixture | Session class | Result | Transcript/review |
-|---|---|---|---|
-| A | strong temporary web agent | pending user execution | pending |
-| A | basic Windows Copilot | pending user execution | pending |
-| B | strong temporary web agent | pending user execution | pending |
-| B | basic Windows Copilot | pending user execution | pending |
+The user ran two independent Codex 5.6 sessions and two basic Windows Copilot
+sessions against `explaino_magnet_root_well` and
+`explaino_mandelbrot_root_trap`. All four stayed exploration-first and correctly
+emitted no proposal after either the opening prompt or `What would you try?`.
 
-For every row, require exploration-first behavior, no proposal after either
-prompt, correct evidence hierarchy, and no violation of the six interpretation
-rules. The execution agent must not simulate or self-grade these sessions.
+The capable-agent calibration found one localized recurring ambiguity: a
+render-signal blend was sometimes narrated as a geometric or recurrence change.
+The packet now explicitly distinguishes signal-processing authority from
+recurrence authority. This is the final left-side hardening item from the manual
+review.
+
+Basic Windows Copilot repeatedly acknowledged the evidence rules and then
+violated them through unsupported causal parameter storytelling. The user has
+explicitly excluded Copilot remediation from this product's packet-calibration
+target. Those sessions remain diagnostic contrast, not a requirement to weaken
+the evidence rules or add compensating packet machinery.
+
+| Capture | Session class | Proposal suppression | Interpretation review |
+|---|---|---|---|
+| `explaino_magnet_root_well` | Codex 5.6 | pass | pass |
+| `explaino_mandelbrot_root_trap` | Codex 5.6 | pass | pass with one localized signal-versus-geometry overreach |
+| `explaino_magnet_root_well` | basic Windows Copilot | pass | non-target model noncompliance |
+| `explaino_mandelbrot_root_trap` | basic Windows Copilot | pass | non-target model noncompliance |
+
+The pasted transcripts did not retain exact packet IDs or hashes, so these rows
+are calibration findings tied to the user-supplied capture identities rather
+than packet-bound proof receipts. No downstream model result is fabricated or
+self-graded by the execution agent.

@@ -71,8 +71,9 @@ catalog hash, selector, and review status.
 The high-priority contract also requires the agent to keep continuous signals
 distinct from categorical basins, serialized root symmetry distinct from
 visible frame symmetry, nonzero values distinct from proven visual causes,
-engine help within its literal scope, global statistics non-spatial, and
-single-frame repetition short of exact self-similarity.
+signal-processing help distinct from recurrence or geometry authority, engine
+help within its literal scope, global statistics non-spatial, and single-frame
+repetition short of exact self-similarity.
 
 ## Packet and preview safety
 
