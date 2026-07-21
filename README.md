@@ -182,9 +182,12 @@ Run the fresh finding-to-proof shell:
 
 The active application has one two-column workflow surface. Opening a finding
 automatically creates an agent exploration packet containing the exact captured
-`state.json`, readable finding context, deployed UI-Salt function semantics,
-parser-validated examples, and closing machine-binding metadata. The proposal
-editor starts empty.
+`state.json`, the optional engine-captured `fractal-state.json` review sidecar,
+readable finding context, deployed UI-Salt function semantics, parser-validated
+examples, and closing machine-binding metadata. The packet warns that the broad
+replay state contains inactive/default/derived fields and that even the review
+sidecar is not a counterfactual sensitivity proof. The proposal editor starts
+empty.
 
 `Validate & Replay Prove` binds the exact packet and proposal text, applies
 scalar overrides, lowers bounded Color Pipeline row-0 selections through the

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -83,6 +84,26 @@ class FindingWorkspaceTests(unittest.TestCase):
 
             self.assertEqual(first.finding_id, second.finding_id)
             self.assertTrue((second.finding_dir / "proposals" / "keep.txt").exists())
+
+    def test_import_preserves_optional_review_focused_fractal_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir) / "workspace"
+            capture_root = Path(temp_dir) / "capture"
+            _write_json(capture_root / "state.json", {"state_version": 3, "params": {"max_iter": 500}})
+            review_state = {
+                "schema_id": "viewer.finding_fractal_state.v1",
+                "active_fractal_controls": {"max_iter": 500},
+            }
+            _write_json(capture_root / "fractal-state.json", review_state)
+
+            imported = SourceCaptureImporter(workspace_root).import_capture(capture_root)
+            copied = imported.finding_dir / "source" / "fractal-state.json"
+            manifest = json.loads(imported.workspace_manifest_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(json.loads(copied.read_text(encoding="utf-8")), review_state)
+            entry = manifest["source_artifacts"]["review_fractal_state"]
+            self.assertEqual(entry["workspace_path"], "source/fractal-state.json")
+            self.assertEqual(entry["sha256"], hashlib.sha256(copied.read_bytes()).hexdigest())
 
     def test_reimport_from_different_path_updates_aliases_same_finding(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

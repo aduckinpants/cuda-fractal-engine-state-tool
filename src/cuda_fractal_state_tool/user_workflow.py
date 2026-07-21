@@ -19,7 +19,7 @@ from .runtime_surface import DEFAULT_RUNTIME_CMD, build_runtime_identity, resolv
 
 
 CAPABILITY_PROFILE = "finding-color-first-row-v1"
-PACKET_VERSION = 2
+PACKET_VERSION = 3
 
 
 class SessionState(str, Enum):
@@ -38,6 +38,8 @@ class FindingContext:
     workspace_root: Path
     workspace_manifest: dict[str, Any]
     authoring_base_state_path: Path
+    review_fractal_state_path: Optional[Path]
+    review_fractal_state_sha256: Optional[str]
     primary_frame_path: Optional[Path]
     summary_text: str
 
@@ -193,6 +195,24 @@ def load_finding_context(source_capture_path: Path, workspace_root: Path) -> Fin
     if isinstance(frame_entry, dict):
         frame_path = _resolve_artifact(finding_dir, frame_entry.get("workspace_path"), "primary frame")
 
+    review_entry = source_artifacts.get("review_fractal_state")
+    review_path = None
+    review_sha256 = None
+    if isinstance(review_entry, dict):
+        review_path = _resolve_artifact(
+            finding_dir,
+            review_entry.get("workspace_path"),
+            "review-focused fractal state",
+        )
+        expected_review_sha256 = review_entry.get("sha256")
+        if review_path is not None:
+            review_sha256 = sha256_file(review_path)
+            if expected_review_sha256 != review_sha256:
+                raise ValueError("Review-focused fractal-state.json hash changed after workspace import")
+            review_state = _load_object(review_path, "Review-focused fractal state")
+            if review_state.get("schema_id") != "viewer.finding_fractal_state.v1":
+                raise ValueError("Unsupported review-focused fractal-state.json schema_id")
+
     state = _load_object(state_path, "Authoring base state")
     render = state.get("render") if isinstance(state.get("render"), dict) else {}
     params = state.get("params") if isinstance(state.get("params"), dict) else {}
@@ -204,6 +224,7 @@ def load_finding_context(source_capture_path: Path, workspace_root: Path) -> Fin
         f"Iterations: {params.get('max_iter', '?')} | auto: {(state.get('view') or {}).get('auto_max_iter', '?') if isinstance(state.get('view'), dict) else '?'}",
         f"Color: {params.get('color_signal', '?')} → {params.get('color_shape', '?')} → {params.get('color_palette', '?')} → {params.get('color_grading', '?')}",
         f"Frame: {frame_path.name if frame_path else 'not present'}",
+        f"Review sidecar: {'viewer.finding_fractal_state.v1' if review_path else 'not present'}",
         f"Workspace index: {'updated' if import_result.workspace_index_updated else 'imported; index update failed'}",
     ]
     return FindingContext(
@@ -211,6 +232,8 @@ def load_finding_context(source_capture_path: Path, workspace_root: Path) -> Fin
         workspace_root=workspace_root.resolve(),
         workspace_manifest=manifest,
         authoring_base_state_path=state_path,
+        review_fractal_state_path=review_path,
+        review_fractal_state_sha256=review_sha256,
         primary_frame_path=frame_path,
         summary_text="\n".join(summary_lines),
     )
@@ -338,6 +361,12 @@ def build_finding_intake_packet(
         raise ValueError("Authoritative finding state.json must be an object")
     if sha256_file(finding.authoring_base_state_path) != finding.authoring_base_sha256:
         raise ValueError("Authoritative finding state.json changed before packet generation")
+    review_state_text = None
+    if finding.review_fractal_state_path is not None:
+        review_state_text = finding.review_fractal_state_path.read_bytes().decode("utf-8")
+        observed_review_sha256 = sha256_file(finding.review_fractal_state_path)
+        if observed_review_sha256 != finding.review_fractal_state_sha256:
+            raise ValueError("Review-focused fractal-state.json changed before packet generation")
     runtime_summary = {
         "launcher_sha256": runtime_identity.get("launcher_sha256"),
         "resolved_executable_sha256": runtime_identity.get("resolved_executable_sha256"),
@@ -406,6 +435,31 @@ def build_finding_intake_packet(
             "",
             "Attach the finding frame to this conversation separately; the image is not embedded in this text packet.",
             "",
+            "## State interpretation warning — read this before discussing the math",
+            "",
+            "`state.json` is the engine's complete replay authority. It intentionally serializes a broad shared",
+            "parameter model, including defaults, compatibility mirrors, derived values, and fields owned by other",
+            "fractal families. A field's presence in `state.json` does not prove that it affects this render.",
+            "In particular, do not attribute an ExplainO-family frame to Multibrot power, Julia constants, or other",
+            "family-specific values merely because those values appear in the broad replay state.",
+            "",
+            "When the sibling `fractal-state.json` review sidecar is present below, use its `capture_context`,",
+            "`active_fractal_controls`, and `color_pipeline` as the preferred first-pass account of the captured",
+            "render. Parameters omitted there must not be promoted into explanations of the current frame.",
+            "",
+            "The review sidecar also has a known limit: `active_fractal_controls` identifies controls owned by or",
+            "relevant to the selected family, but it is not a dependency graph or a counterfactual sensitivity proof.",
+            "A listed value can still be inert under the current mode, gate, zero-strength setting, authority choice,",
+            "or downstream pipeline selection. `derived_runtime_values` are capture receipts, not independent causes.",
+            "Do not translate a suggestive name into undocumented mathematics—for example, do not describe",
+            "`explaino_mix = 0.5` as 'half Newton, half Julia' without direct engine evidence for that interpretation.",
+            "",
+            "Phrase conclusions at the right confidence level:",
+            "- serialized fact: the field or sidecar reports a value;",
+            "- visual observation: a feature is visible in the attached frame;",
+            "- grounded inference: engine metadata or proven behavior supports a relationship;",
+            "- hypothesis: an interesting possibility to test, not a claim about what caused this frame.",
+            "",
             "## Current finding",
             "",
             f"- Fractal family: `{state.get('fractal_type', 'unknown')}`",
@@ -426,6 +480,24 @@ def build_finding_intake_packet(
             "```json",
             state_text.rstrip("\r\n"),
             "```",
+            "",
+            "## Exact review-focused active-state sidecar",
+            "",
+            *(
+                [
+                    "This is the exact engine-captured `fractal-state.json`. It is review guidance, not replay input,",
+                    "and must be interpreted with the limitations above.",
+                    "",
+                    "```json",
+                    review_state_text.rstrip("\r\n"),
+                    "```",
+                ]
+                if review_state_text is not None
+                else [
+                    "No `fractal-state.json` accompanied this capture. Applicability cannot be inferred from the broad",
+                    "replay state alone; keep parameter-to-image explanations tentative unless separately grounded.",
+                ]
+            ),
             "",
             "## What a proposal may change",
             "",
@@ -472,6 +544,7 @@ def build_finding_intake_packet(
             f"- capability_profile: `{CAPABILITY_PROFILE}`",
             f"- finding_id: `{finding.finding_id}`",
             f"- authoring_base_sha256: `{finding.authoring_base_sha256}`",
+            f"- review_fractal_state_sha256: `{finding.review_fractal_state_sha256 or 'not-present'}`",
             f"- runtime_identity_sha256: `{runtime_identity_sha256}`",
             f"- ui_salt_contract_sha256: `{contract_sha256}`",
             "",
@@ -490,6 +563,7 @@ def build_finding_intake_packet(
         "capability_profile": CAPABILITY_PROFILE,
         "finding_id": finding.finding_id,
         "authoring_base_sha256": finding.authoring_base_sha256,
+        "review_fractal_state_sha256": finding.review_fractal_state_sha256,
         "runtime_identity": runtime_summary,
         "runtime_identity_sha256": runtime_identity_sha256,
         "ui_salt_contract_sha256": contract_sha256,

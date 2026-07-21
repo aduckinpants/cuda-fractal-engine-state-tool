@@ -30,8 +30,9 @@ The left side is finding context moving outward:
    mirrored into the workspace.
 4. Inspect the finding summary and bounded frame derivative.
 5. Review and copy the automatically generated outgoing exploration packet.
-   It contains the complete captured `state.json`; the frame itself is attached
-   separately to the web conversation.
+   It contains the complete captured `state.json` and, when supplied by Capture
+   Finding, the exact `fractal-state.json` review sidecar. The frame itself is
+   attached separately to the web conversation.
 
 The right side is agent output moving inward:
 
@@ -49,10 +50,17 @@ The session states are `EMPTY`, `FINDING_READY`, `PACKET_READY`,
 
 ## Packet and preview safety
 
-- Packet payloads contain the exact captured engine `state.json`, readable
-  finding context, model guidance, compiled UI-Salt descriptions, validated
-  examples, and closing finding/hash/runtime/contract bindings. They do not
-  expose local filesystem paths.
+- Packet payloads contain the exact captured engine `state.json`, optional exact
+  review-focused `fractal-state.json`, readable finding context, model guidance,
+  compiled UI-Salt descriptions, validated examples, and closing
+  finding/hash/runtime/contract bindings. They do not expose local filesystem
+  paths.
+- `state.json` remains complete replay authority but contains broad shared,
+  inactive, default, compatibility, and derived fields. Presence is not proof
+  of relevance to the current fractal family.
+- `fractal-state.json` is the preferred first-pass review aid for active family
+  controls and Color Pipeline state. It is not replay input, a dependency
+  graph, or counterfactual proof that every listed control affects the frame.
 - The exact copied packet is persisted with a manifest under the mirrored
   finding.
 - The active capability profile is `finding-color-first-row-v1`; proof receipts

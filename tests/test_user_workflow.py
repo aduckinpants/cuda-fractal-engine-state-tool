@@ -30,6 +30,8 @@ class UserWorkflowTests(unittest.TestCase):
                     "view": {"auto_max_iter": False},
                     "params": {
                         "max_iter": 500,
+                        "multibrot_power": 3,
+                        "julia_c_real": -0.7,
                         "color_signal": "root_index",
                         "color_shape": "identity",
                         "color_palette": "joy",
@@ -37,6 +39,29 @@ class UserWorkflowTests(unittest.TestCase):
                     },
                     "render": {"width": 80, "height": 60, "device_id": 0},
                 }
+            ),
+            encoding="utf-8",
+        )
+        (capture / "fractal-state.json").write_text(
+            json.dumps(
+                {
+                    "schema_id": "viewer.finding_fractal_state.v1",
+                    "capture_context": {"fractal_type": "explaino_all"},
+                    "active_fractal_controls": {
+                        "max_iter": 500,
+                        "explaino_seed": 38,
+                        "explaino_mix": 0.5,
+                    },
+                    "derived_runtime_values": {"last_iters_avg": 8},
+                    "color_pipeline": {
+                        "color_signal": "root_index",
+                        "color_shape": "identity",
+                        "color_palette": "joy",
+                        "color_grading": "basin_default",
+                    },
+                    "omitted_groups": ["inactive_family_parameter_groups"],
+                },
+                indent=2,
             ),
             encoding="utf-8",
         )
@@ -106,16 +131,23 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertIn(finding.finding_id, finding.summary_text)
             self.assertEqual(packet.capability_profile, CAPABILITY_PROFILE)
             self.assertEqual(hashlib.sha256(packet.packet_text.encode("utf-8")).hexdigest(), packet.packet_sha256)
-            self.assertEqual(packet.packet_path.read_text(encoding="utf-8"), packet.packet_text)
+            self.assertEqual(packet.packet_path.read_bytes().decode("utf-8"), packet.packet_text)
             manifest = json.loads(packet.manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["packet_sha256"], packet.packet_sha256)
             self.assertEqual(manifest["finding_id"], finding.finding_id)
+            self.assertEqual(manifest["review_fractal_state_sha256"], finding.review_fractal_state_sha256)
             self.assertIn("# CUDA Fractal Finding — Agent Exploration Packet", packet.packet_text)
             self.assertIn("Begin with a curiosity-driven discussion", packet.packet_text)
             self.assertIn("Surface anything mathematically", packet.packet_text)
             self.assertIn("clearly separating serialized facts, visual observations", packet.packet_text)
             self.assertIn("Do not invent mathematical claims", packet.packet_text)
             self.assertIn("is optional until the user wants to try a concrete change", packet.packet_text)
+            self.assertIn("A field's presence in `state.json` does not prove", packet.packet_text)
+            self.assertIn("do not attribute an ExplainO-family frame to Multibrot power", packet.packet_text)
+            self.assertIn("not a dependency graph or a counterfactual sensitivity proof", packet.packet_text)
+            self.assertIn("do not describe\n`explaino_mix = 0.5` as 'half Newton, half Julia'", packet.packet_text)
+            self.assertIn("viewer.finding_fractal_state.v1", packet.packet_text)
+            self.assertIn('"active_fractal_controls": {', packet.packet_text)
             self.assertIn('"fractal_type": "explaino_all"', packet.packet_text)
             self.assertIn("`repeat` (Repeat): Tile the signal into repeating bands.", packet.packet_text)
             self.assertIn('"color_pipeline_draft": {', packet.packet_text)

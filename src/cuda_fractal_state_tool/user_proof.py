@@ -110,7 +110,7 @@ def _validate_packet_binding(
         raise ProofBindingError(f"Unsupported packet capability profile: {packet.capability_profile}")
     if packet.packet_sha256 != _sha256_text(packet.packet_text):
         raise ProofBindingError("Packet payload no longer matches its recorded SHA-256")
-    if not packet.packet_path.is_file() or packet.packet_path.read_text(encoding="utf-8") != packet.packet_text:
+    if not packet.packet_path.is_file() or packet.packet_path.read_bytes().decode("utf-8") != packet.packet_text:
         raise ProofBindingError("Persisted packet payload no longer matches the active packet")
     if packet.ui_salt_contract_sha256 != contract_sha256:
         raise ProofBindingError("UI-Salt contract changed after this packet was built")
