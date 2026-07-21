@@ -174,13 +174,16 @@ Example bounded draft override payload in proposal_v1:
 }
 ```
 
-Run the minimal UI:
+Run the fresh finding-to-proof shell:
 
 ```powershell
-./run_ui.cmd
+.\run_ui.cmd
 ```
 
-The UI includes a promotion profile selector used by Replay Prove (`none`, single-key profiles, and combined observed enrichment).
+The active application has one two-column workflow surface. Finding import,
+summary, bounded cached preview, exact packet generation/copy, and an initially
+empty proposal editor are active. Validate/prove, repair, and launch remain
+disabled at the mandatory Slice 2 interaction-model review gate.
 
 Direct module launch (equivalent):
 
@@ -188,4 +191,7 @@ Direct module launch (equivalent):
 $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.app
 ```
+
+The failed notebook/controller is available only through
+`archive/vscode-phase3-ui`; it is not present in the active application code.
 

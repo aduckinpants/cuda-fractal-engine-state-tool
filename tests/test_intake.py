@@ -49,12 +49,12 @@ class IntakeTests(unittest.TestCase):
 
             packet = build_intake_packet(manifest_path, replay_path)
             self.assertIn("6. Metadata authority chain expectations", packet)
-            self.assertIn("Treat runtime describe outputs as authority", packet)
+            self.assertIn("deployed compiled UI-Salt contract", packet)
             self.assertIn("8. Color triplet contract", packet)
             self.assertIn("Color triplet coupling rule", packet)
             self.assertIn("- root_index + joy + basin_default", packet)
-            self.assertIn("9. Phase 3 draft/lane authoring constraint", packet)
-            self.assertIn("Do not author color_pipeline_draft in proposal_v1 yet.", packet)
+            self.assertIn("9. Exact finding packet requirement", packet)
+            self.assertIn("baseline packet does not authorize color_pipeline_draft", packet)
             self.assertIn("11. Proposal envelope", packet)
 
 
