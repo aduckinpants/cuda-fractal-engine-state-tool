@@ -62,6 +62,19 @@ Once triggered, the agent returns a short rationale and exactly one fenced
 `json` block containing a `proposal_version: 1` object. `proposal_v1` is the
 object contract name, not the code-fence language.
 
+Packet V5 then supplies exactly one engine-owned description for the selected
+`state.json.fractal_type`. That section is general mathematical background, not
+parameter applicability, current finding state, current Color Pipeline state,
+or proof of what caused the frame. The manifest records the exact descriptive
+catalog hash, selector, and review status.
+
+The high-priority contract also requires the agent to keep continuous signals
+distinct from categorical basins, serialized root symmetry distinct from
+visible frame symmetry, nonzero values distinct from proven visual causes,
+signal-processing help distinct from recurrence or geometry authority, engine
+help within its literal scope, global statistics non-spatial, and single-frame
+repetition short of exact self-similarity.
+
 ## Packet and preview safety
 
 - Packet payloads contain the exact captured engine `state.json`, optional exact
@@ -84,6 +97,11 @@ object contract name, not the code-fence language.
   retain their exact visibility surface and `visible_if` metadata in the packet.
   Relationships among applicable values remain hypotheses unless engine help or
   a proven comparison supports them.
+- The selected descriptive-catalog row comes only from the configured published
+  runtime. Exact bytes are cached under
+  `cache/fractal-descriptive-catalog-v1/<runtime-identity>/<catalog-hash>/`.
+  Missing reviewed prose is nonfatal; malformed catalog authority, duplicate
+  selectors, or a missing selected identity fail packet generation.
 - The exact copied packet is persisted with a manifest under the mirrored
   finding.
 - The active capability profile is `finding-color-first-row-v1`; proof receipts

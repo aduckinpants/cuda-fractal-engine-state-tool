@@ -96,7 +96,9 @@ class UserProofTests(unittest.TestCase):
         ui_dir.mkdir()
         cmd = runtime / "fractal_ui.cmd"
         cmd.write_text(
-            '@echo off\nif /I "%1"=="--describe-parameter-surface-json" copy /y "%~dp0parameter-surface.fixture.json" "%~2" >nul\n',
+            "@echo off\n"
+            'if /I "%1"=="--describe-parameter-surface-json" copy /y "%~dp0parameter-surface.fixture.json" "%~2" >nul\n'
+            'if /I "%1"=="--describe-fractal-catalog-json" copy /y "%~dp0fractal-catalog.fixture.json" "%~2" >nul\n',
             encoding="utf-8",
         )
         (runtime / "fractal_ui_active.txt").write_text("fractal_ui.exe\n", encoding="utf-8")
@@ -126,6 +128,34 @@ class UserProofTests(unittest.TestCase):
                                     "default_visible": True,
                                 }
                             ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (runtime / "fractal-catalog.fixture.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "entries": [
+                        {
+                            "selector_id": "explaino_all",
+                            "display_name": "Explaino All",
+                            "category": "explaino",
+                            "family": "explaino",
+                            "formula_growth_surface": "native_composite_formula",
+                            "capability_flags": ["root_basin_coloring"],
+                            "runtime_flags": ["basin_coloring"],
+                            "description_status": "reviewed",
+                            "description": {
+                                "math_summary": "Reviewed summary.",
+                                "recurrence_or_field_model": "Reviewed recurrence.",
+                                "state_order": "Reviewed state order.",
+                                "termination_or_classification": "Reviewed termination.",
+                                "interpretation_notes": "Reviewed interpretation boundary.",
+                                "source_refs": ["ui_app/src/example.cpp#Example"],
+                            },
                         }
                     ],
                 }
