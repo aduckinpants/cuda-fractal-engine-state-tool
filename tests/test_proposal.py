@@ -170,6 +170,22 @@ class ProposalTests(unittest.TestCase):
         self.assertIn("params.color_signal", proposal.overrides)
         self.assertIn("color_pipeline_draft", proposal.overrides)
 
+    def test_finding_id_base_state_shape_is_accepted(self) -> None:
+        proposal = parse_proposal_v1(
+            '{"proposal_version": 1, "base_state": {"finding_id": "finding-1", "sha256": "hash"}, "overrides": {}}',
+            "finding-1",
+            "hash",
+        )
+        self.assertEqual(proposal.base_state_id, "finding-1")
+
+    def test_invalid_base_state_shape_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_proposal_v1(
+                '{"proposal_version": 1, "base_state": {"id": "runtime-default-v1", "finding_id": "x", "sha256": "hash"}, "overrides": {}}',
+                "runtime-default-v1",
+                "hash",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

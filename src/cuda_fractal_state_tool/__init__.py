@@ -1,6 +1,8 @@
 __all__ = [
     "app",
     "baseline",
+    "finding_workspace",
+    "finding_workflow",
     "intake",
     "json_utils",
     "materializer",

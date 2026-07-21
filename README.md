@@ -12,6 +12,7 @@ Current status:
 - Stable conclusions are tracked in `docs/runtime_authority_probe.md`
 - Phase 2 closure summary is tracked in `docs/phase2_closure.md`
 - Phase 3 start checkpoint is tracked in `docs/phase3_start_checkpoint.md`
+- Web-session copy/paste usage guide is tracked in `USER_GUIDE_WEB_SESSION.md`
 
 ## Phase 0 goals
 
@@ -85,6 +86,16 @@ Prompt-session harness for repeatable agent-style tests:
 $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.prompt_session_cli --pack .local\prompt_session_pack.json
 ```
+
+Canonical fresh-agent onboarding (recommended):
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3.14 -m cuda_fractal_state_tool.agent_handoff_cli --baseline-manifest .local\baselines\runtime-default-v1\manifest.json --replay-state .local\runtime_probe\replay_one\state.json --out .local\agent_handoff_packet.md
+```
+
+Give the generated `.local\agent_handoff_packet.md` to a fresh agent session.
+It defines terms (`state.json` vs `proposal_v1`), runtime-authoritative loop, output contract, and run commands.
 
 Current runtime note:
 

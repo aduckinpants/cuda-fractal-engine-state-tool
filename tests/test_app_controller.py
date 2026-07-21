@@ -8,6 +8,7 @@ from unittest.mock import patch
 from cuda_fractal_state_tool.app import Phase1Controller, Phase1Paths
 from cuda_fractal_state_tool.json_utils import dumps_pretty
 from cuda_fractal_state_tool.state_workflow import WorkflowResult
+from cuda_fractal_state_tool.proposal import parse_proposal_v1
 
 
 class AppControllerTests(unittest.TestCase):
@@ -26,7 +27,14 @@ class AppControllerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             probe = self._make_probe_root(root)
-            paths = Phase1Paths(root, probe, root / "baselines", root / "baselines" / "runtime-default-v1" / "manifest.json", root / "working_states")
+            paths = Phase1Paths(
+                root,
+                probe,
+                root / "baselines",
+                root / "baselines" / "runtime-default-v1" / "manifest.json",
+                root / "working_states",
+                root / "validation_runs",
+            )
             controller = Phase1Controller(paths, runtime_cmd_path=Path(r"D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd"))
             self.assertIn("runtime-default-v1", controller.baseline_status_text())
             self.assertIn('"overrides": {}', controller.example_noop_proposal())
@@ -40,11 +48,45 @@ class AppControllerTests(unittest.TestCase):
             self.assertIn("params.color_grading", packet)
             self.assertIn("schema provenance status: mismatched", packet)
 
+            output_groups = controller.output_folder_groups("demo_state")
+            self.assertIn("capture_finding_output_folder", output_groups)
+            self.assertIn("next_working_state_subfolder", output_groups)
+            self.assertIn("next_validation_run_subfolder", output_groups)
+            self.assertTrue(output_groups["next_working_state_subfolder"].endswith("demo_state"))
+
+            proposal_from_capture = controller.proposal_from_state_json_path(probe / "capture_one" / "state.json")
+            parsed = parse_proposal_v1(
+                proposal_from_capture,
+                controller.baseline.baseline_id,
+                controller.baseline.manifest["state_sha256"],
+            )
+            self.assertEqual(dict(parsed.overrides), {})
+
+            mutated_state_path = probe / "capture_mutated.json"
+            mutated_state_path.write_text(
+                '{"state_version": 3, "fractal_type": "explaino_all", "view": {}, "params": {"max_iter": 700, "color_shape": "identity", "color_signal": "root_index", "color_palette": "joy", "color_grading": "basin_default"}, "render": {}}\n',
+                encoding="utf-8",
+            )
+            proposal_from_mutated = controller.proposal_from_state_json_path(mutated_state_path)
+            parsed_mutated = parse_proposal_v1(
+                proposal_from_mutated,
+                controller.baseline.baseline_id,
+                controller.baseline.manifest["state_sha256"],
+            )
+            self.assertEqual(parsed_mutated.overrides["params.max_iter"], 700)
+
     def test_replay_prove_forwards_selected_promotion_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             probe = self._make_probe_root(root)
-            paths = Phase1Paths(root, probe, root / "baselines", root / "baselines" / "runtime-default-v1" / "manifest.json", root / "working_states")
+            paths = Phase1Paths(
+                root,
+                probe,
+                root / "baselines",
+                root / "baselines" / "runtime-default-v1" / "manifest.json",
+                root / "working_states",
+                root / "validation_runs",
+            )
             controller = Phase1Controller(paths, runtime_cmd_path=Path(r"D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd"))
 
             result = WorkflowResult(

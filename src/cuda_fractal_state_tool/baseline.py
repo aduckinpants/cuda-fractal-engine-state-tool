@@ -82,7 +82,13 @@ def load_frozen_baseline(manifest_path: Path) -> FrozenBaseline:
     if not isinstance(manifest, dict):
         raise ValueError("Baseline manifest must be a JSON object")
     baseline_id = manifest.get("baseline_id")
-    state_path = manifest_path.with_name("state.json")
+    state_path_value = manifest.get("state_path")
+    if isinstance(state_path_value, str) and state_path_value.strip():
+        state_path = Path(state_path_value)
+        if not state_path.is_absolute():
+            state_path = (manifest_path.parent / state_path).resolve()
+    else:
+        state_path = manifest_path.with_name("state.json")
     if not state_path.exists():
         raise FileNotFoundError(f"Frozen baseline state is missing: {state_path}")
     expected_hash = manifest.get("state_sha256")

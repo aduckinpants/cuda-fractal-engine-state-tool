@@ -377,10 +377,17 @@ def parse_proposal_v1(text: str, expected_baseline_id: str, expected_baseline_sh
         raise ValueError("proposal_version must equal 1")
     if not isinstance(value["base_state"], dict):
         raise ValueError("base_state must be an object")
-    _ensure_exact_keys(value["base_state"], {"id", "sha256"}, "base_state")
-    if value["base_state"]["id"] != expected_baseline_id:
+    base_state = value["base_state"]
+    base_keys = set(base_state.keys())
+    if base_keys == {"id", "sha256"}:
+        base_state_id = base_state["id"]
+    elif base_keys == {"finding_id", "sha256"}:
+        base_state_id = base_state["finding_id"]
+    else:
+        raise ValueError("base_state must contain either {id, sha256} or {finding_id, sha256}")
+    if base_state_id != expected_baseline_id:
         raise ValueError("Proposal base_state.id does not match the frozen baseline")
-    if value["base_state"]["sha256"] != expected_baseline_sha256:
+    if base_state["sha256"] != expected_baseline_sha256:
         raise ValueError("Proposal base_state.sha256 does not match the frozen baseline")
     overrides = value["overrides"]
     if not isinstance(overrides, dict):
@@ -401,7 +408,7 @@ def parse_proposal_v1(text: str, expected_baseline_id: str, expected_baseline_sh
 
     return ProposalV1(
         proposal_version=1,
-        base_state_id=expected_baseline_id,
+        base_state_id=base_state_id,
         base_state_sha256=expected_baseline_sha256,
         overrides=overrides,
         raw_text=text,
