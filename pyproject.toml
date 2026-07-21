@@ -7,9 +7,11 @@ name = "cuda-fractal-state-tool"
 version = "0.1.0"
 description = "Experimental authority probe and state workflow tool for the CUDA fractal runtime"
 requires-python = ">=3.9"
+dependencies = ["Pillow>=12.1,<13"]
 
 [project.scripts]
 cuda-fractal-runtime-probe = "cuda_fractal_state_tool.runtime_probe:main"
+cuda-fractal-color-authority-proof = "cuda_fractal_state_tool.color_authority_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

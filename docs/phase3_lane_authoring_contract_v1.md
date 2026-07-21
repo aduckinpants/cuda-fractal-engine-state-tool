@@ -1,7 +1,12 @@
 # Phase 3 Lane Authoring Contract V1 (Draft)
 
 Date: 2026-07-20
-Status: Draft, fail-closed
+Status: Superseded by the UI rescue authority proof
+
+> Historical checkpoint only. Do not execute the metadata or materialization
+> design below. `docs/slice1_color_authority_proof.md` establishes the deployed
+> compiled UI-Salt contract and engine action seam as the current authority;
+> direct sparse-draft replacement is fail-closed.
 
 ## Purpose
 

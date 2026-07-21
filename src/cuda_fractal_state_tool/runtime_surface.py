@@ -21,6 +21,7 @@ class LauncherResolution:
     resolved_executable_path: Optional[str]
     repo_root_hint: Optional[str]
     runtime_schema_path: Optional[str]
+    ui_salt_contract_path: Optional[str]
 
 
 def sha256_file(path: Path) -> str:
@@ -48,6 +49,12 @@ def resolve_launcher(runtime_cmd_path: Path) -> LauncherResolution:
     repo_root_file = launcher_directory / "fractal_ui_repo_root.txt"
     repo_root_hint = repo_root_file.read_text(encoding="utf-8").strip() if repo_root_file.exists() else None
     runtime_schema = launcher_directory / "ui" / "fractal_binding_surface_v1.ui_schema.json"
+    ui_salt_contract = (
+        launcher_directory
+        / "ui_salt"
+        / "generated"
+        / "color_pipeline_function_library.contract.v1.json"
+    )
     return LauncherResolution(
         runtime_cmd_path=str(runtime_cmd_path),
         launcher_directory=str(launcher_directory),
@@ -56,6 +63,7 @@ def resolve_launcher(runtime_cmd_path: Path) -> LauncherResolution:
         resolved_executable_path=resolved_executable_path,
         repo_root_hint=repo_root_hint,
         runtime_schema_path=str(runtime_schema) if runtime_schema.exists() else None,
+        ui_salt_contract_path=str(ui_salt_contract) if ui_salt_contract.exists() else None,
     )
 
 
@@ -79,6 +87,8 @@ def build_runtime_identity(runtime_cmd_path: Path, cwd: Path) -> dict[str, Any]:
         "runtime_schema_sha256": None,
         "source_schema_path": source_schema_path,
         "source_schema_sha256": source_schema_sha256,
+        "ui_salt_contract_path": resolution.ui_salt_contract_path,
+        "ui_salt_contract_sha256": None,
         "describe_parameter_surface_sha256": None,
         "describe_functions_sha256": None,
     }
@@ -88,6 +98,8 @@ def build_runtime_identity(runtime_cmd_path: Path, cwd: Path) -> dict[str, Any]:
         identity["resolved_executable_file_version"] = file_version(exe_path)
     if resolution.runtime_schema_path:
         identity["runtime_schema_sha256"] = sha256_file(Path(resolution.runtime_schema_path))
+    if resolution.ui_salt_contract_path:
+        identity["ui_salt_contract_sha256"] = sha256_file(Path(resolution.ui_salt_contract_path))
     return identity
 
 

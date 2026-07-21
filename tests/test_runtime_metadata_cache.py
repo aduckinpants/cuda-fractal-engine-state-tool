@@ -39,6 +39,18 @@ class RuntimeMetadataCacheTests(unittest.TestCase):
 
         self.assertEqual(runtime_identity_cache_key(identity_a), runtime_identity_cache_key(identity_b))
 
+    def test_runtime_identity_cache_key_changes_with_ui_salt_contract(self) -> None:
+        identity = {
+            "launcher_path": "C:/runtime/fractal_ui.cmd",
+            "launcher_sha256": "launcher",
+            "working_directory": "C:/runtime",
+            "ui_salt_contract_path": "C:/runtime/ui_salt/generated/contract.json",
+            "ui_salt_contract_sha256": "contract-a",
+        }
+        changed = dict(identity)
+        changed["ui_salt_contract_sha256"] = "contract-b"
+        self.assertNotEqual(runtime_identity_cache_key(identity), runtime_identity_cache_key(changed))
+
     def test_run_probe_uses_cached_outputs_when_runtime_identity_matches(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

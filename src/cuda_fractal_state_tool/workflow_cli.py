@@ -31,7 +31,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         description="Execute bounded proposal_v1 workflow with runtime replay proof",
         epilog=(
             "Scope note: this CLI executes bounded proposal_v1 overrides only. "
-            "Bounded full color_pipeline_draft replacement is accepted and validated against runtime metadata lane/function catalog."
+            "Color Pipeline draft authoring requires the packet-bound engine-action workflow and fails closed here."
         ),
     )
     parser.add_argument("--proposal", type=Path, required=True, help="Path to proposal JSON")

@@ -10,7 +10,7 @@ from .lane_catalog import (
     LaneUnknownError,
     RuntimeMetadataUnavailableError,
     RuntimeMetadataShapeUnsupportedError,
-    load_lane_catalog_from_describe_functions,
+    load_lane_catalog_from_ui_salt_contract,
     validate_lane_function_reference,
 )
 
@@ -28,10 +28,10 @@ def _collect_lanes(entries: list[dict[str, str]]) -> dict[str, list[str]]:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Inspect runtime-derived lane/function catalog from describe-functions JSON",
+        description="Inspect the deployed compiled UI-Salt lane/function contract",
         epilog="Fail-closed: unsupported metadata shapes are rejected instead of inferred.",
     )
-    parser.add_argument("--describe-functions", type=Path, required=True, help="Path to describe-functions.json")
+    parser.add_argument("--ui-salt-contract", type=Path, required=True, help="Path to compiled UI-Salt contract JSON")
     parser.add_argument("--check-lane", type=str, default=None, help="Optional lane id to validate against metadata catalog")
     parser.add_argument("--check-function", type=str, default=None, help="Optional function id to validate for --check-lane")
     args = parser.parse_args(argv)
@@ -50,7 +50,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     try:
-        catalog = load_lane_catalog_from_describe_functions(args.describe_functions)
+        catalog = load_lane_catalog_from_ui_salt_contract(args.ui_salt_contract)
     except RuntimeMetadataUnavailableError as exc:
         print(json.dumps({"status": "runtime_metadata_unavailable", "error": str(exc)}, indent=2, sort_keys=True))
         return 2

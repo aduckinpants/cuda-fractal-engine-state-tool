@@ -72,13 +72,11 @@ py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_propo
 py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_proposal.json --promotion-profile none --launch-viewer-on-success
 ```
 
-Phase 3 draft smoke path (proposal -> workflow -> validation-runs query):
+Controlled Color Pipeline authority proof (compiled UI-Salt -> engine action -> action-free replay):
 
 ```powershell
 $env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.proposal_cli --example color-pipeline-draft --draft-lane shape --draft-function identity --out .local\proposal_draft_smoke.json
-py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_draft_smoke.json --promotion-profile color_pipeline_draft_only_v1 --state-id draft_smoke_cli
-py -3.14 -m cuda_fractal_state_tool.validation_runs --list --promotion-profile color_pipeline_draft_only_v1 --status runtime_proof_succeeded --limit 5
+py -3.14 -m cuda_fractal_state_tool.color_authority_cli --runtime-cmd D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd --base-state .local\baselines\runtime-default-v1\state.json --out .local\slice1_color_authority_proof
 ```
 
 Prompt-session harness for repeatable agent-style tests:
@@ -100,21 +98,21 @@ It defines terms (`state.json` vs `proposal_v1`), runtime-authoritative loop, ou
 
 Current runtime note:
 
-- Real draft-lane prompt packs require runtime `describe-functions` metadata that includes lane/function catalog shape.
-- If runtime metadata lacks lane/function entries, draft cases fail closed with `runtime_metadata_shape_unsupported`.
+- Color Pipeline lane/function authority comes from the deployed compiled UI-Salt contract, not `--describe-functions`.
+- Direct sparse-draft workflow materialization now fails closed with `color_pipeline_draft_requires_engine_action_workflow`.
 - Bounded scalar/triplet prompt packs run now and are suitable for immediate real-session harness validation.
 
 Example pack schema:
 
 ```json
 {
-	"session_id": "draft-smoke-pack",
+	"session_id": "noop-smoke-pack",
 	"cases": [
 		{
-			"case_id": "draft-identity",
-			"proposal_path": ".local/proposal_draft_smoke.json",
-			"state_id": "draft_identity_run",
-			"promotion_profile": "color_pipeline_draft_only_v1",
+			"case_id": "noop",
+			"proposal_path": ".local/proposal_noop.json",
+			"state_id": "noop_run",
+			"promotion_profile": "none",
 			"expected_status": "runtime_proof_succeeded",
 			"expected_runtime_status": "runtime_success"
 		}
@@ -135,21 +133,18 @@ Generate proposal examples (for workflow_cli input):
 $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.proposal_cli --example noop --out .local\proposal_noop.json
 py -3.14 -m cuda_fractal_state_tool.proposal_cli --example color-triplet --signal root_proximity --palette cyclic_escape --grading tone_map_default --out .local\proposal_triplet.json
-py -3.14 -m cuda_fractal_state_tool.proposal_cli --example color-pipeline-draft --draft-lane shape --draft-function identity --out .local\proposal_draft.json
 py -3.14 -m cuda_fractal_state_tool.proposal_cli --list-color-triplets
 py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_triplet.json --promotion-profile none
-py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_draft.json --promotion-profile none
 ```
 
-Proposal CLI intentionally remains bounded: it emits scalar and replay-proven triplet examples only.
-Bounded `color_pipeline_draft` full replacement payloads are accepted in `proposal_v1` and validated during workflow execution.
+`proposal_v1` remains structurally unchanged. Draft payloads require the packet-bound engine-action workflow that lands after interaction-model acceptance; the legacy direct workflow rejects them rather than writing an incomplete engine state.
 
-Inspect runtime metadata for lane/function catalog discovery (fail-closed parser):
+Inspect the compiled UI-Salt lane/function authority (fail-closed bounded projection):
 
 ```powershell
 $env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.lane_catalog_cli --describe-functions .local\runtime_probe\describe-functions.json
-py -3.14 -m cuda_fractal_state_tool.lane_catalog_cli --describe-functions .local\runtime_probe\describe-functions.json --check-lane shape --check-function identity
+py -3.14 -m cuda_fractal_state_tool.lane_catalog_cli --ui-salt-contract D:\salt-fractal\cuda_newton_fractal_clone\runtime\ui_salt\generated\color_pipeline_function_library.contract.v1.json
+py -3.14 -m cuda_fractal_state_tool.lane_catalog_cli --ui-salt-contract D:\salt-fractal\cuda_newton_fractal_clone\runtime\ui_salt\generated\color_pipeline_function_library.contract.v1.json --check-lane shape --check-function repeat
 ```
 
 When `--check-lane` and `--check-function` are provided, the CLI returns explicit fail-closed statuses for mismatch:

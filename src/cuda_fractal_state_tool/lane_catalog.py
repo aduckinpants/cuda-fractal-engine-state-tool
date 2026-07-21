@@ -14,8 +14,16 @@ class LaneFunction:
 
 
 @dataclass(frozen=True)
+class LaneDefinition:
+    lane_id: str
+    default_function_id: str
+    function_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class LaneCatalog:
     shape: str
+    lanes: tuple[LaneDefinition, ...]
     entries: tuple[LaneFunction, ...]
 
 
@@ -39,104 +47,91 @@ class FunctionUnknownError(LaneCatalogError):
     pass
 
 
-def _ensure_str(value: Any, field_name: str) -> str:
+def _non_empty_string(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise RuntimeMetadataShapeUnsupportedError(f"Expected non-empty string for {field_name}")
     return value
 
 
-def _collect_from_lane_functions(payload: Any) -> list[LaneFunction]:
-    if not isinstance(payload, list):
-        raise RuntimeMetadataShapeUnsupportedError("Expected list payload for lane/function metadata")
-    entries: list[LaneFunction] = []
-    for item in payload:
-        if not isinstance(item, dict):
-            raise RuntimeMetadataShapeUnsupportedError("Expected object entries in lane/function metadata list")
-        lane_id = _ensure_str(item.get("lane_id"), "lane_id")
-        function_id = _ensure_str(item.get("function_id"), "function_id")
-        entries.append(LaneFunction(lane_id=lane_id, function_id=function_id))
-    return entries
-
-
-def _collect_from_functions(payload: Any) -> list[LaneFunction]:
-    if not isinstance(payload, list):
-        raise RuntimeMetadataShapeUnsupportedError("Expected list payload for functions metadata")
-    entries: list[LaneFunction] = []
-    for item in payload:
-        if not isinstance(item, dict):
-            raise RuntimeMetadataShapeUnsupportedError("Expected object entries in functions metadata list")
-        lane_id = _ensure_str(item.get("lane_id"), "lane_id")
-        function_id = _ensure_str(item.get("id"), "id")
-        entries.append(LaneFunction(lane_id=lane_id, function_id=function_id))
-    return entries
-
-
-def _collect_from_color_pipeline_draft(payload: Any) -> list[LaneFunction]:
+def parse_ui_salt_contract_payload(payload: Any) -> LaneCatalog:
     if not isinstance(payload, dict):
-        raise RuntimeMetadataShapeUnsupportedError("Expected object payload for color_pipeline_draft metadata")
-    lanes = payload.get("lanes")
-    if not isinstance(lanes, list):
-        raise RuntimeMetadataShapeUnsupportedError("Expected lanes list in color_pipeline_draft metadata")
+        raise RuntimeMetadataShapeUnsupportedError("UI-Salt contract root must be an object")
+    function_library = payload.get("function_library")
+    if not isinstance(function_library, dict):
+        raise RuntimeMetadataShapeUnsupportedError("UI-Salt contract is missing function_library")
+    lane_payloads = function_library.get("lanes")
+    if not isinstance(lane_payloads, list) or not lane_payloads:
+        raise RuntimeMetadataShapeUnsupportedError("UI-Salt function_library.lanes must be a non-empty array")
 
+    lanes: list[LaneDefinition] = []
     entries: list[LaneFunction] = []
-    for lane in lanes:
-        if not isinstance(lane, dict):
-            raise RuntimeMetadataShapeUnsupportedError("Expected lane object in color_pipeline_draft metadata")
-        lane_id = _ensure_str(lane.get("lane_id"), "lane_id")
-        functions = lane.get("functions")
-        if not isinstance(functions, list):
-            raise RuntimeMetadataShapeUnsupportedError("Expected functions list for lane in color_pipeline_draft metadata")
-        for function in functions:
-            if isinstance(function, str):
-                function_id = _ensure_str(function, "function")
-            elif isinstance(function, dict):
-                function_id = _ensure_str(function.get("function_id") or function.get("id"), "function_id")
-            else:
-                raise RuntimeMetadataShapeUnsupportedError("Expected string/object function entries")
+    seen_lane_ids: set[str] = set()
+    for lane_index, lane_payload in enumerate(lane_payloads):
+        if not isinstance(lane_payload, dict):
+            raise RuntimeMetadataShapeUnsupportedError(
+                f"UI-Salt function_library.lanes[{lane_index}] must be an object"
+            )
+        lane_id = _non_empty_string(lane_payload.get("id"), f"lanes[{lane_index}].id")
+        if lane_id in seen_lane_ids:
+            raise RuntimeMetadataShapeUnsupportedError(f"Duplicate UI-Salt lane id: {lane_id}")
+        seen_lane_ids.add(lane_id)
+        default_function_id = _non_empty_string(
+            lane_payload.get("default"), f"lanes[{lane_index}].default"
+        )
+        function_payloads = lane_payload.get("functions")
+        if not isinstance(function_payloads, list) or not function_payloads:
+            raise RuntimeMetadataShapeUnsupportedError(
+                f"UI-Salt lane {lane_id} must contain a non-empty functions array"
+            )
+        function_ids: list[str] = []
+        seen_function_ids: set[str] = set()
+        for function_index, function_payload in enumerate(function_payloads):
+            if not isinstance(function_payload, dict):
+                raise RuntimeMetadataShapeUnsupportedError(
+                    f"UI-Salt lane {lane_id} function[{function_index}] must be an object"
+                )
+            function_id = _non_empty_string(
+                function_payload.get("id"), f"lane {lane_id} function[{function_index}].id"
+            )
+            if function_id in seen_function_ids:
+                raise RuntimeMetadataShapeUnsupportedError(
+                    f"Duplicate UI-Salt function id in lane {lane_id}: {function_id}"
+                )
+            seen_function_ids.add(function_id)
+            function_ids.append(function_id)
             entries.append(LaneFunction(lane_id=lane_id, function_id=function_id))
-    return entries
+        if default_function_id not in seen_function_ids:
+            raise RuntimeMetadataShapeUnsupportedError(
+                f"UI-Salt lane {lane_id} default is not present in functions: {default_function_id}"
+            )
+        lanes.append(
+            LaneDefinition(
+                lane_id=lane_id,
+                default_function_id=default_function_id,
+                function_ids=tuple(function_ids),
+            )
+        )
+
+    return LaneCatalog(shape="ui_salt_function_library_v1", lanes=tuple(lanes), entries=tuple(entries))
 
 
-def parse_lane_catalog_payload(describe_functions_payload: Any) -> LaneCatalog:
-    shape = ""
-    entries: list[LaneFunction]
-
-    if isinstance(describe_functions_payload, dict) and "lane_functions" in describe_functions_payload:
-        shape = "lane_functions"
-        entries = _collect_from_lane_functions(describe_functions_payload["lane_functions"])
-    elif isinstance(describe_functions_payload, dict) and "functions" in describe_functions_payload:
-        shape = "functions"
-        entries = _collect_from_functions(describe_functions_payload["functions"])
-    elif isinstance(describe_functions_payload, dict) and "color_pipeline_draft" in describe_functions_payload:
-        shape = "color_pipeline_draft"
-        entries = _collect_from_color_pipeline_draft(describe_functions_payload["color_pipeline_draft"])
-    elif isinstance(describe_functions_payload, list):
-        shape = "lane_functions"
-        entries = _collect_from_lane_functions(describe_functions_payload)
-    else:
-        raise RuntimeMetadataShapeUnsupportedError("No supported lane/function metadata shape found")
-
-    deduped = sorted({(item.lane_id, item.function_id) for item in entries})
-    if not deduped:
-        raise RuntimeMetadataShapeUnsupportedError("No lane/function entries were found")
-
-    return LaneCatalog(shape=shape, entries=tuple(LaneFunction(lane_id=lane_id, function_id=function_id) for lane_id, function_id in deduped))
-
-
-def load_lane_catalog_from_describe_functions(describe_functions_path: Path) -> LaneCatalog:
-    path = describe_functions_path.resolve()
+def load_lane_catalog_from_ui_salt_contract(contract_path: Path) -> LaneCatalog:
+    path = contract_path.resolve()
     if not path.exists():
-        raise RuntimeMetadataUnavailableError(f"describe-functions file not found: {path}")
+        raise RuntimeMetadataUnavailableError(f"UI-Salt contract file not found: {path}")
     payload = loads_no_duplicates(path.read_text(encoding="utf-8"))
-    return parse_lane_catalog_payload(payload)
+    return parse_ui_salt_contract_payload(payload)
 
 
 def lane_known(catalog: LaneCatalog, lane_id: str) -> bool:
-    return any(entry.lane_id == lane_id for entry in catalog.entries)
+    return any(lane.lane_id == lane_id for lane in catalog.lanes)
 
 
 def lane_function_known(catalog: LaneCatalog, lane_id: str, function_id: str) -> bool:
-    return any(entry.lane_id == lane_id and entry.function_id == function_id for entry in catalog.entries)
+    return any(
+        lane.lane_id == lane_id and function_id in lane.function_ids
+        for lane in catalog.lanes
+    )
 
 
 def validate_lane_function_reference(catalog: LaneCatalog, lane_id: str, function_id: str) -> None:
@@ -144,3 +139,17 @@ def validate_lane_function_reference(catalog: LaneCatalog, lane_id: str, functio
         raise LaneUnknownError(f"lane_unknown: {lane_id}")
     if not lane_function_known(catalog, lane_id, function_id):
         raise FunctionUnknownError(f"function_unknown: lane={lane_id} function={function_id}")
+
+
+def ordered_selection_actions(catalog: LaneCatalog, selections: dict[str, str]) -> tuple[str, ...]:
+    unknown_lanes = sorted(set(selections) - {lane.lane_id for lane in catalog.lanes})
+    if unknown_lanes:
+        raise LaneUnknownError(f"lane_unknown: {unknown_lanes[0]}")
+    actions: list[str] = []
+    for lane in catalog.lanes:
+        function_id = selections.get(lane.lane_id)
+        if function_id is None:
+            continue
+        validate_lane_function_reference(catalog, lane.lane_id, function_id)
+        actions.append(f"select_function:{lane.lane_id}:0:{function_id}")
+    return tuple(actions)

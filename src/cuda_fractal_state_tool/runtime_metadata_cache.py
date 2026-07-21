@@ -18,6 +18,8 @@ _CACHE_IDENTITY_FIELDS = (
     "runtime_schema_sha256",
     "source_schema_path",
     "source_schema_sha256",
+    "ui_salt_contract_path",
+    "ui_salt_contract_sha256",
 )
 
 

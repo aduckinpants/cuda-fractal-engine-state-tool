@@ -11,163 +11,64 @@ from cuda_fractal_state_tool.lane_catalog_cli import main
 
 
 class LaneCatalogCliTests(unittest.TestCase):
-    def test_cli_prints_catalog_for_supported_shape(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            describe_functions = root / "describe-functions.json"
-            describe_functions.write_text(
-                json.dumps(
-                    {
-                        "lane_functions": [
-                            {"lane_id": "shape", "function_id": "identity"},
-                            {"lane_id": "shape", "function_id": "repeat"},
+    def _write_contract(self, root: Path) -> Path:
+        path = root / "contract.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "function_library": {
+                        "lanes": [
+                            {
+                                "id": "shape",
+                                "default": "identity",
+                                "functions": [{"id": "identity"}, {"id": "repeat"}],
+                            }
                         ]
                     }
-                ),
-                encoding="utf-8",
-            )
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
 
-            stdout = io.StringIO()
-            with redirect_stdout(stdout):
-                exit_code = main(["--describe-functions", str(describe_functions)])
-
-            self.assertEqual(exit_code, 0)
-            payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["lane_count"], 1)
-            self.assertIn("shape", payload["lanes"])
-
-    def test_cli_validates_lane_function_success(self) -> None:
+    def test_cli_prints_and_validates_compiled_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            describe_functions = root / "describe-functions.json"
-            describe_functions.write_text(
-                json.dumps(
-                    {
-                        "lane_functions": [
-                            {"lane_id": "shape", "function_id": "identity"},
-                        ]
-                    }
-                ),
-                encoding="utf-8",
-            )
-
+            contract = self._write_contract(Path(temp_dir))
             stdout = io.StringIO()
             with redirect_stdout(stdout):
                 exit_code = main(
                     [
-                        "--describe-functions",
-                        str(describe_functions),
-                        "--check-lane",
-                        "shape",
-                        "--check-function",
-                        "identity",
-                    ]
-                )
-
-            self.assertEqual(exit_code, 0)
-            payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["validated_lane"], "shape")
-            self.assertEqual(payload["validated_function"], "identity")
-
-    def test_cli_reports_unsupported_shape(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            describe_functions = root / "describe-functions.json"
-            describe_functions.write_text(json.dumps({"unexpected": []}), encoding="utf-8")
-
-            stdout = io.StringIO()
-            with redirect_stdout(stdout):
-                exit_code = main(["--describe-functions", str(describe_functions)])
-
-            self.assertEqual(exit_code, 2)
-            payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["status"], "runtime_metadata_shape_unsupported")
-
-    def test_cli_reports_unknown_lane(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            describe_functions = root / "describe-functions.json"
-            describe_functions.write_text(
-                json.dumps(
-                    {
-                        "lane_functions": [
-                            {"lane_id": "shape", "function_id": "identity"},
-                        ]
-                    }
-                ),
-                encoding="utf-8",
-            )
-
-            stdout = io.StringIO()
-            with redirect_stdout(stdout):
-                exit_code = main(
-                    [
-                        "--describe-functions",
-                        str(describe_functions),
-                        "--check-lane",
-                        "signal",
-                        "--check-function",
-                        "root_index",
-                    ]
-                )
-
-            self.assertEqual(exit_code, 2)
-            payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["status"], "lane_unknown")
-
-    def test_cli_reports_unknown_function_for_lane(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            describe_functions = root / "describe-functions.json"
-            describe_functions.write_text(
-                json.dumps(
-                    {
-                        "lane_functions": [
-                            {"lane_id": "shape", "function_id": "identity"},
-                        ]
-                    }
-                ),
-                encoding="utf-8",
-            )
-
-            stdout = io.StringIO()
-            with redirect_stdout(stdout):
-                exit_code = main(
-                    [
-                        "--describe-functions",
-                        str(describe_functions),
+                        "--ui-salt-contract",
+                        str(contract),
                         "--check-lane",
                         "shape",
                         "--check-function",
                         "repeat",
                     ]
                 )
-
-            self.assertEqual(exit_code, 2)
+            self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["status"], "function_unknown")
+            self.assertEqual(payload["shape"], "ui_salt_function_library_v1")
+            self.assertEqual(payload["lanes"]["shape"], ["identity", "repeat"])
 
-    def test_cli_rejects_partial_check_arguments(self) -> None:
+    def test_cli_rejects_unsupported_shape_and_partial_check(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            describe_functions = root / "describe-functions.json"
-            describe_functions.write_text(json.dumps({"lane_functions": []}), encoding="utf-8")
-
+            bad = root / "bad.json"
+            bad.write_text('{"functions": []}', encoding="utf-8")
             stdout = io.StringIO()
             with redirect_stdout(stdout):
-                exit_code = main(
-                    [
-                        "--describe-functions",
-                        str(describe_functions),
-                        "--check-lane",
-                        "shape",
-                    ]
-                )
+                self.assertEqual(main(["--ui-salt-contract", str(bad)]), 2)
+            self.assertEqual(json.loads(stdout.getvalue())["status"], "runtime_metadata_shape_unsupported")
 
-            self.assertEqual(exit_code, 2)
-            payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["status"], "invalid_arguments")
+            contract = self._write_contract(root)
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                self.assertEqual(
+                    main(["--ui-salt-contract", str(contract), "--check-lane", "shape"]),
+                    2,
+                )
+            self.assertEqual(json.loads(stdout.getvalue())["status"], "invalid_arguments")
 
 
 if __name__ == "__main__":
