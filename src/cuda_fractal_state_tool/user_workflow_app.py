@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import queue
 from pathlib import Path
@@ -11,6 +12,7 @@ from PIL import Image, ImageTk
 from .async_jobs import AsyncJobRunner, JobOutcome, JobRequestIdentity, WorkerQueueFullError
 from .preview_service import PreviewService
 from .runtime_surface import DEFAULT_RUNTIME_CMD
+from .user_proof import ProofResult, execute_bound_proof, launch_proven_result
 from .user_workflow import (
     FindingContext,
     PacketContext,
@@ -191,15 +193,15 @@ class UserWorkflowApp:
         actions.grid(row=2, column=0, sticky="ew", pady=(0, 8))
         for column in (0, 1, 2):
             actions.columnconfigure(column, weight=1)
-        self.prove_button = ttk.Button(actions, text="Validate & Replay Prove", state="disabled")
+        self.prove_button = ttk.Button(actions, text="Validate & Replay Prove", command=self.prove_proposal)
         self.prove_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
-        self.repair_button = ttk.Button(actions, text="Copy Repair Packet", state="disabled")
+        self.repair_button = ttk.Button(actions, text="Copy Repair Packet", command=self.copy_repair_packet)
         self.repair_button.grid(row=0, column=1, sticky="ew", padx=4)
-        self.launch_button = ttk.Button(actions, text="Launch Proven State", state="disabled")
+        self.launch_button = ttk.Button(actions, text="Launch Proven State", command=self.launch_proven_state)
         self.launch_button.grid(row=0, column=2, sticky="ew", padx=(4, 0))
         ttk.Label(
             actions,
-            text="Proof and launch are intentionally disabled at the interaction-model review checkpoint.",
+            text="Proof is bound to the exact packet and exact proposal text. Launch rechecks the candidate, runtime, and contract.",
             wraplength=650,
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
@@ -211,8 +213,7 @@ class UserWorkflowApp:
         self.proof_text.grid(row=0, column=0, sticky="nsew")
         self._set_text(
             self.proof_text,
-            "No proof has run. After the interaction shell is accepted, this panel will show validation, "
-            "engine materialization, action-free replay, rejection repair, and exact launch readiness.",
+            "No proof has run. Paste proposal_v1 JSON from the agent conversation, then validate and replay-prove it.",
         )
 
     def _browse_file(self) -> None:
@@ -379,6 +380,7 @@ class UserWorkflowApp:
             self._render()
             return
         self.session.accept_packet(packet)
+        self._set_text(self.proof_text, "No proof has run for this exact packet binding.")
         self._set_text(self.packet_text, packet.packet_text)
         self.binding_var.set(
             f"Packet {packet.packet_id}\nSHA-256 {packet.packet_sha256}\nProfile {packet.capability_profile}"
@@ -406,6 +408,7 @@ class UserWorkflowApp:
             return
         self.proposal_text.edit_modified(False)
         self.session.set_proposal_text(self.proposal_text.get("1.0", "end-1c"))
+        self._set_text(self.proof_text, "Proposal changed. Prior proof readiness is invalidated.")
         self._render()
 
     def set_proposal_text(self, text: str) -> None:
@@ -417,6 +420,132 @@ class UserWorkflowApp:
         finally:
             self._setting_proposal = False
         self.session.set_proposal_text(text)
+        self._set_text(self.proof_text, "Proposal changed. Prior proof readiness is invalidated.")
+        self._render()
+
+    def prove_proposal(self) -> None:
+        finding = self.session.finding
+        packet = self.session.packet
+        proposal_text = self.session.proposal_text
+        if finding is None or packet is None or not proposal_text.strip():
+            self._set_error("Open a finding, copy its exact packet, and paste proposal_v1 JSON before proof.")
+            self._render()
+            return
+        proposal_sha256 = hashlib.sha256(proposal_text.encode("utf-8")).hexdigest()
+        identity = JobRequestIdentity(
+            generation=self.session.generation,
+            finding_id=finding.finding_id,
+            authoring_base_sha256=finding.authoring_base_sha256,
+            packet_id=packet.packet_id,
+            packet_sha256=packet.packet_sha256,
+            proposal_text_sha256=proposal_sha256,
+            runtime_identity_sha256=packet.runtime_identity_sha256,
+            ui_salt_contract_sha256=packet.ui_salt_contract_sha256,
+        )
+        self.session.begin_proof()
+        self._set_text(
+            self.proof_text,
+            "PROVING\n\nValidating packet and proposal binding, asking the engine to materialize the candidate, "
+            "then replaying that emitted state without actions…",
+        )
+        self._submit(
+            "proof",
+            identity,
+            lambda context: execute_bound_proof(
+                finding,
+                packet,
+                proposal_text,
+                self.runtime_cmd_path,
+                context,
+            ),
+            self._proof_completed,
+        )
+        self._render()
+
+    def _proof_completed(self, outcome: JobOutcome) -> None:
+        self._busy_kinds.discard(outcome.kind)
+        finding = self.session.finding
+        packet = self.session.packet
+        current_proposal_sha = hashlib.sha256(self.session.proposal_text.encode("utf-8")).hexdigest()
+        if (
+            outcome.identity.generation != self.session.generation
+            or finding is None
+            or packet is None
+            or outcome.identity.finding_id != finding.finding_id
+            or outcome.identity.authoring_base_sha256 != finding.authoring_base_sha256
+            or outcome.identity.packet_id != packet.packet_id
+            or outcome.identity.packet_sha256 != packet.packet_sha256
+            or outcome.identity.proposal_text_sha256 != current_proposal_sha
+            or outcome.cancelled
+        ):
+            self._render()
+            return
+        if outcome.error:
+            self.session.state = SessionState.REJECTED
+            self.session.status_text = f"Proof operation failed: {outcome.error}"
+            self._set_text(self.proof_text, f"PROOF OPERATION FAILED\n\n{outcome.error}")
+            self._render()
+            return
+        result = outcome.value
+        if not isinstance(result, ProofResult):
+            self.session.state = SessionState.REJECTED
+            self._set_error("Proof operation returned an invalid result.")
+            self._render()
+            return
+        self.session.accept_proof_result(result)
+        if result.status == "proven":
+            self._set_text(
+                self.proof_text,
+                "PROVEN\n\n"
+                f"{result.message}\n\n"
+                f"Candidate SHA-256: {result.candidate_sha256}\n"
+                "Launch readiness: READY (candidate, runtime, contract, packet, and proposal are rechecked on click)\n"
+                f"Receipt: {result.receipt_path}",
+            )
+        else:
+            repair_note = "A bound repair packet is ready to copy." if result.repair_packet_text else "No repair packet is available for this operational failure."
+            self._set_text(
+                self.proof_text,
+                "REJECTED\n\n"
+                f"{result.message}\n\n{repair_note}\n"
+                f"Receipt: {result.receipt_path}",
+            )
+        self._render()
+
+    def copy_repair_packet(self) -> None:
+        result = self.session.proof_result
+        if not isinstance(result, ProofResult) or not result.repair_packet_text:
+            self._set_error("No actionable rejection repair packet is available.")
+            self._render()
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(result.repair_packet_text)
+        self.root.update_idletasks()
+        self.session.status_text = f"Copied repair packet for rejection {result.proof_id}."
+        self._render()
+
+    def launch_proven_state(self) -> None:
+        result = self.session.proof_result
+        packet = self.session.packet
+        if not isinstance(result, ProofResult) or packet is None:
+            self._set_error("No exact proven candidate is launch-ready.")
+            self._render()
+            return
+        try:
+            process = launch_proven_result(
+                result,
+                packet,
+                self.session.proposal_text,
+                self.runtime_cmd_path,
+            )
+        except Exception as exc:
+            self.session.proof_result = None
+            self.session.state = SessionState.PROPOSAL_DIRTY
+            self._set_error(f"Launch readiness invalidated: {exc}. Prove the current binding again.")
+            self._set_text(self.proof_text, f"LAUNCH READINESS INVALIDATED\n\n{exc}\n\nRun proof again.")
+            self._render()
+            return
+        self.session.status_text = f"Launched exact proven candidate in a new viewer (PID {process.pid})."
         self._render()
 
     def open_full_frame(self) -> None:
@@ -437,6 +566,7 @@ class UserWorkflowApp:
     def _clear_finding_views(self, retain_proposal: bool) -> None:
         self._set_text(self.summary_text, "")
         self._set_text(self.packet_text, "")
+        self._set_text(self.proof_text, "No proof has run. Paste a bound proposal to begin.")
         self.binding_var.set("No packet binding yet.")
         self.packet_info_var.set("Packet is generated automatically after finding import.")
         self.preview_status_var.set("No finding frame loaded.")
@@ -489,9 +619,20 @@ class UserWorkflowApp:
             if finding_ready and self.session.finding.primary_frame_path is not None
             else "disabled"
         )
-        self.prove_button.configure(state="disabled")
-        self.repair_button.configure(state="disabled")
-        self.launch_button.configure(state="disabled")
+        proof_busy = "proof" in self._busy_kinds
+        proposal_ready = packet_ready and bool(self.session.proposal_text.strip())
+        result = self.session.proof_result
+        self.prove_button.configure(state="normal" if proposal_ready and not proof_busy else "disabled")
+        self.repair_button.configure(
+            state="normal"
+            if isinstance(result, ProofResult) and bool(result.repair_packet_text) and not proof_busy
+            else "disabled"
+        )
+        self.launch_button.configure(
+            state="normal"
+            if isinstance(result, ProofResult) and result.status == "proven" and not proof_busy
+            else "disabled"
+        )
 
     def close(self) -> None:
         if self._closed:

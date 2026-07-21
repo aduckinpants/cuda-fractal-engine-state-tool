@@ -70,6 +70,7 @@ class UserWorkflowSession:
     packet: Optional[PacketContext] = None
     preview: Optional[PreviewResult] = None
     proposal_text: str = ""
+    proof_result: Any = None
     status_text: str = "Choose a captured finding to begin."
 
     def begin_finding_change(self) -> int:
@@ -78,6 +79,7 @@ class UserWorkflowSession:
         self.finding = None
         self.packet = None
         self.preview = None
+        self.proof_result = None
         self.state = SessionState.EMPTY
         self.status_text = "Loading finding…"
         if retained_proposal:
@@ -88,6 +90,7 @@ class UserWorkflowSession:
         self.finding = finding
         self.packet = None
         self.preview = None
+        self.proof_result = None
         self.state = SessionState.PROPOSAL_DIRTY if self.proposal_text.strip() else SessionState.FINDING_READY
         self.status_text = "Finding ready. Building its agent exploration packet…"
 
@@ -96,6 +99,7 @@ class UserWorkflowSession:
 
     def accept_packet(self, packet: PacketContext) -> None:
         self.packet = packet
+        self.proof_result = None
         self.state = SessionState.PROPOSAL_DIRTY if self.proposal_text.strip() else SessionState.PACKET_READY
         self.status_text = "Exact intake packet ready to copy."
 
@@ -103,9 +107,10 @@ class UserWorkflowSession:
         if proposal_text == self.proposal_text:
             return
         self.proposal_text = proposal_text
+        self.proof_result = None
         if proposal_text.strip() and self.finding is not None:
             self.state = SessionState.PROPOSAL_DIRTY
-            self.status_text = "Proposal changed. Operational proof remains disabled until shell acceptance."
+            self.status_text = "Proposal changed. Validate and replay-prove this exact text against the active packet."
         elif self.packet is not None:
             self.state = SessionState.PACKET_READY
             self.status_text = "Exact intake packet ready to copy."
@@ -116,6 +121,22 @@ class UserWorkflowSession:
             self.state = SessionState.EMPTY
             self.status_text = "Choose a captured finding to begin."
 
+    def begin_proof(self) -> None:
+        if self.finding is None or self.packet is None or not self.proposal_text.strip():
+            raise ValueError("A finding, exact packet, and proposal are required before proof")
+        self.proof_result = None
+        self.state = SessionState.PROVING
+        self.status_text = "Validating exact binding and proving through the CUDA engine…"
+
+    def accept_proof_result(self, result: Any) -> None:
+        self.proof_result = result
+        if getattr(result, "status", None) == "proven":
+            self.state = SessionState.PROVEN
+            self.status_text = "Exact proposal binding proven and candidate launch-ready."
+        else:
+            self.state = SessionState.REJECTED
+            self.status_text = "Proposal rejected. Review the proof status and copy the repair packet."
+
     def reset(self) -> None:
         self.generation += 1
         self.state = SessionState.EMPTY
@@ -123,6 +144,7 @@ class UserWorkflowSession:
         self.packet = None
         self.preview = None
         self.proposal_text = ""
+        self.proof_result = None
         self.status_text = "Session reset. Durable findings, packets, and preview caches were preserved."
 
 
@@ -319,6 +341,9 @@ def build_finding_intake_packet(
     runtime_summary = {
         "launcher_sha256": runtime_identity.get("launcher_sha256"),
         "resolved_executable_sha256": runtime_identity.get("resolved_executable_sha256"),
+        "resolved_executable_file_version": runtime_identity.get("resolved_executable_file_version"),
+        "runtime_schema_sha256": runtime_identity.get("runtime_schema_sha256"),
+        "source_schema_sha256": runtime_identity.get("source_schema_sha256"),
         "ui_salt_contract_sha256": contract_sha256,
     }
     runtime_identity_sha256 = _canonical_sha256(runtime_summary)
@@ -364,8 +389,9 @@ def build_finding_intake_packet(
             "",
             "You are helping the user explore the attached CUDA fractal render.",
             "Discuss its visual structure, interesting regions, and possible changes normally with the user.",
-            "Do not propose changes until the user is ready. When asked for a concrete proposal, give a short",
-            "rationale followed by exactly one `proposal_v1` JSON code block. Do not return a complete state.json.",
+            "You may suggest parameter and Color Pipeline directions during that discussion. When the user asks",
+            "for a concrete proposal, give a short rationale followed by exactly one `proposal_v1` JSON code block.",
+            "Do not return a complete state.json.",
             "The desktop tool applies the bounded proposal to the exact captured state below and proves the result",
             "through the CUDA engine's existing state loader, Color Pipeline action seam, and action-free replay.",
             "",
@@ -400,7 +426,7 @@ def build_finding_intake_packet(
             "- `color_pipeline_draft.lanes`: one optional `{lane_id, function_id}` row-0 selection per shipped lane.",
             "- Scalar overrides are applied to the captured base before Color Pipeline row-0 selection actions.",
             "",
-            "Replay-proven scalar color tuples:",
+            "Replay-proven scalar color tuples (the engine still rejects tuples incompatible with this fractal family):",
             *allowed_triplet_lines,
             "",
             "## Color Pipeline functions",

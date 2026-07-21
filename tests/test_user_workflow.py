@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from PIL import Image
 
@@ -134,6 +135,13 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertEqual(session.state, SessionState.PACKET_READY)
             session.set_proposal_text('{"proposal_version":1}')
             self.assertEqual(session.state, SessionState.PROPOSAL_DIRTY)
+            session.begin_proof()
+            self.assertEqual(session.state, SessionState.PROVING)
+            session.accept_proof_result(SimpleNamespace(status="proven"))
+            self.assertEqual(session.state, SessionState.PROVEN)
+            session.set_proposal_text('{"proposal_version":1}\n')
+            self.assertEqual(session.state, SessionState.PROPOSAL_DIRTY)
+            self.assertIsNone(session.proof_result)
             session.accept_packet(packet_two)
             self.assertEqual(session.state, SessionState.PROPOSAL_DIRTY)
             self.assertNotEqual(packet_one.packet_id, packet_two.packet_id)

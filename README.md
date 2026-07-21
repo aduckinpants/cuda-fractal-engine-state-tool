@@ -7,7 +7,7 @@ Current status:
 - Phase 0 complete: runtime authority probe committed at `102c5bd`
 - Phase 1 complete: bounded proposal loop, replay proof workflow, and slim desktop UI
 - Phase 2 complete (bounded scope): replay-proven color triplet coverage expansion, promotion profile controls, and CLI-first execution/reporting paths
-- UI rescue in progress on `codex/user-workflow-ui-rescue`; the rejected Phase 3 desktop surface is preserved at `archive/vscode-phase3-ui`
+- UI rescue implementation is operational on `codex/user-workflow-ui-rescue`; final operational UX acceptance is pending user review. The rejected Phase 3 surface is preserved at `archive/vscode-phase3-ui`.
 - Raw probe outputs live under ignored `.local/`
 - Stable conclusions are tracked in `docs/runtime_authority_probe.md`
 - Phase 2 closure summary is tracked in `docs/phase2_closure.md`
@@ -86,20 +86,20 @@ $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.prompt_session_cli --pack .local\prompt_session_pack.json
 ```
 
-Canonical fresh-agent onboarding (recommended):
+Legacy frozen-baseline agent handoff CLI:
 
 ```powershell
 $env:PYTHONPATH = "src"
 py -3.14 -m cuda_fractal_state_tool.agent_handoff_cli --baseline-manifest .local\baselines\runtime-default-v1\manifest.json --replay-state .local\runtime_probe\replay_one\state.json --out .local\agent_handoff_packet.md
 ```
 
-Give the generated `.local\agent_handoff_packet.md` to a fresh agent session.
+Give the generated `.local\agent_handoff_packet.md` to a fresh agent session only for the older frozen-baseline CLI workflow.
 It defines terms (`state.json` vs `proposal_v1`), runtime-authoritative loop, output contract, and run commands.
 
 Current runtime note:
 
 - Color Pipeline lane/function authority comes from the deployed compiled UI-Salt contract, not `--describe-functions`.
-- Direct sparse-draft workflow materialization now fails closed with `color_pipeline_draft_requires_engine_action_workflow`.
+- Direct sparse-draft workflow materialization fails closed with `color_pipeline_draft_requires_engine_action_workflow`; the desktop finding workflow lowers bounded row-0 selections through the engine action seam.
 - Bounded scalar/triplet prompt packs run now and are suitable for immediate real-session harness validation.
 
 Example pack schema:
@@ -137,7 +137,7 @@ py -3.14 -m cuda_fractal_state_tool.proposal_cli --list-color-triplets
 py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_triplet.json --promotion-profile none
 ```
 
-`proposal_v1` remains structurally unchanged. Draft payloads require the packet-bound engine-action workflow that lands after interaction-model acceptance; the legacy direct workflow rejects them rather than writing an incomplete engine state.
+`proposal_v1` remains structurally unchanged. Draft payloads use the exact packet-bound desktop workflow; the legacy direct workflow rejects them rather than writing an incomplete engine state.
 
 Inspect the compiled UI-Salt lane/function authority (fail-closed bounded projection):
 
@@ -180,10 +180,26 @@ Run the fresh finding-to-proof shell:
 .\run_ui.cmd
 ```
 
-The active application has one two-column workflow surface. Finding import,
-summary, bounded cached preview, exact packet generation/copy, and an initially
-empty proposal editor are active. Validate/prove, repair, and launch remain
-disabled at the mandatory Slice 2 interaction-model review gate.
+The active application has one two-column workflow surface. Opening a finding
+automatically creates an agent exploration packet containing the exact captured
+`state.json`, readable finding context, deployed UI-Salt function semantics,
+parser-validated examples, and closing machine-binding metadata. The proposal
+editor starts empty.
+
+`Validate & Replay Prove` binds the exact packet and proposal text, applies
+scalar overrides, lowers bounded Color Pipeline row-0 selections through the
+engine action seam, captures the engine-emitted candidate, and replays that
+candidate without actions. Actionable proposal rejection enables a bound repair
+packet. Successful proof enables launch only for the exact rehashed candidate,
+runtime, contract, packet, and proposal binding.
+
+Durable finding artifacts are laid out under the configured workspace:
+
+- `findings/<finding-id>/source/` — mirrored read-only capture artifacts;
+- `findings/<finding-id>/packets/<packet-id>/` — exact packet and manifest;
+- `findings/<finding-id>/proofs/<proof-id>/` — binding, proposal, intermediate
+  base, materialization, replay, repair when actionable, proven candidate, and
+  receipt.
 
 Direct module launch (equivalent):
 
