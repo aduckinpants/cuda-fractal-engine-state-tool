@@ -4,6 +4,8 @@ This repository hosts a small experimental Python tool for creating and validati
 
 Current status:
 
+- Agent State Override rescue is at the Slice 1 manual transport gate on `codex/agent-state-override-rescue`. Packet V6 is available through its standalone CLI; sparse merge/proof and the atomic desktop UI cutover have not started.
+- The currently active desktop application still exposes the preceding proposal workflow. It is retained only until the approved atomic Slice 4 cutover and is not the Packet V6 acceptance surface.
 - Phase 0 complete: runtime authority probe committed at `102c5bd`
 - Phase 1 complete: bounded proposal loop, replay proof workflow, and slim desktop UI
 - Phase 2 complete (bounded scope): replay-proven color triplet coverage expansion, promotion profile controls, and CLI-first execution/reporting paths
@@ -30,9 +32,21 @@ Current status:
 Run tests:
 
 ```powershell
-$env:PYTHONPATH = "src"
-py -3 -m unittest discover -s tests
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+py -3.14 -m unittest discover -s tests
 ```
+
+Build an exact Packet V6 agent bundle from a captured finding:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+py -3.14 -m cuda_fractal_state_tool.agent_bundle_cli build `
+  --workspace-root D:\salt-fractal\cuda-fractal-engine-state-tool `
+  --source D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-20\192515_961__explaino_all `
+  --runtime-cmd D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd
+```
+
+The command imports source artifacts without rewriting them and publishes one immutable Packet V6 directory. Paste its `packet.md` into the web session, then attach the exact required files listed inside it; copying the Markdown alone does not transport those authorities. The exact current manual gate is tracked in `docs/slice1_packet_v6_manual_gate.md`.
 
 Run the runtime probe:
 

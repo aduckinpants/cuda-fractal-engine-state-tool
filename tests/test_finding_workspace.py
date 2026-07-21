@@ -105,6 +105,24 @@ class FindingWorkspaceTests(unittest.TestCase):
             self.assertEqual(entry["workspace_path"], "source/fractal-state.json")
             self.assertEqual(entry["sha256"], hashlib.sha256(copied.read_bytes()).hexdigest())
 
+    def test_import_adds_optional_field_notes_without_rewriting_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir) / "workspace"
+            capture_root = Path(temp_dir) / "capture"
+            _write_json(capture_root / "state.json", {"state_version": 3, "params": {"max_iter": 500}})
+            notes_bytes = b"First observation.\r\nSecond observation.\r\n"
+            (capture_root / "field-notes.md").write_bytes(notes_bytes)
+
+            imported = SourceCaptureImporter(workspace_root).import_capture(capture_root)
+            copied = imported.finding_dir / "source" / "field-notes.md"
+            manifest = json.loads(imported.workspace_manifest_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(copied.read_bytes(), notes_bytes)
+            self.assertEqual((capture_root / "field-notes.md").read_bytes(), notes_bytes)
+            entry = manifest["source_artifacts"]["field_notes"]
+            self.assertEqual(entry["workspace_path"], "source/field-notes.md")
+            self.assertEqual(entry["sha256"], hashlib.sha256(notes_bytes).hexdigest())
+
     def test_reimport_from_different_path_updates_aliases_same_finding(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir) / "workspace"

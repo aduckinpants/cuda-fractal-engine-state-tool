@@ -102,7 +102,7 @@ def _validate_description(selector: str, description: Any) -> None:
             )
 
 
-def _validate_catalog(catalog_bytes: bytes) -> dict[str, dict[str, Any]]:
+def validate_catalog_bytes(catalog_bytes: bytes) -> dict[str, dict[str, Any]]:
     try:
         catalog_text = catalog_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -215,7 +215,7 @@ def load_selected_fractal_description(
             raise ValueError(f"Engine fractal descriptive catalog export failed{suffix}")
         catalog_bytes = output_path.read_bytes()
 
-    by_selector = _validate_catalog(catalog_bytes)
+    by_selector = validate_catalog_bytes(catalog_bytes)
     selected = by_selector.get(selector)
     if selected is None:
         raise ValueError(f"Fractal descriptive catalog does not contain selected selector: {selector}")
