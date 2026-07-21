@@ -183,10 +183,11 @@ Run the fresh finding-to-proof shell:
 The active application has one two-column workflow surface. Opening a finding
 automatically creates an agent exploration packet containing the exact captured
 `state.json`, the optional engine-captured `fractal-state.json` review sidecar,
+an engine-generated applicable-parameter projection for the selected fractal,
 readable finding context, deployed UI-Salt function semantics, parser-validated
-examples, and closing machine-binding metadata. The packet warns that the broad
-replay state contains inactive/default/derived fields and that even the review
-sidecar is not a counterfactual sensitivity proof. The proposal editor starts
+examples, and closing machine-binding metadata. The projection merges the
+published runtime's parameter-surface descriptor with its deployed UI schema,
+including current values and parameter properties. The proposal editor starts
 empty.
 
 `Validate & Replay Prove` binds the exact packet and proposal text, applies
@@ -199,7 +200,8 @@ runtime, contract, packet, and proposal binding.
 Durable finding artifacts are laid out under the configured workspace:
 
 - `findings/<finding-id>/source/` — mirrored read-only capture artifacts;
-- `findings/<finding-id>/packets/<packet-id>/` — exact packet and manifest;
+- `findings/<finding-id>/packets/<packet-id>/` — exact packet, manifest, and raw
+  engine parameter-surface descriptor;
 - `findings/<finding-id>/proofs/<proof-id>/` — binding, proposal, intermediate
   base, materialization, replay, repair when actionable, proven candidate, and
   receipt.

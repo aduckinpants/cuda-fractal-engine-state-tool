@@ -353,7 +353,7 @@ class UserWorkflowApp:
         self._submit(
             "packet",
             identity,
-            lambda context: build_finding_intake_packet(finding, self.runtime_cmd_path),
+            lambda context: build_finding_intake_packet(finding, self.runtime_cmd_path, job=context),
             self._packet_built,
         )
         self._render()

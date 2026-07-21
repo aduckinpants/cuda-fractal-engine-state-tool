@@ -72,10 +72,80 @@ class UserWorkflowTests(unittest.TestCase):
         runtime = root / "runtime"
         contract_dir = runtime / "ui_salt" / "generated"
         contract_dir.mkdir(parents=True)
+        ui_dir = runtime / "ui"
+        ui_dir.mkdir()
         cmd = runtime / "fractal_ui.cmd"
-        cmd.write_text("@echo off\n", encoding="utf-8")
+        cmd.write_text(
+            '@echo off\nif /I "%1"=="--describe-parameter-surface-json" copy /y "%~dp0parameter-surface.fixture.json" "%~2" >nul\n',
+            encoding="utf-8",
+        )
         (runtime / "fractal_ui_active.txt").write_text("fractal_ui.exe\n", encoding="utf-8")
         (runtime / "fractal_ui.exe").write_bytes(b"engine")
+        (runtime / "parameter-surface.fixture.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "lanes": [
+                        {
+                            "fractal_id": "explaino_all",
+                            "controls": [
+                                {
+                                    "control_id": "explaino_seed",
+                                    "owner_lane": "explaino_all",
+                                    "binding_path": "fractal.params.explaino_seed",
+                                    "control_type": "slider_double",
+                                    "value_type": "double",
+                                    "default_value": "0",
+                                    "candidate_value": "0.001",
+                                    "runtime_binding_kind": "double",
+                                    "binding_resolves": True,
+                                    "state_io_key": "explaino_seed",
+                                    "has_validation_range": True,
+                                    "animatable": True,
+                                    "visibility_surface_id": "default",
+                                    "default_visible": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (ui_dir / "fractal_binding_surface_v1.ui_schema.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "namespace": "fractal",
+                    "panels": [
+                        {
+                            "id": "fractal",
+                            "label": "Fractal",
+                            "controls": [
+                                {
+                                    "id": "explaino_seed",
+                                    "type": "slider_double",
+                                    "label": "Explaino Seed",
+                                    "help": "Primary Explaino seed control.",
+                                    "value_type": "double",
+                                    "ui_min": -10.0,
+                                    "ui_max": 10.0,
+                                    "step": 0.001,
+                                    "default": 0.0,
+                                    "binding": {"kind": "param", "path": "fractal.params.explaino_seed"},
+                                    "visible_if": {
+                                        "op": "in",
+                                        "path": "fractal.view.fractal_type",
+                                        "value": "explaino,explaino_all",
+                                    },
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
         (contract_dir / "color_pipeline_function_library.contract.v1.json").write_text(
             json.dumps(
                 {
@@ -136,6 +206,9 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertEqual(manifest["packet_sha256"], packet.packet_sha256)
             self.assertEqual(manifest["finding_id"], finding.finding_id)
             self.assertEqual(manifest["review_fractal_state_sha256"], finding.review_fractal_state_sha256)
+            self.assertEqual(manifest["parameter_surface_sha256"], packet.parameter_surface_sha256)
+            parameter_surface_path = packet.manifest_path.parent / manifest["parameter_surface_path"]
+            self.assertEqual(hashlib.sha256(parameter_surface_path.read_bytes()).hexdigest(), packet.parameter_surface_sha256)
             self.assertIn("# CUDA Fractal Finding — Agent Exploration Packet", packet.packet_text)
             self.assertIn("Begin with a curiosity-driven discussion", packet.packet_text)
             self.assertIn("Surface anything mathematically", packet.packet_text)
@@ -143,9 +216,21 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertIn("Do not invent mathematical claims", packet.packet_text)
             self.assertIn("is optional until the user wants to try a concrete change", packet.packet_text)
             self.assertIn("A field's presence in `state.json` does not prove", packet.packet_text)
-            self.assertIn("do not attribute an ExplainO-family frame to Multibrot power", packet.packet_text)
-            self.assertIn("not a dependency graph or a counterfactual sensitivity proof", packet.packet_text)
-            self.assertIn("do not describe\n`explaino_mix = 0.5` as 'half Newton, half Julia'", packet.packet_text)
+            self.assertIn("engine-generated applicable-parameter projection", packet.packet_text)
+            self.assertIn("Applicability is still not counterfactual sensitivity proof", packet.packet_text)
+            projection_marker = "## Engine-generated applicable fractal parameters"
+            projection_start = packet.packet_text.index("```json", packet.packet_text.index(projection_marker)) + len("```json")
+            projection_end = packet.packet_text.index("```", projection_start)
+            projection = json.loads(packet.packet_text[projection_start:projection_end])
+            self.assertEqual(projection["fractal_id"], "explaino_all")
+            self.assertEqual([item["control_id"] for item in projection["controls"]], ["explaino_seed"])
+            seed = projection["controls"][0]
+            self.assertEqual(seed["current_value"], 38)
+            self.assertEqual(seed["current_value_source"], "fractal-state.json.active_fractal_controls")
+            self.assertEqual(seed["schema_properties"]["label"], "Explaino Seed")
+            self.assertEqual(seed["schema_properties"]["ui_min"], -10.0)
+            self.assertNotIn("multibrot_power", {item["control_id"] for item in projection["controls"]})
+            self.assertNotIn("julia_c_real", {item["control_id"] for item in projection["controls"]})
             self.assertIn("viewer.finding_fractal_state.v1", packet.packet_text)
             self.assertIn('"active_fractal_controls": {', packet.packet_text)
             self.assertIn('"fractal_type": "explaino_all"', packet.packet_text)

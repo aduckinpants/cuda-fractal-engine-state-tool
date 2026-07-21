@@ -10,7 +10,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
+from .async_jobs import JobContext
 from .finding_workspace import ImportResult, SourceCaptureImporter
+from .fractal_parameter_authority import capture_fractal_parameter_authority
 from .json_utils import loads_no_duplicates
 from .lane_catalog import load_lane_catalog_from_ui_salt_contract
 from .preview_service import PreviewResult
@@ -62,6 +64,7 @@ class PacketContext:
     manifest_path: Path
     runtime_identity_sha256: str
     ui_salt_contract_sha256: str
+    parameter_surface_sha256: str
 
 
 @dataclass
@@ -346,6 +349,7 @@ def _serialized_draft_lines(state: dict[str, Any]) -> list[str]:
 def build_finding_intake_packet(
     finding: FindingContext,
     runtime_cmd_path: Path = DEFAULT_RUNTIME_CMD,
+    job: Optional[JobContext] = None,
 ) -> PacketContext:
     runtime_cmd_path = runtime_cmd_path.resolve()
     runtime_identity = build_runtime_identity(runtime_cmd_path, runtime_cmd_path.parent)
@@ -362,11 +366,31 @@ def build_finding_intake_packet(
     if sha256_file(finding.authoring_base_state_path) != finding.authoring_base_sha256:
         raise ValueError("Authoritative finding state.json changed before packet generation")
     review_state_text = None
+    review_state = None
     if finding.review_fractal_state_path is not None:
         review_state_text = finding.review_fractal_state_path.read_bytes().decode("utf-8")
         observed_review_sha256 = sha256_file(finding.review_fractal_state_path)
         if observed_review_sha256 != finding.review_fractal_state_sha256:
             raise ValueError("Review-focused fractal-state.json changed before packet generation")
+        review_state = loads_no_duplicates(review_state_text)
+        if not isinstance(review_state, dict):
+            raise ValueError("Review-focused fractal-state.json must be an object")
+    fractal_id = state.get("fractal_type")
+    if not isinstance(fractal_id, str) or not fractal_id:
+        raise ValueError("Authoritative finding state has no fractal_type")
+    parameter_authority = capture_fractal_parameter_authority(
+        runtime_cmd_path,
+        fractal_id,
+        state,
+        review_state,
+        job=job,
+    )
+    parameter_projection_text = json.dumps(
+        parameter_authority.projection,
+        indent=2,
+        sort_keys=True,
+        ensure_ascii=False,
+    )
     runtime_summary = {
         "launcher_sha256": runtime_identity.get("launcher_sha256"),
         "resolved_executable_sha256": runtime_identity.get("resolved_executable_sha256"),
@@ -440,25 +464,40 @@ def build_finding_intake_packet(
             "`state.json` is the engine's complete replay authority. It intentionally serializes a broad shared",
             "parameter model, including defaults, compatibility mirrors, derived values, and fields owned by other",
             "fractal families. A field's presence in `state.json` does not prove that it affects this render.",
-            "In particular, do not attribute an ExplainO-family frame to Multibrot power, Julia constants, or other",
-            "family-specific values merely because those values appear in the broad replay state.",
             "",
-            "When the sibling `fractal-state.json` review sidecar is present below, use its `capture_context`,",
-            "`active_fractal_controls`, and `color_pipeline` as the preferred first-pass account of the captured",
-            "render. Parameters omitted there must not be promoted into explanations of the current frame.",
+            "The engine-generated applicable-parameter projection below is the authority for which fractal controls",
+            f"belong to `{fractal_id}`. It is produced for this packet from the published runtime's parameter-surface",
+            "descriptor and deployed UI schema. Use only controls listed in that projection when discussing fractal",
+            "parameters; do not infer applicability from names or from unrelated values in the broad replay state.",
+            "Each projected control includes its current value when resolvable, binding/state key, label, help text,",
+            "type, defaults, ranges, step, animation/validation metadata, and exact visibility condition.",
             "",
-            "The review sidecar also has a known limit: `active_fractal_controls` identifies controls owned by or",
-            "relevant to the selected family, but it is not a dependency graph or a counterfactual sensitivity proof.",
-            "A listed value can still be inert under the current mode, gate, zero-strength setting, authority choice,",
-            "or downstream pipeline selection. `derived_runtime_values` are capture receipts, not independent causes.",
-            "Do not translate a suggestive name into undocumented mathematics—for example, do not describe",
-            "`explaino_mix = 0.5` as 'half Newton, half Julia' without direct engine evidence for that interpretation.",
+            "`default_visible: false` or a non-default `visibility_surface_id` marks a conditionally applicable control;",
+            "read its exact `visible_if` schema property before treating it as active in the captured configuration.",
+            "The sibling `fractal-state.json` remains the preferred review source for capture-time values, derived",
+            "runtime receipts, and Color Pipeline state. It is not replay input and does not replace the generated",
+            "applicability projection.",
+            "",
+            "Applicability is still not counterfactual sensitivity proof. A correctly applicable control can be inert",
+            "under its current value, mode, gate, authority choice, or downstream pipeline selection. Do not translate",
+            "a suggestive identifier into undocumented mathematics; describe causal influence only when engine help",
+            "text, current gating metadata, or a proven comparison supports it.",
             "",
             "Phrase conclusions at the right confidence level:",
             "- serialized fact: the field or sidecar reports a value;",
             "- visual observation: a feature is visible in the attached frame;",
             "- grounded inference: engine metadata or proven behavior supports a relationship;",
             "- hypothesis: an interesting possibility to test, not a claim about what caused this frame.",
+            "",
+            "## Engine-generated applicable fractal parameters",
+            "",
+            f"- selected fractal: `{fractal_id}`",
+            f"- parameter-surface SHA-256: `{parameter_authority.parameter_surface_sha256}`",
+            f"- deployed UI-schema SHA-256: `{parameter_authority.runtime_schema_sha256}`",
+            "",
+            "```json",
+            parameter_projection_text,
+            "```",
             "",
             "## Current finding",
             "",
@@ -547,6 +586,7 @@ def build_finding_intake_packet(
             f"- review_fractal_state_sha256: `{finding.review_fractal_state_sha256 or 'not-present'}`",
             f"- runtime_identity_sha256: `{runtime_identity_sha256}`",
             f"- ui_salt_contract_sha256: `{contract_sha256}`",
+            f"- parameter_surface_sha256: `{parameter_authority.parameter_surface_sha256}`",
             "",
             "The exact copied packet payload is hashed and retained by the desktop tool. A later proof request must",
             "bind this packet, this base state, this runtime and contract identity, and the exact pasted proposal text.",
@@ -567,10 +607,13 @@ def build_finding_intake_packet(
         "runtime_identity": runtime_summary,
         "runtime_identity_sha256": runtime_identity_sha256,
         "ui_salt_contract_sha256": contract_sha256,
+        "parameter_surface_sha256": parameter_authority.parameter_surface_sha256,
+        "parameter_surface_path": "parameter-surface.json",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "packet_path": "packet.txt",
     }
     _atomic_write_text(packet_path, packet_text)
+    _atomic_write_text(packet_dir / "parameter-surface.json", parameter_authority.parameter_surface_text)
     _atomic_write_text(manifest_path, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return PacketContext(
         packet_id=packet_id,
@@ -581,4 +624,5 @@ def build_finding_intake_packet(
         manifest_path=manifest_path.resolve(),
         runtime_identity_sha256=runtime_identity_sha256,
         ui_salt_contract_sha256=contract_sha256,
+        parameter_surface_sha256=parameter_authority.parameter_surface_sha256,
     )

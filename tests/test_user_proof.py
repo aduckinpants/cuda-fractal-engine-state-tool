@@ -92,10 +92,80 @@ class UserProofTests(unittest.TestCase):
         runtime = root / "runtime"
         contract_dir = runtime / "ui_salt" / "generated"
         contract_dir.mkdir(parents=True)
+        ui_dir = runtime / "ui"
+        ui_dir.mkdir()
         cmd = runtime / "fractal_ui.cmd"
-        cmd.write_text("@echo off\n", encoding="utf-8")
+        cmd.write_text(
+            '@echo off\nif /I "%1"=="--describe-parameter-surface-json" copy /y "%~dp0parameter-surface.fixture.json" "%~2" >nul\n',
+            encoding="utf-8",
+        )
         (runtime / "fractal_ui_active.txt").write_text("fractal_ui.exe\n", encoding="utf-8")
         (runtime / "fractal_ui.exe").write_bytes(b"engine")
+        (runtime / "parameter-surface.fixture.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "lanes": [
+                        {
+                            "fractal_id": "explaino_all",
+                            "controls": [
+                                {
+                                    "control_id": "explaino_seed",
+                                    "owner_lane": "explaino_all",
+                                    "binding_path": "fractal.params.explaino_seed",
+                                    "control_type": "slider_double",
+                                    "value_type": "double",
+                                    "default_value": "0",
+                                    "candidate_value": "0.001",
+                                    "runtime_binding_kind": "double",
+                                    "binding_resolves": True,
+                                    "state_io_key": "explaino_seed",
+                                    "has_validation_range": True,
+                                    "animatable": True,
+                                    "visibility_surface_id": "default",
+                                    "default_visible": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (ui_dir / "fractal_binding_surface_v1.ui_schema.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "namespace": "fractal",
+                    "panels": [
+                        {
+                            "id": "fractal",
+                            "label": "Fractal",
+                            "controls": [
+                                {
+                                    "id": "explaino_seed",
+                                    "type": "slider_double",
+                                    "label": "Explaino Seed",
+                                    "help": "Primary Explaino seed control.",
+                                    "value_type": "double",
+                                    "ui_min": -10.0,
+                                    "ui_max": 10.0,
+                                    "step": 0.001,
+                                    "default": 0.0,
+                                    "binding": {"kind": "param", "path": "fractal.params.explaino_seed"},
+                                    "visible_if": {
+                                        "op": "in",
+                                        "path": "fractal.view.fractal_type",
+                                        "value": "explaino,explaino_all",
+                                    },
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
         lanes = []
         for lane_id, label, default, functions in (
             ("source", "Source", "root_index", [("root_index", "Root Index", "Use root classification.")]),
@@ -298,6 +368,27 @@ class UserProofTests(unittest.TestCase):
             errors = validate_launch_readiness(result, replacement_packet, proposal, runtime)
             self.assertIn("Packet ID changed after proof", errors)
             self.assertIn("Packet payload binding changed after proof", errors)
+
+    def test_parameter_surface_evidence_tampering_rejects_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            finding = load_finding_context(self._capture(root), root / "workspace")
+            runtime = self._runtime(root)
+            packet = build_finding_intake_packet(finding, runtime)
+            (packet.manifest_path.parent / "parameter-surface.json").write_text("{}", encoding="utf-8")
+            proposal = json.dumps(
+                {
+                    "proposal_version": 1,
+                    "base_state": {"finding_id": finding.finding_id, "sha256": finding.authoring_base_sha256},
+                    "overrides": {"params.max_iter": 600},
+                }
+            )
+            job = FakeJob()
+            result = execute_bound_proof(finding, packet, proposal, runtime, job)
+            self.assertEqual(result.status, "rejected")
+            self.assertEqual(job.commands, [])
+            self.assertIsNone(result.repair_packet_text)
+            self.assertIn("parameter-surface descriptor changed", result.message)
 
 
 if __name__ == "__main__":

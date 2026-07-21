@@ -145,6 +145,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         "packet_sha256": packet.packet_sha256,
         "packet_path": str(packet.packet_path),
         "packet_size_bytes": len(packet.packet_text.encode("utf-8")),
+        "parameter_surface_sha256": packet.parameter_surface_sha256,
+        "parameter_surface_path": str(packet.manifest_path.parent / "parameter-surface.json"),
         "accepted_proposal_sha256": accepted_result.proposal_text_sha256,
         "accepted_receipt_path": str(accepted_result.receipt_path),
         "candidate_path": str(accepted_result.candidate_path),

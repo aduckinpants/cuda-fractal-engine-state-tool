@@ -130,10 +130,15 @@ def _validate_packet_binding(
         "authoring_base_sha256": finding.authoring_base_sha256,
         "runtime_identity_sha256": runtime_identity_sha256,
         "ui_salt_contract_sha256": contract_sha256,
+        "parameter_surface_sha256": packet.parameter_surface_sha256,
+        "parameter_surface_path": "parameter-surface.json",
     }
     for key, value in expected.items():
         if manifest.get(key) != value:
             raise ProofBindingError(f"Packet manifest binding mismatch for {key}")
+    parameter_surface_path = packet.manifest_path.parent / "parameter-surface.json"
+    if not parameter_surface_path.is_file() or sha256_file(parameter_surface_path) != packet.parameter_surface_sha256:
+        raise ProofBindingError("Persisted engine parameter-surface descriptor changed after packet generation")
     return expected
 
 
@@ -307,6 +312,8 @@ def execute_bound_proof(
             "authoring_base_sha256": finding.authoring_base_sha256,
             "runtime_identity_sha256": runtime_identity_sha256,
             "ui_salt_contract_sha256": contract_sha256,
+            "parameter_surface_sha256": packet.parameter_surface_sha256,
+            "parameter_surface_path": "parameter-surface.json",
             "proposal_text_sha256": proposal_sha256,
         }
         return _rejected_result(
