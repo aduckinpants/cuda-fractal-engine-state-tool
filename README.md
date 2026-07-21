@@ -190,12 +190,16 @@ published runtime's parameter-surface descriptor with its deployed UI schema,
 including current values and parameter properties. The proposal editor starts
 empty.
 
-The packet begins with a compact behavioral contract before the evidence
-appendix. It fixes the evidence order, keeps questions and requests for ideas in
-discussion mode, defines the exact proposal trigger, requires one fenced `json`
-block containing a `proposal_version: 1` object, and keeps relationships among
-applicable values hypothetical until engine help or comparative proof supports
-them.
+Packet V5 begins with a compact behavioral contract and one selected
+engine-owned fractal description before the evidence appendix. It fixes the
+evidence order, keeps questions and requests for ideas in discussion mode,
+defines the exact proposal trigger, requires one fenced `json` block containing
+a `proposal_version: 1` object, and blocks unsupported basin, visible-symmetry,
+nonzero-control, broadened-help, spatial-statistics, and exact-self-similarity
+claims. The descriptive catalog is queried from the published runtime, validated
+fail-closed, selected exactly by `state.json.fractal_type`, and cached by runtime
+identity plus exact catalog hash. A valid unavailable description fails softly;
+there is no historical-file fallback.
 
 `Validate & Replay Prove` binds the exact packet and proposal text, applies
 scalar overrides, lowers bounded Color Pipeline row-0 selections through the

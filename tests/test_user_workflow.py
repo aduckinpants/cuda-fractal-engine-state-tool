@@ -11,6 +11,7 @@ from PIL import Image
 
 from cuda_fractal_state_tool.user_workflow import (
     CAPABILITY_PROFILE,
+    PACKET_VERSION,
     SessionState,
     UserWorkflowSession,
     build_finding_intake_packet,
@@ -76,7 +77,9 @@ class UserWorkflowTests(unittest.TestCase):
         ui_dir.mkdir()
         cmd = runtime / "fractal_ui.cmd"
         cmd.write_text(
-            '@echo off\nif /I "%1"=="--describe-parameter-surface-json" copy /y "%~dp0parameter-surface.fixture.json" "%~2" >nul\n',
+            "@echo off\n"
+            'if /I "%1"=="--describe-parameter-surface-json" copy /y "%~dp0parameter-surface.fixture.json" "%~2" >nul\n'
+            'if /I "%1"=="--describe-fractal-catalog-json" copy /y "%~dp0fractal-catalog.fixture.json" "%~2" >nul\n',
             encoding="utf-8",
         )
         (runtime / "fractal_ui_active.txt").write_text("fractal_ui.exe\n", encoding="utf-8")
@@ -109,6 +112,46 @@ class UserWorkflowTests(unittest.TestCase):
                         }
                     ],
                 }
+            ),
+            encoding="utf-8",
+        )
+        (runtime / "fractal-catalog.fixture.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "entries": [
+                        {
+                            "selector_id": "explaino_all",
+                            "display_name": "Explaino All",
+                            "category": "explaino",
+                            "family": "explaino",
+                            "formula_growth_surface": "native_composite_formula",
+                            "capability_flags": ["root_basin_coloring"],
+                            "runtime_flags": ["basin_coloring", "explaino_family"],
+                            "description_status": "reviewed",
+                            "description": {
+                                "math_summary": "The selected ExplainO composition uses a reviewed Newton basis.",
+                                "recurrence_or_field_model": "The reviewed recurrence combines bounded terms.",
+                                "state_order": "Its state order depends on the active memory term.",
+                                "termination_or_classification": "Residual and finite-state checks govern termination.",
+                                "interpretation_notes": "Enabled terms do not prove visual dominance.",
+                                "source_refs": ["ui_app/src/example.cpp#Example"],
+                            },
+                        },
+                        {
+                            "selector_id": "newton",
+                            "display_name": "Newton",
+                            "category": "root_finding",
+                            "family": "newton",
+                            "formula_growth_surface": "native_2d_formula",
+                            "capability_flags": ["root_basin_coloring"],
+                            "runtime_flags": ["basin_coloring"],
+                            "description_status": "unavailable",
+                            "description": None,
+                        },
+                    ],
+                },
+                separators=(",", ":"),
             ),
             encoding="utf-8",
         )
@@ -203,18 +246,43 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(packet.packet_text.encode("utf-8")).hexdigest(), packet.packet_sha256)
             self.assertEqual(packet.packet_path.read_bytes().decode("utf-8"), packet.packet_text)
             manifest = json.loads(packet.manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(PACKET_VERSION, 5)
+            self.assertEqual(manifest["packet_version"], 5)
             self.assertEqual(manifest["packet_sha256"], packet.packet_sha256)
             self.assertEqual(manifest["finding_id"], finding.finding_id)
             self.assertEqual(manifest["review_fractal_state_sha256"], finding.review_fractal_state_sha256)
             self.assertEqual(manifest["parameter_surface_sha256"], packet.parameter_surface_sha256)
+            self.assertEqual(
+                manifest["fractal_descriptive_catalog_sha256"],
+                packet.fractal_descriptive_catalog_sha256,
+            )
+            self.assertEqual(manifest["selected_fractal_selector"], "explaino_all")
+            self.assertEqual(manifest["selected_fractal_description_status"], "reviewed")
             parameter_surface_path = packet.manifest_path.parent / manifest["parameter_surface_path"]
             self.assertEqual(hashlib.sha256(parameter_surface_path.read_bytes()).hexdigest(), packet.parameter_surface_sha256)
             self.assertIn("# CUDA Fractal Finding — Agent Exploration Packet", packet.packet_text)
             contract_index = packet.packet_text.index("## Behavioral contract — read first")
+            description_index = packet.packet_text.index(
+                "## Selected fractal — engine-owned mathematical background"
+            )
             session_index = packet.packet_text.index("## What this session is for")
             appendix_index = packet.packet_text.index("## Authoritative evidence appendix")
+            parameter_index = packet.packet_text.index("## Engine-generated applicable fractal parameters")
+            sidecar_index = packet.packet_text.index("## Exact review-focused active-state sidecar")
+            state_index = packet.packet_text.index("## Exact authoritative engine state")
             self.assertLess(contract_index, session_index)
+            self.assertLess(contract_index, description_index)
+            self.assertLess(description_index, session_index)
             self.assertLess(session_index, appendix_index)
+            self.assertLess(description_index, parameter_index)
+            self.assertLess(parameter_index, sidecar_index)
+            self.assertLess(sidecar_index, state_index)
+            self.assertEqual(
+                packet.packet_text.count("## Selected fractal — engine-owned mathematical background"),
+                1,
+            )
+            self.assertIn("The selected ExplainO composition uses a reviewed Newton basis.", packet.packet_text)
+            self.assertNotIn("## Newton — engine-owned mathematical background", packet.packet_text)
             self.assertIn("'What would you try?'", packet.packet_text)
             self.assertIn("'Show me a good alternative'", packet.packet_text)
             self.assertIn("'Could root proximity help?'", packet.packet_text)
@@ -232,6 +300,12 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertIn("A field's presence in `state.json` does not prove", packet.packet_text)
             self.assertIn("engine-generated applicable-parameter projection", packet.packet_text)
             self.assertIn("Applicability is still not counterfactual sensitivity proof", packet.packet_text)
+            self.assertIn("continuous signal such as `root_proximity` does not establish basins", packet.packet_text)
+            self.assertIn("Serialized root-layout symmetry does not establish visible symmetry", packet.packet_text)
+            self.assertIn("A nonzero control does not prove visible contribution", packet.packet_text)
+            self.assertIn("Use engine help no more broadly than its exact words", packet.packet_text)
+            self.assertIn("Global iteration statistics cannot be spatially localized", packet.packet_text)
+            self.assertIn("One frame does not establish exact mathematical self-similarity", packet.packet_text)
             self.assertIn("conjugate roots, real coefficients, or matching defaults", packet.packet_text)
             projection_marker = "## Engine-generated applicable fractal parameters"
             projection_start = packet.packet_text.index("```json", packet.packet_text.index(projection_marker)) + len("```json")
@@ -252,6 +326,8 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertIn("`repeat` (Repeat): Tile the signal into repeating bands.", packet.packet_text)
             self.assertIn('"color_pipeline_draft": {', packet.packet_text)
             self.assertIn("These examples were generated and accepted", packet.packet_text)
+            self.assertIn("one authoring rail per conceptual lane", packet.packet_text)
+            self.assertIn("Captured color values describe this finding", packet.packet_text)
             self.assertNotIn("Return one proposal_v1 JSON object only", packet.packet_text)
             self.assertNotIn(str(capture), packet.packet_text)
             self.assertNotIn(str(root / "workspace"), packet.packet_text)
@@ -286,6 +362,27 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertGreater(session.generation, generation)
             self.assertIsNone(session.packet)
             self.assertEqual(session.proposal_text, "")
+
+    def test_unavailable_selected_description_is_clear_and_does_not_block_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            finding = load_finding_context(self._capture(root), root / "workspace")
+            runtime = self._runtime(root)
+            catalog_path = runtime.parent / "fractal-catalog.fixture.json"
+            catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+            catalog["entries"][0]["description_status"] = "unavailable"
+            catalog["entries"][0]["description"] = None
+            catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+
+            packet = build_finding_intake_packet(finding, runtime)
+            manifest = json.loads(packet.manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["selected_fractal_selector"], "explaino_all")
+            self.assertEqual(manifest["selected_fractal_description_status"], "unavailable")
+            self.assertIn(
+                "No reviewed engine-owned mathematical background is available for this live selector.",
+                packet.packet_text,
+            )
+            self.assertIn("Do not substitute historical catalog prose", packet.packet_text)
 
 
 if __name__ == "__main__":

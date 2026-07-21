@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from .async_jobs import JobContext
 from .finding_workspace import ImportResult, SourceCaptureImporter
+from .fractal_descriptive_catalog import load_selected_fractal_description
 from .fractal_parameter_authority import capture_fractal_parameter_authority
 from .json_utils import loads_no_duplicates
 from .lane_catalog import load_lane_catalog_from_ui_salt_contract
@@ -21,7 +22,7 @@ from .runtime_surface import DEFAULT_RUNTIME_CMD, build_runtime_identity, resolv
 
 
 CAPABILITY_PROFILE = "finding-color-first-row-v1"
-PACKET_VERSION = 4
+PACKET_VERSION = 5
 
 
 class SessionState(str, Enum):
@@ -65,6 +66,9 @@ class PacketContext:
     runtime_identity_sha256: str
     ui_salt_contract_sha256: str
     parameter_surface_sha256: str
+    fractal_descriptive_catalog_sha256: str
+    selected_fractal_selector: str
+    selected_fractal_description_status: str
 
 
 @dataclass
@@ -346,6 +350,45 @@ def _serialized_draft_lines(state: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _selected_fractal_description_lines(entry: dict[str, Any]) -> list[str]:
+    selector = entry["selector_id"]
+    status = entry["description_status"]
+    lines = [
+        f"- selector: `{selector}`",
+        f"- display name: {entry['display_name']}",
+        f"- category / family: `{entry['category']}` / `{entry['family']}`",
+        f"- formula-growth surface: `{entry['formula_growth_surface']}`",
+        f"- description status: `{status}`",
+        "",
+    ]
+    if status == "unavailable":
+        lines.extend(
+            [
+                "No reviewed engine-owned mathematical background is available for this live selector.",
+                "Continue with the frame, applicable-parameter projection, review sidecar, and exact replay state.",
+                "Do not substitute historical catalog prose or infer a family mechanism from the selector name.",
+            ]
+        )
+        return lines
+
+    description = entry["description"]
+    lines.extend(
+        [
+            f"- Mathematical summary: {description['math_summary']}",
+            f"- Recurrence or field model: {description['recurrence_or_field_model']}",
+            f"- State order: {description['state_order']}",
+            f"- Termination or classification: {description['termination_or_classification']}",
+            f"- Interpretation boundary: {description['interpretation_notes']}",
+            "- Reviewed engine source references:",
+            *[f"  - `{source_ref}`" for source_ref in description["source_refs"]],
+            "",
+            "This section is general engine-owned background. It does not identify current applicable controls,",
+            "replace current finding values, describe the captured Color Pipeline, or prove what caused this frame.",
+        ]
+    )
+    return lines
+
+
 def build_finding_intake_packet(
     finding: FindingContext,
     runtime_cmd_path: Path = DEFAULT_RUNTIME_CMD,
@@ -359,6 +402,15 @@ def build_finding_intake_packet(
     contract_path = Path(resolution.ui_salt_contract_path)
     catalog = load_lane_catalog_from_ui_salt_contract(contract_path)
     contract_sha256 = sha256_file(contract_path)
+    runtime_summary = {
+        "launcher_sha256": runtime_identity.get("launcher_sha256"),
+        "resolved_executable_sha256": runtime_identity.get("resolved_executable_sha256"),
+        "resolved_executable_file_version": runtime_identity.get("resolved_executable_file_version"),
+        "runtime_schema_sha256": runtime_identity.get("runtime_schema_sha256"),
+        "source_schema_sha256": runtime_identity.get("source_schema_sha256"),
+        "ui_salt_contract_sha256": contract_sha256,
+    }
+    runtime_identity_sha256 = _canonical_sha256(runtime_summary)
     state_text = finding.authoring_base_state_path.read_bytes().decode("utf-8")
     state = loads_no_duplicates(state_text)
     if not isinstance(state, dict):
@@ -378,6 +430,14 @@ def build_finding_intake_packet(
     fractal_id = state.get("fractal_type")
     if not isinstance(fractal_id, str) or not fractal_id:
         raise ValueError("Authoritative finding state has no fractal_type")
+    selected_description = load_selected_fractal_description(
+        runtime_cmd_path,
+        finding.workspace_root,
+        fractal_id,
+        runtime_identity_sha256,
+        job=job,
+    )
+    selected_description_lines = _selected_fractal_description_lines(selected_description.entry)
     parameter_authority = capture_fractal_parameter_authority(
         runtime_cmd_path,
         fractal_id,
@@ -391,15 +451,6 @@ def build_finding_intake_packet(
         sort_keys=True,
         ensure_ascii=False,
     )
-    runtime_summary = {
-        "launcher_sha256": runtime_identity.get("launcher_sha256"),
-        "resolved_executable_sha256": runtime_identity.get("resolved_executable_sha256"),
-        "resolved_executable_file_version": runtime_identity.get("resolved_executable_file_version"),
-        "runtime_schema_sha256": runtime_identity.get("runtime_schema_sha256"),
-        "source_schema_sha256": runtime_identity.get("source_schema_sha256"),
-        "ui_salt_contract_sha256": contract_sha256,
-    }
-    runtime_identity_sha256 = _canonical_sha256(runtime_summary)
     packet_id = str(uuid.uuid4())
     lane_ids = tuple(lane.lane_id for lane in catalog.lanes)
     authoring_lines = _contract_authoring_lines(contract_path, lane_ids)
@@ -441,10 +492,10 @@ def build_finding_intake_packet(
             "## Behavioral contract — read first",
             "",
             "- This interaction is exploration-first. Discuss the finding before turning it into configuration work.",
-            "- Evidence order: attached frame for visual observations; engine-generated parameter projection for",
-            "  applicability and parameter properties; `fractal-state.json` for capture-time review values and Color",
-            "  Pipeline context; `state.json` for the exact replay base. Engine help or proven comparisons are needed",
-            "  for causal claims.",
+            "- Evidence order: attached frame for visual observations; selected engine-owned fractal description for",
+            "  general mathematical background; engine-generated parameter projection for applicability and parameter",
+            "  properties; `fractal-state.json` for capture-time review values and derived receipts; `state.json` for",
+            "  exact replay authority; proven comparisons for causal claims. Later evidence does not rewrite earlier facts.",
             "- Do not emit proposal JSON for questions, observations, requests for ideas/options, or exploratory prompts",
             "  such as 'What would you try?', 'Show me a good alternative', or 'Could root proximity help?'. Discuss",
             "  those normally and ask what direction the user wants to take.",
@@ -456,17 +507,33 @@ def build_finding_intake_packet(
             "  `state.json`.",
             "- Applicability, co-occurrence, symmetry among values, and suggestive parameter names are not causal proof.",
             "  Keep relationships hypothetical unless engine help text or a proven comparison supports them.",
+            "- A continuous signal such as `root_proximity` does not establish basins. Use region, domain, gradient,",
+            "  well-like motif, structure, or transition unless categorical root ownership or independent evidence exists.",
+            "- Serialized root-layout symmetry does not establish visible symmetry in the cropped frame. Distinguish",
+            "  root geometry, directly observed frame symmetry, and a hypothesis that the geometry influences morphology.",
+            "- A nonzero control does not prove visible contribution. Report its value and exact gating/help, or propose",
+            "  a comparison; do not assign it a visible feature without documentation or isolating evidence.",
+            "- Use engine help no more broadly than its exact words. Plausible visual benefits remain hypotheses until",
+            "  the engine documents them or a comparison proves them.",
+            "- Global iteration statistics cannot be spatially localized. Claims about where convergence is fast or slow",
+            "  require a spatial diagnostic, iteration-colored comparison, or equivalent spatial evidence.",
+            "- One frame does not establish exact mathematical self-similarity. Prefer multiscale, recurrent, recursively",
+            "  suggestive, or consistent with self-similar organization for repeated visible morphology.",
+            "",
+            "## Selected fractal — engine-owned mathematical background",
+            "",
+            *selected_description_lines,
             "",
             "## What this session is for",
             "",
             "You are helping the user explore the attached CUDA fractal render.",
             "Begin with a curiosity-driven discussion rather than treating this as a form-filling task.",
             "Look at the attached frame and the exact serialized state together. Surface anything mathematically",
-            "interesting that is actually visible or state-grounded: symmetry, repetition, self-similar structure,",
-            "basin or boundary behavior, unusually sensitive regions, and relationships between the fractal family,",
-            "view, iteration settings, and Color Pipeline. Mention noteworthy settings in plain language and explain",
-            "what they may be contributing, while clearly separating serialized facts, visual observations, and",
-            "tentative interpretation. Do not invent mathematical claims that the frame or state cannot support.",
+            "interesting that is actually visible or state-grounded: symmetry, repetition, multiscale structure,",
+            "categorical basin or ownership structure only when supported, boundary behavior, and sensitive-looking",
+            "regions worth testing. Mention noteworthy settings in plain language, quote the engine's actual semantics,",
+            "and suggest comparisons that could test their influence while clearly separating serialized facts, visual observations,",
+            "grounded inferences, and hypotheses. Do not invent mathematical claims the frame or state cannot support.",
             "Offer a few promising things to inspect or wonder about and ask questions that help the user choose",
             "where to look next. Discuss interesting regions and possible changes normally with the user; a proposal",
             "is optional until the user wants to try a concrete change.",
@@ -536,15 +603,6 @@ def build_finding_intake_packet(
             "",
             *draft_lines,
             "",
-            "## Exact authoritative engine state",
-            "",
-            "The JSON below is the exact UTF-8 `state.json` captured by the engine and bound by this packet.",
-            "It is the base state, not a proposal and not a Python reconstruction.",
-            "",
-            "```json",
-            state_text.rstrip("\r\n"),
-            "```",
-            "",
             "## Exact review-focused active-state sidecar",
             "",
             *(
@@ -563,7 +621,30 @@ def build_finding_intake_packet(
                 ]
             ),
             "",
+            "## Exact authoritative engine state",
+            "",
+            "The JSON below is the exact UTF-8 `state.json` captured by the engine and bound by this packet.",
+            "It is the base state, not a proposal and not a Python reconstruction.",
+            "",
+            "```json",
+            state_text.rstrip("\r\n"),
+            "```",
+            "",
+            "## Proven comparisons",
+            "",
+            "No packet-bound counterfactual comparison is supplied here. Treat causal explanations as hypotheses until",
+            "a later proof receipt isolates a change while preserving the exact runtime, state, and capture conditions.",
+            "",
             "## What a proposal may change",
+            "",
+            "Captured color values describe this finding; they are not proof of visual cause and are not automatically",
+            "replacement requests. Use one authoring rail per conceptual lane:",
+            "- The legacy scalar color rail replaces `params.color_signal`, `params.color_palette`, and",
+            "  `params.color_grading` together as one approved tuple. Do not combine it with draft Source, Palette, or",
+            "  Grading selections in the same proposal.",
+            "- The scalar Shape rail replaces `params.color_shape`. Do not combine it with a draft Shape selection.",
+            "- The row-zero draft rail uses `color_pipeline_draft.lanes` and may select at most one function per shipped",
+            "  lane. It does not authorize parameters, extra rows, recipes, or graph changes.",
             "",
             f"- `params.max_iter`: positive integer; current value `{current_max_iter}`.",
             f"- `params.color_shape`: `identity` or `repeat`; current value `{params.get('color_shape', '?')}`.",
@@ -612,6 +693,9 @@ def build_finding_intake_packet(
             f"- runtime_identity_sha256: `{runtime_identity_sha256}`",
             f"- ui_salt_contract_sha256: `{contract_sha256}`",
             f"- parameter_surface_sha256: `{parameter_authority.parameter_surface_sha256}`",
+            f"- fractal_descriptive_catalog_sha256: `{selected_description.catalog_sha256}`",
+            f"- selected_fractal_selector: `{selected_description.entry['selector_id']}`",
+            f"- selected_fractal_description_status: `{selected_description.entry['description_status']}`",
             "",
             "The exact copied packet payload is hashed and retained by the desktop tool. A later proof request must",
             "bind this packet, this base state, this runtime and contract identity, and the exact pasted proposal text.",
@@ -634,6 +718,9 @@ def build_finding_intake_packet(
         "ui_salt_contract_sha256": contract_sha256,
         "parameter_surface_sha256": parameter_authority.parameter_surface_sha256,
         "parameter_surface_path": "parameter-surface.json",
+        "fractal_descriptive_catalog_sha256": selected_description.catalog_sha256,
+        "selected_fractal_selector": selected_description.entry["selector_id"],
+        "selected_fractal_description_status": selected_description.entry["description_status"],
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "packet_path": "packet.txt",
     }
@@ -650,4 +737,7 @@ def build_finding_intake_packet(
         runtime_identity_sha256=runtime_identity_sha256,
         ui_salt_contract_sha256=contract_sha256,
         parameter_surface_sha256=parameter_authority.parameter_surface_sha256,
+        fractal_descriptive_catalog_sha256=selected_description.catalog_sha256,
+        selected_fractal_selector=selected_description.entry["selector_id"],
+        selected_fractal_description_status=selected_description.entry["description_status"],
     )
