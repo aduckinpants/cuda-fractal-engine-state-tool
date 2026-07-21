@@ -7,11 +7,12 @@ Current status:
 - Phase 0 complete: runtime authority probe committed at `102c5bd`
 - Phase 1 complete: bounded proposal loop, replay proof workflow, and slim desktop UI
 - Phase 2 complete (bounded scope): replay-proven color triplet coverage expansion, promotion profile controls, and CLI-first execution/reporting paths
-- Phase 3 in progress: runtime metadata-cache wiring plus fail-closed lane/function metadata validation is active; bounded full `color_pipeline_draft` replacement is available in proposal_v1
+- UI rescue in progress on `codex/user-workflow-ui-rescue`; the rejected Phase 3 desktop surface is preserved at `archive/vscode-phase3-ui`
 - Raw probe outputs live under ignored `.local/`
 - Stable conclusions are tracked in `docs/runtime_authority_probe.md`
 - Phase 2 closure summary is tracked in `docs/phase2_closure.md`
 - Phase 3 start checkpoint is tracked in `docs/phase3_start_checkpoint.md`
+- The approved five-slice rescue contract is tracked in `docs/user_workflow_ui_rescue.md`
 - Web-session copy/paste usage guide is tracked in `USER_GUIDE_WEB_SESSION.md`
 
 ## Phase 0 goals
