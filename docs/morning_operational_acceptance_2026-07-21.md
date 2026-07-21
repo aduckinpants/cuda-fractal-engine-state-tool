@@ -25,11 +25,13 @@ The operational capture used finding
 with authoring base
 `6d68b95d89445deef0ee1300150acb4c5283e4493212b1bb98b814e3ab72c7ef`.
 
-The UI automatically generated a 20,588-byte agent exploration packet. It
+The UI automatically generated a 21,454-byte agent exploration packet. It
 contains the exact captured `state.json`, current finding/render context,
 deployed UI-Salt descriptions, three parser-accepted proposal examples, and
-closing binding metadata. The incoming proposal editor was empty at packet
-readiness.
+closing binding metadata. Its opening guidance asks the agent to lead with a
+grounded, curiosity-driven discussion of visible mathematical structure and
+noteworthy serialized settings before proposing changes. The incoming proposal
+editor was empty at packet readiness.
 
 Accepted proposal:
 
@@ -42,7 +44,7 @@ action-free replay both exited successfully. Their encoded frame SHA-256 was
 `0eda5672a61336c91ef66b72e95ae27cbad9f01d6564cc56fc862f91d8096ffc`;
 decoded RGBA hashes also matched exactly at 4096×2560. Candidate/replay state
 differed only at volatile `stats.last_render_ms`. Candidate SHA-256 was
-`0f42e504c064cd23be40ed825e3c216a258667847f7d808b0a297357e03ac879`,
+`63176b1ab5685e58aace9d2ad38c2615e677756bdcece27adbc72ac79b69238e`,
 and the immediate launch-readiness audit returned no errors.
 
 An invalid `shape:0=definitely_missing` proposal was rejected before an engine
@@ -62,7 +64,7 @@ Raw screenshots, the manifest, and exact receipt handles are under
 ## Qualification ledger
 
 - Focused rescue suite: 38 tests passed in 10.926 seconds.
-- Full local suite: 113 tests passed in 26.541 seconds.
+- Full local suite: 113 tests passed in 27.200 seconds.
 - Exact packet rebinding and proposal whitespace edits invalidate readiness.
 - Runtime, compiled-contract, persisted-packet, and candidate-state tampering
   are rejected before launch.
@@ -104,4 +106,4 @@ owned worker process; Tk opens only the cached derivative.
   runtime infrastructure failure.
 - The exact state and function catalog make the exploration packet materially
   larger than the rejected receipt packet; the measured real packet is about
-  20 KB.
+  21 KB.
