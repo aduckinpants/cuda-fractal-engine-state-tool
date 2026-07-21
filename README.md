@@ -4,7 +4,7 @@ This repository hosts a small experimental Python tool for creating and validati
 
 Current status:
 
-- Agent State Override rescue is at the Slice 1 manual transport gate on `codex/agent-state-override-rescue`. Packet V6 is available through its standalone CLI; sparse merge/proof and the atomic desktop UI cutover have not started.
+- Agent State Override rescue has passed its Slice 1 manual transport gate on `codex/agent-state-override-rescue`. Slice 2 provides packet-bound sparse validation and deterministic merge through a standalone CLI; runtime proof and the atomic desktop UI cutover have not started.
 - The currently active desktop application still exposes the preceding proposal workflow. It is retained only until the approved atomic Slice 4 cutover and is not the Packet V6 acceptance surface.
 - Phase 0 complete: runtime authority probe committed at `102c5bd`
 - Phase 1 complete: bounded proposal loop, replay proof workflow, and slim desktop UI
@@ -47,6 +47,19 @@ py -3.14 -m cuda_fractal_state_tool.agent_bundle_cli build `
 ```
 
 The command imports source artifacts without rewriting them and publishes one immutable Packet V6 directory. Paste its `packet.md` into the web session, then attach the exact required files listed inside it; copying the Markdown alone does not transport those authorities. The exact current manual gate is tracked in `docs/slice1_packet_v6_manual_gate.md`.
+
+Validate and merge one sparse state override against the exact Packet V6 authorities:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+py -3.14 -m cuda_fractal_state_tool.state_override_cli `
+  --packet-dir <exact-packet-v6-directory> `
+  --override <exact-utf8-state-override.json> `
+  --out .local\merged-candidate.json `
+  --manifest-sha256 <exact-packet-manifest-sha256>
+```
+
+The CLI accepts only `params`, companion-paired `view`, and fixed-topology `color_pipeline_draft` changes authorized by the copied packet bytes. It emits a structured acceptance or rejection result. It does not run the engine, prove replay, approve a visual candidate, or authorize launch; those remain later rescue slices.
 
 Run the runtime probe:
 

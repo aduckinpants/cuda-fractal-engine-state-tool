@@ -44,5 +44,21 @@ def loads_no_duplicates(text: str) -> Any:
     return json.loads(text, cls=Decoder)
 
 
+def loads_strict_no_duplicates(text: str) -> Any:
+    path_stack: list[str] = []
+
+    def reject_nonfinite(value: str) -> Any:
+        raise ValueError(f"Non-finite JSON number is not allowed: {value}")
+
+    class Decoder(json.JSONDecoder):
+        def __init__(self) -> None:
+            super().__init__(
+                object_pairs_hook=_object_pairs_hook_factory(path_stack),
+                parse_constant=reject_nonfinite,
+            )
+
+    return json.loads(text, cls=Decoder)
+
+
 def dumps_pretty(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True) + "\n"

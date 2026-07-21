@@ -450,6 +450,10 @@ def derive_state_override_authoring_surface(
     }
 
 
+def serialize_state_override_authoring_surface(surface: dict[str, Any]) -> bytes:
+    return _json_bytes(surface)
+
+
 def _contract_function_index(contract: dict[str, Any]) -> tuple[list[str], dict[tuple[str, str], dict[str, Any]]]:
     library = contract.get("function_library")
     if not isinstance(library, dict) or not isinstance(library.get("lanes"), list):
@@ -923,7 +927,7 @@ def build_agent_bundle(
             copied_parameter_surface_bytes,
             schema_bytes,
         )
-        authoring_surface_bytes = _json_bytes(authoring_surface)
+        authoring_surface_bytes = serialize_state_override_authoring_surface(authoring_surface)
         _write_bytes(stage_dir / _AUTHORING_SURFACE_FILENAME, authoring_surface_bytes)
         loaded_surface = _load_json_object(authoring_surface_bytes, "Derived authoring surface")
         refs = loaded_surface.get("authority_refs")
