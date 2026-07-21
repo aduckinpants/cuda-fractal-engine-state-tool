@@ -20,6 +20,8 @@ from .runtime_surface import (
     build_runtime_command,
     build_runtime_identity,
     resolve_launcher,
+    runtime_identity_summary,
+    runtime_identity_summary_sha256,
     sha256_file,
 )
 
@@ -813,20 +815,6 @@ def _packet_markdown(
     )
 
 
-def _runtime_summary(identity: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "launcher_sha256": identity.get("launcher_sha256"),
-        "resolved_executable_sha256": identity.get("resolved_executable_sha256"),
-        "resolved_executable_file_version": identity.get("resolved_executable_file_version"),
-        "runtime_schema_sha256": identity.get("runtime_schema_sha256"),
-        "ui_salt_contract_sha256": identity.get("ui_salt_contract_sha256"),
-    }
-
-
-def _runtime_summary_sha256(summary: dict[str, Any]) -> str:
-    return _sha256_bytes(_json_bytes(summary))
-
-
 def build_agent_bundle(
     finding_dir: Path,
     runtime_cmd_path: Path,
@@ -1009,7 +997,7 @@ def build_agent_bundle(
                 }
             )
 
-        runtime_summary = _runtime_summary(runtime_identity_before)
+        runtime_summary = runtime_identity_summary(runtime_identity_before)
         manifest = {
             "bundle_manifest_version": BUNDLE_MANIFEST_VERSION,
             "packet_version": PACKET_VERSION,
@@ -1019,7 +1007,7 @@ def build_agent_bundle(
             "selected_fractal_description_status": selected_entry["description_status"],
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "runtime_identity": runtime_summary,
-            "runtime_identity_sha256": _runtime_summary_sha256(runtime_summary),
+            "runtime_identity_sha256": runtime_identity_summary_sha256(runtime_summary),
             "authority_identities": {
                 "state_sha256": _sha256_bytes(state_bytes),
                 "parameter_surface_sha256": _sha256_bytes(copied_parameter_surface_bytes),
@@ -1056,7 +1044,7 @@ def build_agent_bundle(
             raise ValueError("Runtime parameter-surface export changed during packet construction")
         if catalog_after != copied_catalog_bytes:
             raise ValueError("Runtime descriptive-catalog export changed during packet construction")
-        if _runtime_summary(runtime_identity_after) != runtime_summary:
+        if runtime_identity_summary(runtime_identity_after) != runtime_summary:
             raise ValueError("Published runtime identity changed during packet construction")
         if sha256_file(schema_source) != _sha256_bytes(schema_bytes):
             raise ValueError("Deployed UI schema changed during packet construction")
