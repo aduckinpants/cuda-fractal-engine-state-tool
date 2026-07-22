@@ -84,6 +84,11 @@ Allowed override domains are:
 - complete fixed-topology `color_pipeline_draft.lanes` replacement when the
   captured state already contains a complete draft.
 
+The legacy flat Color panel is never advertised as independent state authority.
+Color edits use the complete copied draft, exact UI-Salt function/parameter
+definitions, and that contract's runtime compatibility rows. Engine
+materialization remains final authority for a selected recipe.
+
 Objects merge recursively, arrays replace completely, and unknown, absent,
 read-only, duplicate, null, or non-finite values fail closed. `{}` copies the
 exact base `state.json` bytes. A nonempty candidate uses the documented stable
@@ -146,6 +151,9 @@ py -3.14 -m cuda_fractal_state_tool.state_override_proof_cli `
 ```
 
 The proof CLI deliberately stops at visual review pending and never launches.
+Existing Packet V6 directories with an older authoring-surface version are
+rejected with a rebuild instruction rather than retaining unsafe color-path
+authority.
 
 ## Validation
 

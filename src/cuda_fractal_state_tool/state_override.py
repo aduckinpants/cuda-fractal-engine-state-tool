@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .agent_bundle import (
+    AUTHORING_SURFACE_VERSION,
     derive_state_override_authoring_surface,
     load_agent_bundle_handoff,
     serialize_state_override_authoring_surface,
@@ -166,6 +167,10 @@ def _load_packet_authorities(
         bundled_surface_bytes,
         "Packet V6 state-override-authoring-surface.json",
     )
+    if bundled_surface.get("surface_version") != AUTHORING_SURFACE_VERSION:
+        raise ValueError(
+            "Packet V6 authoring surface is from an unsafe or unsupported version; rebuild the exact Agent Bundle"
+        )
     color_pipeline_contract = _load_strict_object(
         color_pipeline_contract_bytes,
         "Packet V6 color_pipeline_function_library.contract.v1.json",

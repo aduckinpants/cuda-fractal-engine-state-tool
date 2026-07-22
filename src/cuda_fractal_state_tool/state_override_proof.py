@@ -298,6 +298,33 @@ def _run_capture(
     return result, command
 
 
+def _runtime_attempt_receipt(result: Any, output_dir: Path, command: list[str]) -> dict[str, Any]:
+    expected = (output_dir / "state.json", output_dir / "frame.bmp")
+    return {
+        "process_receipt": str((output_dir / "process.json").name),
+        "command": command,
+        "exit_code": result.exit_code,
+        "timed_out": result.timed_out,
+        "stdout_path": "stdout.txt",
+        "stderr_path": "stderr.txt",
+        "missing_artifacts": [path.name for path in expected if not path.is_file()],
+    }
+
+
+def _runtime_failure_detail(result: Any, output_dir: Path) -> str:
+    details: list[str] = []
+    if result.timed_out:
+        details.append("timed out")
+    if result.exit_code is not None and result.exit_code != 0:
+        details.append(f"exit code {result.exit_code}")
+    missing = [name for name in ("state.json", "frame.bmp") if not (output_dir / name).is_file()]
+    if missing:
+        details.append(f"missing artifacts: {', '.join(missing)}")
+    diagnostic = result.stderr.strip() or result.stdout.strip()
+    details.append(diagnostic if diagnostic else "runtime emitted no stdout or stderr")
+    return "; ".join(details)
+
+
 def _proof_result(
     *,
     status: str,
@@ -373,6 +400,7 @@ def execute_state_override_proof(
     }
     runtime_identity: dict[str, Any] | None = None
     materialization: StateOverrideMaterialization | None = None
+    runtime_attempts: dict[str, Any] = {}
     materialization_dir = proof_dir / "materialization"
     replay_dir = proof_dir / "replay"
     materialization_dir.mkdir()
@@ -390,6 +418,7 @@ def execute_state_override_proof(
             "binding": binding,
             "runtime_identity": runtime_identity,
             "errors": errors,
+            "runtime_attempts": runtime_attempts,
             "visual_review": "not_available",
             "launch_ready": False,
         }
@@ -455,6 +484,9 @@ def execute_state_override_proof(
             timeout_seconds,
             apply_loaded_draft=materialization.apply_loaded_color_pipeline_draft,
         )
+        runtime_attempts["materialization"] = _runtime_attempt_receipt(
+            materialization_result, materialization_dir, materialization_command
+        )
         engine_state = materialization_dir / "state.json"
         engine_frame = materialization_dir / "frame.bmp"
         if (
@@ -463,7 +495,7 @@ def execute_state_override_proof(
             or not engine_state.is_file()
             or not engine_frame.is_file()
         ):
-            detail = materialization_result.stderr.strip() or materialization_result.stdout.strip() or "missing state/frame"
+            detail = _runtime_failure_detail(materialization_result, materialization_dir)
             return rejected([f"Direct-state engine materialization failed: {detail}"])
         emitted = _load_object(engine_state, "Engine-emitted candidate state")
         materialization_comparison = compare_json_documents(
@@ -483,6 +515,9 @@ def execute_state_override_proof(
         replay_result, replay_command = _run_capture(
             job, runtime_cmd_path, engine_state, replay_dir, timeout_seconds
         )
+        runtime_attempts["replay"] = _runtime_attempt_receipt(
+            replay_result, replay_dir, replay_command
+        )
         replay_state = replay_dir / "state.json"
         replay_frame = replay_dir / "frame.bmp"
         if (
@@ -491,7 +526,7 @@ def execute_state_override_proof(
             or not replay_state.is_file()
             or not replay_frame.is_file()
         ):
-            detail = replay_result.stderr.strip() or replay_result.stdout.strip() or "missing state/frame"
+            detail = _runtime_failure_detail(replay_result, replay_dir)
             return rejected([f"Action-free engine replay failed: {detail}"])
 
         comparison = compare_json_documents(
