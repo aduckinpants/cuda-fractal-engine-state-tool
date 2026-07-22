@@ -199,3 +199,28 @@ acceptance. Slice 3 remains active for a small adversarial ladder covering a
 split or disappearance, an honestly ungroundable high-zoom change, and an
 esoteric ExplainO case. No packet or product mutation is authorized from this
 result alone; fixture qualification and further manual evidence come first.
+
+## Slice 3 three-packet battery handoff
+
+Fixture qualification selected exactly three current captures. Their immutable
+packets were generated and independently re-inspected against the published
+runtime without changing Packet V6 or product code:
+
+1. reverse McMullen split — packet
+   `e0eb0a99-5353-44df-bb24-b6f8fc2cfb01`;
+2. ExplainO Nova high-zoom dynamics — packet
+   `bd84ce6b-19d9-435d-a58c-3d0cff3d6bee`;
+3. ExplainO Counterfactual Pair — packet
+   `90e203ec-f777-4d3b-881f-de9c62a25a34`.
+
+Every manifest file matched its recorded size and SHA-256, every generated
+authoring-surface authority reference matched the neighboring copied state,
+parameter-surface, and UI-schema bytes, and all three packets bind runtime
+identity `140707fd16283ac2db3c58a24146b73a7f29bbd15b0e1b36771c301f8b275e95`.
+Exact directories, hashes, prompts, and evaluator boundaries are recorded in
+`docs/catalog_viewport_continuity_manual_gate.md`.
+
+The deeper Nova reserve, additional old captures, and a new custom fixture are
+deferred to a later round. Slice 3 now stops at the user-run three-session
+manual battery. No packet tweak is authorized unless those sessions reveal a
+genuine packet ambiguity rather than downstream model noncompliance.

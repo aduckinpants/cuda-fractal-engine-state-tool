@@ -102,7 +102,74 @@ not packet generation or engine behavior. A repeated JSON block during later
 discussion was harmless conversational overproduction; the discussion-only
 post-render wording below is the preferred control for future tests.
 
-## Contrast fixture — ExplainO Multibrot root-trap
+## Current three-packet adversarial battery
+
+These are the only packets in the current manual round. The previously prepared
+ExplainO Multibrot and ExplainO All packets remain historical calibration
+evidence and are not part of this battery. Deeper reserve captures and a new
+custom capture are deferred until this battery completes without requiring a
+packet change.
+
+All three packets bind runtime identity
+`140707fd16283ac2db3c58a24146b73a7f29bbd15b0e1b36771c301f8b275e95`,
+contain nine required and three recommended attachments, report no unavailable
+optional attachments, and passed an independent manifest/file/hash inspection.
+
+### A — Reverse McMullen split
+
+- Source capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-22\180102_222__mcmullen`
+- Finding ID: `f7e4a203a6783e173c390c155a4d51d4010247f2d9c89679b95cf9a99622466c`
+- Packet ID: `e0eb0a99-5353-44df-bb24-b6f8fc2cfb01`
+- Packet directory: `D:\salt-fractal\cuda-fractal-engine-state-tool\findings\f7e4a203a6783e173c390c155a4d51d4010247f2d9c89679b95cf9a99622466c\packets\e0eb0a99-5353-44df-bb24-b6f8fc2cfb01`
+- Packet SHA-256: `d6da3b6f8ef39ca9335a2e00a61f75091116a729f0e536da49559d5a0e911d86`
+- Manifest SHA-256: `38c54a66e6da739d104c0911e723e927404d9023e1d6f0e117ef291c3488c3a2`
+- Selected description status: `reviewed`
+- `log2_zoom`: `6.6001691399968774`
+- Complex frame size: `0.065967661108452882 × 0.04122978819278305`
+
+This starts from the accepted parabolic-threshold result. The manual experiment
+returns lambda to `0.15` and asks the agent to follow the complete fixed-point
+split rather than silently choosing one branch. The evaluator retains the
+expected branch geometry and viewport-containment calculation; it is not added
+to Packet V6.
+
+### B — ExplainO Nova high-zoom dynamics
+
+- Source capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-16\105825_478__explaino_nova`
+- Finding ID: `d25243e57c814c687b28e9634d31700edcc69655be68dba2454bc80dd16a512c`
+- Packet ID: `bd84ce6b-19d9-435d-a58c-3d0cff3d6bee`
+- Packet directory: `D:\salt-fractal\cuda-fractal-engine-state-tool\findings\d25243e57c814c687b28e9634d31700edcc69655be68dba2454bc80dd16a512c\packets\bd84ce6b-19d9-435d-a58c-3d0cff3d6bee`
+- Packet SHA-256: `5451d35ef73bacfcc4f9a14ed3a3eee575d9f0f6d6880410ea32caa5627fb7d7`
+- Manifest SHA-256: `860065fc9a5df3c8b0d61e90c3e79a338b51a94a70b7f0fe206885bfd491e8f1`
+- Selected description status: `reviewed`
+- `log2_zoom`: `20.62552856249024`
+- Complex frame size: `3.956190541058871e-06 × 2.4726190881617944e-06`
+
+This fixture has a custom quartic, seed `-10`, and
+`nova_alpha = 0.7031999826431274`. Its authoring surface exposes the applicable
+Nova and ExplainO dynamics controls plus camera companions. The test asks for a
+non-color dynamics experiment and checks whether the agent distinguishes a
+grounded feature track from an honestly ungroundable high-zoom survey.
+
+### C — ExplainO Counterfactual Pair
+
+- Source capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-06-22\142209_050__explaino_counterfactual_pair`
+- Finding ID: `c702b7974ff78a68d53e595f8fc314fccec75f2ce059b3ffa690cda79bd0434e`
+- Packet ID: `90e203ec-f777-4d3b-881f-de9c62a25a34`
+- Packet directory: `D:\salt-fractal\cuda-fractal-engine-state-tool\findings\c702b7974ff78a68d53e595f8fc314fccec75f2ce059b3ffa690cda79bd0434e\packets\90e203ec-f777-4d3b-881f-de9c62a25a34`
+- Packet SHA-256: `aeb01aa6610b3cf69b000e9e154d1a45ef5fbf6f95163ac1c88d622c0877b5bd`
+- Manifest SHA-256: `40fb4e9aa0b7fca61ad49434fe5943d54121545e5df39c0cea172d351175edf8`
+- Selected description status: `reviewed`
+- `log2_zoom`: `14.575373517493107`
+- Complex frame size: `0.0002622557546434392 × 0.000163845819368301`
+
+This fixture exposes paired-orbit root family, world/view-relative frame,
+partner offsets, reconvergence ratio, shared ExplainO dynamics, and camera
+controls. The test checks whether the agent distinguishes a change to the pair
+orbits from a change to their classification threshold and whether its proposed
+camera behavior matches that distinction.
+
+## Historical contrast fixture — ExplainO Multibrot root-trap
 
 - Capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-21\230610_719__explaino_multibrot_root_trap`
 - Finding ID: `e682f599e459082a341bc95238377e2f782ac85c08967bbf44c4f07efd3025c1`
@@ -114,7 +181,7 @@ post-render wording below is the preferred control for future tests.
 - `log2_zoom`: `11.932675187687689`
 - Complex frame size: `0.00163778350731305 × 0.001023214842581566`
 
-## Control fixture — ExplainO All
+## Historical control fixture — ExplainO All
 
 - Capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-20\192515_961__explaino_all`
 - Finding ID: `22a35168b3a7c02b6a3b8eb271d9b9a7611813ff5e558336197ac931fbcd29ae`
@@ -126,7 +193,7 @@ post-render wording below is the preferred control for future tests.
 
 ## Exact handoff
 
-For each selected fixture:
+For each current battery fixture:
 
 1. Use `Copy Packet` and paste the text into a fresh target web session.
 2. Use `Open Agent Bundle Folder`.
@@ -147,6 +214,26 @@ Follow-up:
 
 ```text
 What would you try?
+```
+
+Use one targeted discussion prompt before the concrete override trigger:
+
+McMullen:
+
+```text
+Reverse the preceding transition by returning lambda to 0.15. Follow the complete fixed-point split rather than choosing one branch. What camera strategy and result would you expect?
+```
+
+ExplainO Nova:
+
+```text
+Choose one mathematically motivated Nova dynamics experiment, not a color-only change. At this zoom, decide honestly whether the current subject can be tracked or whether a wider survey or clarification is required.
+```
+
+ExplainO Counterfactual Pair:
+
+```text
+Choose one experiment involving the paired-orbit semantics rather than color alone. Distinguish whether it changes the two orbits, their classification threshold, or both, and account for the camera accordingly.
 ```
 
 When the agent has described one concrete change worth testing:
@@ -261,8 +348,8 @@ directory.
 
 ## Remaining adversarial calibration boundary
 
-The primary gate above passed. Before further packet or product mutation,
-qualify a small ladder of real captures that distinguishes:
+The primary gate above passed and the three-packet battery is prepared. Before
+further packet or product mutation, run this ladder to distinguish:
 
 1. a uniquely trackable feature;
 2. a feature that splits, merges, or disappears;
