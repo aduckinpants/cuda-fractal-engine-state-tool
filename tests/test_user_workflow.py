@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +14,7 @@ from cuda_fractal_state_tool.agent_bundle import AgentBundle
 from cuda_fractal_state_tool.user_workflow import (
     SessionState,
     UserWorkflowSession,
+    load_existing_packet_context,
     load_finding_context,
 )
 
@@ -69,6 +72,43 @@ class UserWorkflowTests(unittest.TestCase):
             unavailable_optional_attachments=(),
         )
 
+    @staticmethod
+    def _existing_packet(finding, packet_id: str = "existing-packet") -> Path:
+        packet_dir = finding.import_result.finding_dir / "packets" / packet_id
+        packet_dir.mkdir(parents=True)
+        packet_bytes = b"# exact existing packet\n"
+        state_bytes = finding.authoring_base_state_path.read_bytes()
+        files = {"packet.md": packet_bytes, "state.json": state_bytes}
+        for name, payload in files.items():
+            (packet_dir / name).write_bytes(payload)
+        manifest = {
+            "bundle_manifest_version": 2,
+            "packet_version": 6,
+            "packet_id": packet_id,
+            "finding_id": finding.finding_id,
+            "selected_fractal_type": "explaino_all",
+            "authority_identities": {
+                "state_sha256": finding.authoring_base_sha256,
+            },
+            "required_attachments": ["state.json"],
+            "recommended_attachments": [],
+            "unavailable_optional_attachments": [],
+            "files": [
+                {
+                    "path": name,
+                    "role": "fixture",
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                    "size_bytes": len(payload),
+                    "web_handoff": "index" if name == "packet.md" else "required",
+                }
+                for name, payload in files.items()
+            ],
+        }
+        (packet_dir / "manifest.json").write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return packet_dir
+
     def test_finding_import_preserves_field_notes_and_exposes_exact_context(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -119,6 +159,42 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertGreater(session.generation, generation)
             self.assertIsNone(session.bundle)
             self.assertTrue(session.override_text)
+
+    def test_existing_packet_load_is_read_only_and_preserves_exact_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            finding = load_finding_context(self._capture(root), root / "workspace")
+            packet_dir = self._existing_packet(finding)
+            workspace_bytes = finding.import_result.workspace_manifest_path.read_bytes()
+            packet_dirs_before = sorted(path.name for path in packet_dir.parent.iterdir())
+
+            context = load_existing_packet_context(packet_dir)
+
+            self.assertEqual(context.finding.finding_id, finding.finding_id)
+            self.assertEqual(context.bundle.packet_id, packet_dir.name)
+            self.assertEqual(context.bundle.packet_dir, packet_dir.resolve())
+            self.assertEqual(
+                finding.import_result.workspace_manifest_path.read_bytes(),
+                workspace_bytes,
+            )
+            self.assertEqual(
+                sorted(path.name for path in packet_dir.parent.iterdir()),
+                packet_dirs_before,
+            )
+
+            detached_packet = root / "detached" / packet_dir.name
+            shutil.copytree(packet_dir, detached_packet)
+            with self.assertRaisesRegex(ValueError, "must use <workspace>/findings"):
+                load_existing_packet_context(detached_packet)
+
+            manifest_path = packet_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["authority_identities"]["state_sha256"] = "f" * 64
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "base state does not match"):
+                load_existing_packet_context(packet_dir)
 
     def test_revision_is_immutable_boundary_and_reset_preserves_durable_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -83,6 +83,24 @@ Let's do that. Return the exact sparse state override for this finding.
 Do not add a camera reminder to that trigger. The test is whether Packet V6 itself
 causes the agent to apply the continuity rule.
 
+## Return the override to the exact packet
+
+After the web agent returns its sparse state override:
+
+1. Launch the application normally with `.\run_ui.cmd`.
+2. In `Capture or Packet V6 folder`, paste the exact packet directory recorded
+   for that fixture, or choose it with `Browse Folder`.
+3. Click `Open Finding / Packet`.
+4. Verify that `Exact bundle binding` shows the recorded packet ID. The status
+   line must say that the existing immutable bundle was loaded.
+5. Paste the returned JSON into `Incoming State Override JSON` and continue with
+   `Validate & Replay Prove`.
+
+Do not click `Refresh Bundle` during this test. That command intentionally creates
+a new immutable packet and therefore a new binding. Loading an existing packet
+does not rewrite the packet, reimport the finding, or create another packet
+directory.
+
 ## Acceptance checklist
 
 - All required files are accepted, retain their names, and remain inspectable.
@@ -117,6 +135,10 @@ causes the agent to apply the continuity rule.
   `VISUAL REVIEW PENDING` with launch disabled.
 - Raw screenshots and receipt paths are retained under
   `.local/catalog_viewport_continuity_ui/`.
+- A real desktop walkthrough also loaded the exact pre-existing control packet
+  `7dd8d89c-7f32-4d64-8bca-8d4e41f7ec4e` through the ordinary finding input,
+  preserved its manifest and finding hashes, and created no replacement packet.
+  Evidence is retained under `.local/existing_packet_ui_gate/`.
 
 ## Stop condition
 

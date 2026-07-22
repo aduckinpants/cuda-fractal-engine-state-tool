@@ -51,6 +51,14 @@ and immutable Agent Bundle V6. `Copy Packet` copies only `packet.md`; `Open Agen
 Bundle Folder` exposes the exact authority files and frame that must be attached
 separately to a web session.
 
+The ordinary `Capture or Packet V6 folder` input accepts either a source capture
+or an already-published Packet V6 directory. Opening an existing packet binds
+that exact packet and its durable finding read-only; it does not import the
+packet as a capture or generate a replacement packet. This is the supported path
+for pasting an override returned for a packet prepared before the UI session.
+`Refresh Bundle` is a deliberate new-packet operation and must not be used when
+testing a response bound to the existing packet.
+
 The right side starts with an empty State Override editor. It accepts one sparse
 state-shaped JSON object. Proof performs no action translation: it loads the
 complete deterministic merged state through the published runtime, captures the

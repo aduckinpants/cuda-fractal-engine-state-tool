@@ -26,7 +26,14 @@ from .state_override_proof import (
     record_state_override_review,
     validate_state_override_launch_readiness,
 )
-from .user_workflow import FindingContext, SessionState, UserWorkflowSession, load_finding_context
+from .user_workflow import (
+    ExistingPacketContext,
+    FindingContext,
+    SessionState,
+    UserWorkflowSession,
+    load_existing_packet_context,
+    load_finding_context,
+)
 
 
 DEFAULT_FINDING_WORKSPACE = Path(r"D:\salt-fractal\cuda-fractal-engine-state-tool")
@@ -126,7 +133,7 @@ class UserWorkflowApp:
         source = ttk.LabelFrame(self.left, text="1. Finding intake", padding=8)
         source.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         source.columnconfigure(1, weight=1)
-        ttk.Label(source, text="Capture source").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        ttk.Label(source, text="Capture or Packet V6 folder").grid(row=0, column=0, sticky="w", padx=(0, 8))
         ttk.Entry(source, textvariable=self.source_path_var).grid(row=0, column=1, sticky="ew")
         ttk.Button(source, text="Browse File…", command=self._browse_file).grid(row=0, column=2, padx=(6, 0))
         ttk.Button(source, text="Browse Folder…", command=self._browse_folder).grid(row=0, column=3, padx=(6, 0))
@@ -137,11 +144,14 @@ class UserWorkflowApp:
         ttk.Button(source, text="Browse…", command=self._browse_workspace).grid(
             row=1, column=3, padx=(6, 0), pady=(6, 0)
         )
-        self.open_finding_button = ttk.Button(source, text="Open Finding", command=self.open_finding)
+        self.open_finding_button = ttk.Button(source, text="Open Finding / Packet", command=self.open_finding)
         self.open_finding_button.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(8, 0))
         ttk.Label(
             source,
-            text="The capture remains read-only; exact artifacts are mirrored into the durable workspace.",
+            text=(
+                "Captures remain read-only and are mirrored into the durable workspace. "
+                "An existing Packet V6 folder is bound read-only without refresh."
+            ),
             wraplength=620,
         ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
@@ -278,7 +288,7 @@ class UserWorkflowApp:
     def _browse_folder(self) -> None:
         from tkinter import filedialog
 
-        path = filedialog.askdirectory(title="Choose capture bundle folder")
+        path = filedialog.askdirectory(title="Choose capture bundle or existing Packet V6 folder")
         if path:
             self.source_path_var.set(path)
 
@@ -295,11 +305,33 @@ class UserWorkflowApp:
             self.workspace_root_var.set(str(workspace_root))
         self.open_finding()
 
+    def open_packet_path(self, packet_dir: Path) -> None:
+        self.source_path_var.set(str(packet_dir))
+        self.runner.cancel_all()
+        self._busy_kinds.clear()
+        generation = self.session.begin_finding_change()
+        self._clear_finding_views(retain_override=True)
+        self.session.status_text = "Loading one existing immutable Agent Bundle V6 binding…"
+        self._submit(
+            "packet_load",
+            JobRequestIdentity(generation=generation),
+            lambda _context: load_existing_packet_context(packet_dir),
+            self._packet_context_loaded,
+        )
+        self._render()
+
     def open_finding(self) -> None:
         source_text = self.source_path_var.get().strip()
         workspace_text = self.workspace_root_var.get().strip()
-        if not source_text or not workspace_text:
-            self._set_error("Capture source and durable workspace are both required.")
+        if not source_text:
+            self._set_error("A capture source or existing Packet V6 folder is required.")
+            return
+        source_path = Path(source_text)
+        if source_path.is_dir() and (source_path / "packet.md").is_file() and (source_path / "manifest.json").is_file():
+            self.open_packet_path(source_path)
+            return
+        if not workspace_text:
+            self._set_error("A durable workspace is required when importing a capture source.")
             return
         self.runner.cancel_all()
         self._busy_kinds.clear()
@@ -308,7 +340,7 @@ class UserWorkflowApp:
         self._submit(
             "finding_import",
             JobRequestIdentity(generation=generation),
-            lambda _context: load_finding_context(Path(source_text), Path(workspace_text)),
+            lambda _context: load_finding_context(source_path, Path(workspace_text)),
             self._finding_loaded,
         )
         self._render()
@@ -329,6 +361,33 @@ class UserWorkflowApp:
             return
         self.session.accept_finding(finding)
         self._set_text(self.summary_text, finding.summary_text)
+        self._start_base_preview(finding)
+        self.build_packet()
+        self._render()
+
+    def _packet_context_loaded(self, outcome: JobOutcome) -> None:
+        self._busy_kinds.discard(outcome.kind)
+        if outcome.identity.generation != self.session.generation or outcome.cancelled:
+            self._render()
+            return
+        if outcome.error:
+            self._set_error(f"Existing Agent Bundle V6 load failed: {outcome.error}")
+            self._render()
+            return
+        context = outcome.value
+        if not isinstance(context, ExistingPacketContext):
+            self._set_error("Existing packet load returned an invalid result.")
+            self._render()
+            return
+        finding = context.finding
+        self.workspace_root_var.set(str(finding.workspace_root))
+        self.session.accept_finding(finding)
+        self._set_text(self.summary_text, finding.summary_text)
+        self._start_base_preview(finding)
+        self._activate_bundle(context.bundle, loaded_existing=True)
+        self._render()
+
+    def _start_base_preview(self, finding: FindingContext) -> None:
         if finding.primary_frame_path is not None:
             self.preview_status_var.set("Building bounded base preview…")
             identity = JobRequestIdentity(
@@ -348,8 +407,6 @@ class UserWorkflowApp:
             )
         else:
             self.preview_status_var.set("Finding has no primary frame; bundle work remains available.")
-        self.build_packet()
-        self._render()
 
     def _base_preview_loaded(self, outcome: JobOutcome) -> None:
         self._busy_kinds.discard(outcome.kind)
@@ -428,6 +485,10 @@ class UserWorkflowApp:
             self._set_error("Bundle generation returned an invalid result.")
             self._render()
             return
+        self._activate_bundle(bundle, loaded_existing=False)
+        self._render()
+
+    def _activate_bundle(self, bundle: AgentBundle, *, loaded_existing: bool) -> None:
         handoff = load_agent_bundle_handoff(bundle.packet_dir)
         self.session.accept_bundle(bundle)
         self._set_text(self.packet_text, handoff.packet_text)
@@ -443,7 +504,11 @@ class UserWorkflowApp:
         self.attachment_var.set(
             f"Attach required: {required}\nRecommended: {recommended} · Unavailable optional: {unavailable}"
         )
-        self._render()
+        if loaded_existing:
+            self.session.status_text = (
+                f"Loaded existing immutable Agent Bundle V6 {bundle.packet_id}; "
+                "paste the override returned for this exact packet."
+            )
 
     def copy_packet(self) -> None:
         bundle = self.session.bundle

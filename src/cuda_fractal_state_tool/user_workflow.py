@@ -5,8 +5,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from .agent_bundle import AgentBundle
-from .finding_workspace import ImportResult, SourceCaptureImporter
+from .agent_bundle import AgentBundle, load_existing_agent_bundle
+from .finding_workspace import FINDINGS_INDEX_FILENAME, ImportResult, SourceCaptureImporter
 from .json_utils import loads_no_duplicates
 from .preview_service import PreviewResult
 from .runtime_surface import sha256_file
@@ -46,6 +46,12 @@ class FindingContext:
     @property
     def authoring_base_sha256(self) -> str:
         return self.import_result.authoring_base_state_sha256
+
+
+@dataclass(frozen=True)
+class ExistingPacketContext:
+    finding: FindingContext
+    bundle: AgentBundle
 
 
 @dataclass
@@ -201,6 +207,13 @@ def _resolve_artifact(finding_dir: Path, workspace_path: Any, label: str) -> Opt
 def load_finding_context(source_capture_path: Path, workspace_root: Path) -> FindingContext:
     importer = SourceCaptureImporter(workspace_root)
     import_result = importer.import_capture(source_capture_path)
+    return _load_finding_context_from_import(import_result, workspace_root.resolve())
+
+
+def _load_finding_context_from_import(
+    import_result: ImportResult,
+    workspace_root: Path,
+) -> FindingContext:
     manifest = _load_object(import_result.workspace_manifest_path, "Finding workspace manifest")
     finding_dir = import_result.finding_dir.resolve()
     authoring_base = manifest.get("authoring_base")
@@ -261,3 +274,45 @@ def load_finding_context(source_capture_path: Path, workspace_root: Path) -> Fin
         primary_frame_path=frame_path,
         summary_text="\n".join(summary_lines),
     )
+
+
+def load_existing_packet_context(packet_dir: Path) -> ExistingPacketContext:
+    """Bind an existing immutable packet to its durable finding without regeneration."""
+    bundle = load_existing_agent_bundle(packet_dir)
+    resolved_packet_dir = bundle.packet_dir.resolve()
+    packets_dir = resolved_packet_dir.parent
+    finding_dir = packets_dir.parent
+    findings_dir = finding_dir.parent
+    workspace_root = findings_dir.parent
+    if packets_dir.name != "packets" or findings_dir.name != "findings":
+        raise ValueError(
+            "Existing Packet V6 must use <workspace>/findings/<finding-id>/packets/<packet-id>"
+        )
+    if finding_dir.name != bundle.finding_id:
+        raise ValueError("Packet V6 finding_id does not match its durable finding directory")
+    workspace_manifest_path = finding_dir / "workspace.json"
+    workspace_manifest = _load_object(workspace_manifest_path, "Finding workspace manifest")
+    if workspace_manifest.get("finding_id") != bundle.finding_id:
+        raise ValueError("Packet V6 finding_id disagrees with the durable workspace manifest")
+    authoring_base = workspace_manifest.get("authoring_base")
+    if not isinstance(authoring_base, dict) or not isinstance(authoring_base.get("sha256"), str):
+        raise ValueError("Finding workspace manifest has no authoring-base hash")
+    manifest = _load_object(bundle.manifest_path, "Packet V6 manifest")
+    authority_identities = manifest.get("authority_identities")
+    if not isinstance(authority_identities, dict):
+        raise ValueError("Packet V6 manifest has no authority_identities")
+    if authority_identities.get("state_sha256") != authoring_base["sha256"]:
+        raise ValueError("Packet V6 base state does not match its durable finding")
+    import_result = ImportResult(
+        finding_id=bundle.finding_id,
+        finding_dir=finding_dir,
+        workspace_manifest_path=workspace_manifest_path,
+        findings_index_path=workspace_root / FINDINGS_INDEX_FILENAME,
+        workspace_index_updated=(workspace_root / FINDINGS_INDEX_FILENAME).is_file(),
+        authoring_base_state_sha256=authoring_base["sha256"],
+    )
+    finding = _load_finding_context_from_import(import_result, workspace_root)
+    state = _load_object(finding.authoring_base_state_path, "Authoring base state")
+    if state.get("fractal_type") != bundle.selected_fractal_type:
+        raise ValueError("Packet V6 selected fractal disagrees with its durable authoring base")
+    return ExistingPacketContext(finding=finding, bundle=bundle)

@@ -165,6 +165,35 @@ def load_agent_bundle_handoff(packet_dir: Path) -> AgentBundleHandoff:
     )
 
 
+def load_existing_agent_bundle(packet_dir: Path) -> AgentBundle:
+    """Load one immutable Packet V6 without refreshing or rewriting it."""
+    handoff = load_agent_bundle_handoff(packet_dir)
+    manifest_path = handoff.packet_dir / "manifest.json"
+    manifest = _load_json_object(manifest_path.read_bytes(), "Packet V6 manifest")
+    packet_id = manifest.get("packet_id")
+    finding_id = manifest.get("finding_id")
+    selected = manifest.get("selected_fractal_type")
+    if not isinstance(packet_id, str) or packet_id != handoff.packet_dir.name:
+        raise ValueError("Packet V6 packet_id does not match its immutable directory name")
+    if not isinstance(finding_id, str) or not finding_id:
+        raise ValueError("Packet V6 manifest has no finding_id")
+    if not isinstance(selected, str) or not selected:
+        raise ValueError("Packet V6 manifest has no selected_fractal_type")
+    return AgentBundle(
+        packet_id=packet_id,
+        packet_dir=handoff.packet_dir,
+        packet_path=(handoff.packet_dir / "packet.md").resolve(),
+        packet_sha256=handoff.packet_sha256,
+        manifest_path=manifest_path.resolve(),
+        manifest_sha256=sha256_file(manifest_path),
+        finding_id=finding_id,
+        selected_fractal_type=selected,
+        required_attachments=handoff.required_attachments,
+        recommended_attachments=handoff.recommended_attachments,
+        unavailable_optional_attachments=handoff.unavailable_optional_attachments,
+    )
+
+
 def copy_agent_packet(packet_dir: Path, clipboard_writer: Callable[[str], None]) -> AgentBundleHandoff:
     handoff = load_agent_bundle_handoff(packet_dir)
     clipboard_writer(handoff.packet_text)

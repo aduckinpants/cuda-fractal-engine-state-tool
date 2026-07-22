@@ -2,7 +2,8 @@
 
 ## Status
 
-Active implementation plan on `codex/catalog-viewport-continuity-integration`.
+Acceptance-ready on `codex/catalog-viewport-continuity-integration`; external
+agent/override review remains the active manual boundary.
 
 ## Exact engine handoff
 
@@ -71,6 +72,9 @@ The sparse override remains a state-shaped object.
 - [x] Phase 4 — run focused and full tests, generate real representative
   high-zoom bundles, perform hostile review, commit/push, and stop at the manual
   web-session review boundary.
+- [x] Phase 5 — close the manual-return binding gap by allowing the ordinary
+  finding input to detect and bind an existing immutable Packet V6 directory
+  read-only, without packet refresh or a parallel command-line workflow.
 
 ## Hostile review findings
 
@@ -83,6 +87,12 @@ The sparse override remains a state-shaped object.
 - Capture-sidecar bytes are preserved only when the exact bound runtime reproduces
   them for the copied state. Older captures without a sidecar use a clearly
   identified runtime-derived authority instead of a historical fallback.
+- Preparing packets before the external session exposed a return-path defect:
+  reopening the original capture generated a different packet identity, so the
+  returned override could not be tested against its exact authority bundle.
+  The ordinary input now recognizes a structurally valid existing packet,
+  verifies its complete manifest and durable finding/base binding, and activates
+  it without mutation. Malformed or displaced packet directories fail closed.
 
 ## Boundaries
 
