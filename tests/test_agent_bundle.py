@@ -451,6 +451,17 @@ class AgentBundleTests(unittest.TestCase):
             self.assertIn("feature_tracking", packet)
             self.assertIn("transition_survey", packet)
             self.assertIn("Small numerical changes do not establish small visual changes", packet)
+            self.assertIn("Chosen experiment", packet)
+            self.assertIn("Why this override", packet)
+            self.assertIn("Expected effect and uncertainty", packet)
+            self.assertIn("Camera intent and viewport check", packet)
+            self.assertIn("Hostile self-review conclusion", packet)
+            self.assertIn("A sweep cannot be encoded as one override", packet)
+            self.assertIn("Generic assent", packet)
+            self.assertIn("predicted to intersect the exact retained viewport", packet)
+            self.assertIn("intentionally expected to lose the subject", packet)
+            self.assertIn("Do not provide private chain-of-thought", packet)
+            self.assertIn("no other code block", packet)
             self.assertIn("fractal-viewport-facts.json", bundle.required_attachments)
             self.assertEqual(
                 manifest["authority_identities"]["fractal_viewport_facts_sha256"],

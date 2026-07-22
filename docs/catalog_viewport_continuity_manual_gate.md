@@ -1,6 +1,7 @@
 # Catalog And Viewport Continuity Manual Gate
 
-Status: acceptance-ready; downstream web-session review is pending user execution.
+Status: calibration reopened after the first downstream session exposed an
+override-decision ambiguity; a hardened primary packet is pending regeneration.
 
 ## What this gate tests
 
@@ -106,6 +107,12 @@ directory.
 - All required files are accepted, retain their names, and remain inspectable.
 - Exploration begins before configuration output.
 - No override is emitted before a concrete trigger.
+- Generic assent after multiple experiments, alternatives, or a multi-value
+  sweep produces one clarification question unless the user explicitly
+  delegates selection.
+- The eventual response visibly identifies the chosen experiment, why its paths
+  change, its expected effect and largest uncertainty, its camera/viewport
+  conclusion, and its hostile self-review conclusion.
 - The agent uses the selected catalog entry as general background rather than
   claiming capture-specific causality from it.
 - The agent uses `fractal-viewport-facts.json` as geometry authority and does not
@@ -113,12 +120,19 @@ directory.
 - A color-only change preserves the exact camera unless reframing was requested.
 - A non-color dynamics change at meaningful zoom states one camera intent in
   prose: `same_window_comparison`, `feature_tracking`, or `transition_survey`.
+- `same_window_comparison` states whether the relevant subject should intersect
+  the exact retained viewport. Predictable subject loss is permitted only as an
+  explicitly selected fixed-window disappearance control.
+- `feature_tracking` or `transition_survey` prose that requires reframing agrees
+  with complete companion-paired `view` changes in the JSON.
 - Small numeric magnitude is not used as evidence of small visual impact.
 - Unique continuation, split, merge, disappearance, and ambiguity are handled as
   distinct cases.
 - If feature motion cannot be grounded, the response states that limitation and
   uses an honest comparison or survey framing.
 - The response returns one sparse state-shaped JSON object without an envelope.
+- The response contains exactly one fenced JSON block and no other code block;
+  its visible preflight remains prose and is not pasted into the state tool.
 - Any view edit includes the required serialized companion values.
 - The UI validator either accepts the object or returns a precise contract error;
   an engine or schema rejection is not silently rewritten into a different change.

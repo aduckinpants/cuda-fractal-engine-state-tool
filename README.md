@@ -118,6 +118,14 @@ intent in prose: `same_window_comparison`, `feature_tracking`, or
 `transition_survey`. Exact fitting uses the attached engine viewport facts;
 Python does not duplicate renderer camera mathematics or choose a subject.
 
+An override response also carries a concise visible decision preflight before
+its single fenced JSON block: the selected experiment, why each path changes,
+the expected effect and uncertainty, the camera/viewport conclusion, and a
+hostile self-review conclusion. Generic assent after multiple experiments or a
+multi-value sweep requires clarification. An unchanged high-zoom window is not
+silently retained when the predicted subject leaves it unless the user
+explicitly selects that disappearance as a fixed-window control.
+
 The merged runtime exposes an explicit engine-owned loaded-draft application
 operation. State-tool materialization invokes it only when the sparse override
 contains `color_pipeline_draft`; ordinary state loading and action-free replay
