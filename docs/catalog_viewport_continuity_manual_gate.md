@@ -32,6 +32,23 @@ simulate or self-grade the external model sessions.
 - `log2_zoom`: `6.6001691399968774`
 - Complex frame size: `0.065967661108452882 × 0.04122978819278305`
 
+The packet above is retained as the exact first-session artifact. It exposed
+the decision-preflight defect and must not be reused for the hardened
+calibration.
+
+### Hardened primary calibration packet
+
+- Packet ID: `2a8f4d43-a08b-487b-9ad8-49bd88b8e06f`
+- Packet directory: `D:\salt-fractal\cuda-fractal-engine-state-tool\findings\cc2cb68da25f649f2de674750b04c2b15f5e1416a806a0329b09743491525e63\packets\2a8f4d43-a08b-487b-9ad8-49bd88b8e06f`
+- Manifest SHA-256: `afad5724a217f3f55ae3c09cf819d357966030e29dc15222bfcda3e0fd2cb1d6`
+- Packet SHA-256: `42042589b1c91f0a2ec2bfbf5d6c223551c9b668b17d09d800736580504f7c19`
+- Runtime identity SHA-256: `140707fd16283ac2db3c58a24146b73a7f29bbd15b0e1b36771c301f8b275e95`
+- Base state SHA-256: `e68e611fd1b8014f98a59af689b53c299585bd62d8ed15dd3b81c1eadaba504d`
+- Viewport-facts SHA-256: `4d40f7c64149ff112842fcefa0f49b0021e6b2a01703058c8267cc328d5eb934`
+
+This new immutable packet is the required input for the next manual session.
+The historical packet and its failed proof remain untouched.
+
 ## Contrast fixture — ExplainO Multibrot root-trap
 
 - Capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-21\230610_719__explaino_multibrot_root_trap`
@@ -81,8 +98,17 @@ When the agent has described one concrete change worth testing:
 Let's do that. Return the exact sparse state override for this finding.
 ```
 
-Do not add a camera reminder to that trigger. The test is whether Packet V6 itself
-causes the agent to apply the continuity rule.
+If the preceding response offered multiple experiments, alternatives, or a
+multi-value sweep, the correct response is one clarification question rather
+than JSON. If clarification is requested, select one state without adding a
+camera reminder. For reproducing the first-session seam, use:
+
+```text
+Use the lambda = 4/27 point as one frame from the bifurcation experiment.
+```
+
+The test is whether Packet V6 itself causes the agent to perform the viewport
+check and produce the visible decision preflight.
 
 ## Return the override to the exact packet
 

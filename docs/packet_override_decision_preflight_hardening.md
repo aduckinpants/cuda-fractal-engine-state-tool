@@ -119,7 +119,7 @@ change appears in JSON, and the largest expected uncertainty is visible.
   the baseline, hostile-review the scope, and checkpoint cleanly.
 - [x] Slice 1 — implement the response/preflight guidance, update tests and
   active documentation, run focused/full/workflow proof, and checkpoint cleanly.
-- [ ] Slice 2 — regenerate the original McMullen packet, verify exact local
+- [x] Slice 2 — regenerate the original McMullen packet, verify exact local
   authority and handoff evidence, and stop for the user-run web calibration.
 - [ ] Slice 3 — after primary acceptance, regenerate the remaining fixtures,
   finish manual acceptance, close documentation, and merge the state-tool PR
@@ -143,3 +143,33 @@ Hostile review confirmed that the guidance does not create a second schema or
 ask for hidden reasoning. It requires only visible decision conclusions, leaves
 the sparse JSON unchanged, applies after the exploration phase, and makes the
 existing human candidate-preview gate the final visual authority.
+
+## Slice 2 manual calibration handoff
+
+The hardened primary packet is:
+
+```text
+D:\salt-fractal\cuda-fractal-engine-state-tool\findings\cc2cb68da25f649f2de674750b04c2b15f5e1416a806a0329b09743491525e63\packets\2a8f4d43-a08b-487b-9ad8-49bd88b8e06f
+```
+
+- Packet SHA-256: `42042589b1c91f0a2ec2bfbf5d6c223551c9b668b17d09d800736580504f7c19`
+- Manifest SHA-256: `afad5724a217f3f55ae3c09cf819d357966030e29dc15222bfcda3e0fd2cb1d6`
+- Runtime identity SHA-256: `140707fd16283ac2db3c58a24146b73a7f29bbd15b0e1b36771c301f8b275e95`
+- Runtime executable SHA-256: `ae329398693a5872faced0fa6f9cf57868788fc975b07ece5150954ac4face78`
+- Base state SHA-256: `e68e611fd1b8014f98a59af689b53c299585bd62d8ed15dd3b81c1eadaba504d`
+- Viewport-facts SHA-256: `4d40f7c64149ff112842fcefa0f49b0021e6b2a01703058c8267cc328d5eb934`
+
+The bundle inspector and ordinary existing-packet workflow loader both accepted
+the new directory, selected `mcmullen`, and recovered the exact durable finding
+without refresh. All nine required and three recommended attachments are
+present. The historical packet retained its recorded packet and manifest
+hashes, proving that regeneration did not mutate it.
+
+The front-loaded packet grew from 9,834 to 12,031 UTF-8 bytes (26 additional
+lines). Hostile review accepted that bounded increase because it carries the
+five operative decision checks without duplicating any attached authority or
+adding another schema.
+
+The execution agent stops here. The user runs the external session described in
+`docs/catalog_viewport_continuity_manual_gate.md`; Slice 3 remains blocked until
+that transcript and candidate result are supplied.
