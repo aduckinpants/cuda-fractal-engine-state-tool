@@ -377,17 +377,59 @@ class StateOverrideTests(unittest.TestCase):
             self.assertEqual(result.conceptual_domains, ("view.center_x",))
             self.assertEqual(len(result.changed_paths), 2)
 
-    def test_pipeline_draft_authoring_fails_closed_without_engine_lowering(self) -> None:
+    def test_pipeline_draft_authoring_uses_copied_contract_and_preserves_topology(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             packet, state, _, _ = self._packet(Path(temp_dir))
             override = self._pipeline_override(state)
             grading = override["color_pipeline_draft"]["lanes"][3]["rows"][0]
             grading["parameter_values"][1]["number_value"] = 1.5
-            with self.assertRaisesRegex(ValueError, "no authoritative direct-state lowering"):
+            output = Path(temp_dir) / "pipeline.json"
+            result = materialize_state_override(packet, json.dumps(override), output)
+            merged = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(
+                merged["color_pipeline_draft"]["lanes"][3]["rows"][0]["parameter_values"][1]["number_value"],
+                1.5,
+            )
+            self.assertIn("color_pipeline_draft", result.conceptual_domains)
+
+            unchanged = self._pipeline_override(state)
+            with self.assertRaisesRegex(ValueError, "must change at least one"):
                 materialize_state_override(
                     packet,
-                    json.dumps(override),
-                    Path(temp_dir) / "pipeline.json",
+                    json.dumps(unchanged),
+                    Path(temp_dir) / "unchanged-pipeline.json",
+                )
+
+            topology_changes = []
+            changed_label = self._pipeline_override(state)
+            changed_label["color_pipeline_draft"]["lanes"][0]["label"] = "Changed"
+            topology_changes.append(changed_label)
+            changed_row_id = self._pipeline_override(state)
+            changed_row_id["color_pipeline_draft"]["lanes"][0]["rows"][0]["ui_row_id"] = 99
+            topology_changes.append(changed_row_id)
+            changed_enablement = self._pipeline_override(state)
+            changed_enablement["color_pipeline_draft"]["lanes"][0]["rows"][0]["enabled"] = False
+            topology_changes.append(changed_enablement)
+            added_row = self._pipeline_override(state)
+            added_row["color_pipeline_draft"]["lanes"][0]["rows"].append(
+                json.loads(json.dumps(added_row["color_pipeline_draft"]["lanes"][0]["rows"][0]))
+            )
+            topology_changes.append(added_row)
+            for index, invalid in enumerate(topology_changes):
+                with self.subTest(index=index), self.assertRaisesRegex(ValueError, "topology"):
+                    materialize_state_override(
+                        packet,
+                        json.dumps(invalid),
+                        Path(temp_dir) / f"bad-topology-{index}.json",
+                    )
+
+            wrong_parameters = self._pipeline_override(state)
+            wrong_parameters["color_pipeline_draft"]["lanes"][3]["rows"][0]["parameter_values"].reverse()
+            with self.assertRaisesRegex(ValueError, "contract order"):
+                materialize_state_override(
+                    packet,
+                    json.dumps(wrong_parameters),
+                    Path(temp_dir) / "bad-parameters.json",
                 )
 
     def test_copied_schema_change_changes_validation_without_python_metadata(self) -> None:

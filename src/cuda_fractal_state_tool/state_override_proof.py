@@ -21,6 +21,7 @@ from .async_jobs import AsyncJobRunner, JobCancelledError, JobContext, JobReques
 from .json_utils import loads_strict_no_duplicates
 from .runtime_surface import (
     build_detached_viewer_launch_command,
+    build_materialization_command,
     build_replay_command,
     build_runtime_identity,
     runtime_identity_summary,
@@ -276,8 +277,20 @@ def _run_capture(
     state_path: Path,
     output_dir: Path,
     timeout_seconds: float,
+    *,
+    apply_loaded_draft: bool = False,
 ) -> tuple[Any, list[str]]:
-    command = build_replay_command(runtime_cmd_path.resolve(), state_path.resolve(), output_dir.resolve())
+    if apply_loaded_draft:
+        command = build_materialization_command(
+            runtime_cmd_path.resolve(),
+            state_path.resolve(),
+            output_dir.resolve(),
+            apply_loaded_draft=True,
+        )
+    else:
+        command = build_replay_command(
+            runtime_cmd_path.resolve(), state_path.resolve(), output_dir.resolve()
+        )
     result = job.run_process(command, runtime_cmd_path.resolve().parent, timeout_seconds=timeout_seconds)
     _atomic_write(output_dir / "stdout.txt", result.stdout.encode("utf-8"))
     _atomic_write(output_dir / "stderr.txt", result.stderr.encode("utf-8"))
@@ -435,7 +448,12 @@ def execute_state_override_proof(
 
     try:
         materialization_result, materialization_command = _run_capture(
-            job, runtime_cmd_path, merged_path, materialization_dir, timeout_seconds
+            job,
+            runtime_cmd_path,
+            merged_path,
+            materialization_dir,
+            timeout_seconds,
+            apply_loaded_draft=materialization.apply_loaded_color_pipeline_draft,
         )
         engine_state = materialization_dir / "state.json"
         engine_frame = materialization_dir / "frame.bmp"
@@ -507,6 +525,9 @@ def execute_state_override_proof(
                 "changed_paths": [asdict(change) for change in materialization.changed_paths],
                 "conceptual_domains": list(materialization.conceptual_domains),
                 "camera_edits": list(materialization.camera_edits),
+                "apply_loaded_color_pipeline_draft": (
+                    materialization.apply_loaded_color_pipeline_draft
+                ),
             },
             "merged_candidate": {
                 "path": "merged_candidate.json",
@@ -516,6 +537,9 @@ def execute_state_override_proof(
             "requested_value_receipts": requested_values,
             "materialization": {
                 **_process_receipt(materialization_result, materialization_command),
+                "applied_loaded_color_pipeline_draft": (
+                    materialization.apply_loaded_color_pipeline_draft
+                ),
                 "state_path": "materialization/state.json",
                 "state_sha256": sha256_file(engine_state),
                 "frame_path": "materialization/frame.bmp",
@@ -553,7 +577,7 @@ def execute_state_override_proof(
         return _proof_result(
             status="replay_proven",
             proof_id=proof_id,
-            message="Direct-state materialization and action-free replay are proven; visual review is pending.",
+            message="Engine materialization and action-free replay are proven; visual review is pending.",
             proof_dir=proof_dir,
             packet_dir=packet_dir,
             packet_id=packet_id,

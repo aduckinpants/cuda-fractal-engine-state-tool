@@ -2,8 +2,8 @@
 
 > Historical checkpoint: the typed draft proof below established persistence
 > and deterministic replay, but Slice 5 base/candidate pixel comparison proved
-> the draft-only edit visually inert. Active draft authoring now fails closed;
-> see `slice5_real_acceptance_checkpoint.md`.
+> the then-current draft-only load visually inert. The merged engine now exposes
+> explicit authoritative lowering; see `slice5_color_pipeline_engine_integration.md`.
 
 Status: direct-state materialization, replay, immutable evidence, review decisions,
 and exact-candidate launch readiness are implemented and locally accepted.

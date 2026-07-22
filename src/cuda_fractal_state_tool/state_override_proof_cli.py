@@ -11,7 +11,7 @@ from .state_override_proof import run_state_override_proof_sync
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Prove one Packet V6 state override through direct engine materialization and replay"
+        description="Prove one Packet V6 state override through engine materialization and action-free replay"
     )
     parser.add_argument("--packet-dir", type=Path, required=True)
     parser.add_argument("--override", type=Path, required=True, help="Exact UTF-8 state override JSON")

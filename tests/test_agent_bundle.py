@@ -368,8 +368,10 @@ class AgentBundleTests(unittest.TestCase):
             self.assertNotIn("proposal_v1", packet)
             self.assertNotIn("capability_profile", packet)
             self.assertNotIn("select_function", packet)
-            self.assertIn("Do not return `color_pipeline_draft`", packet)
-            self.assertIn("for inspection only", packet)
+            self.assertIn("You may return `color_pipeline_draft`", packet)
+            self.assertIn("applies that loaded draft through the engine-owned lowering operation", packet)
+            self.assertIn("unchanged structural template", packet)
+            self.assertNotIn("pending editor state", packet)
             self.assertNotIn("state-override-example-color-pipeline.json", bundle.required_attachments)
             self.assertIn("state-override-example-color-pipeline.json", bundle.recommended_attachments)
 

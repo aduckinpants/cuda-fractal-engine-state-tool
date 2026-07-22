@@ -1,8 +1,9 @@
 # Slice 5 Real Acceptance Checkpoint
 
-Status: scalar and camera paths are accepted; direct-state Color Pipeline draft
-authoring is classified as blocked pending an engine-authoritative lowering
-contract or entry point.
+Status: historical negative authority checkpoint. Scalar and camera paths were
+accepted here; the Color Pipeline limitation recorded below was later resolved
+by the merged engine-owned application operation documented in
+`slice5_color_pipeline_engine_integration.md`.
 
 ## Scalar launch and recapture acceptance
 
@@ -110,8 +111,8 @@ field mapping.
 
 The state tool must not infer that mapping from equal captured values, duplicate
 engine tables, or recreate `ApplyColorPipelineDraftToLiveState` in Python.
-Accordingly, the Color Pipeline acceptance gate does not pass under the current
-direct-state-only contract.
+Accordingly, the Color Pipeline acceptance gate did not pass under the
+direct-state-only contract that existed at this checkpoint.
 
 ## Hardening added at this checkpoint
 
@@ -124,8 +125,6 @@ candidate.
 
 ## Decision boundary
 
-Do not reintroduce Python action lowering or a handwritten Color Pipeline
-mapping. Before claiming typed draft authoring, choose and approve one
-engine-authoritative seam, such as an engine operation that applies the loaded
-validated draft, or a deterministic exported lowering contract. Engine changes
-remain unauthorized under the current campaign.
+This boundary was resolved by merged CUDA-engine PR #4. The state tool continues
+to forbid Python action lowering and handwritten Color Pipeline mappings; it now
+uses the engine's explicit loaded-draft operation for materialization only.

@@ -137,5 +137,28 @@ def build_replay_command(runtime_cmd_path: Path, candidate_path: Path, replay_di
     )
 
 
+def build_materialization_command(
+    runtime_cmd_path: Path,
+    candidate_path: Path,
+    materialization_dir: Path,
+    *,
+    apply_loaded_draft: bool,
+) -> list[str]:
+    args = [
+        "--load-state-json",
+        os.path.abspath(str(candidate_path)),
+    ]
+    if apply_loaded_draft:
+        args.append("--apply-loaded-color-pipeline-draft")
+    args.extend(
+        [
+            "--capture-diagnostic",
+            "--diagnostics-out-dir",
+            os.path.abspath(str(materialization_dir)),
+        ]
+    )
+    return build_runtime_command(runtime_cmd_path, *args)
+
+
 def build_detached_viewer_launch_command(runtime_cmd_path: Path, state_path: Path) -> list[str]:
     return build_runtime_command(runtime_cmd_path, "--load-state-json", os.path.abspath(str(state_path)))

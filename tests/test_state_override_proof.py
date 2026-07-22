@@ -15,6 +15,7 @@ from cuda_fractal_state_tool.agent_bundle import (
 )
 from cuda_fractal_state_tool.process_utils import ProcessResult
 from cuda_fractal_state_tool.runtime_surface import (
+    build_materialization_command,
     build_runtime_identity,
     runtime_identity_summary,
     runtime_identity_summary_sha256,
@@ -48,6 +49,11 @@ class FakeProofJob:
         output = Path(command[command.index("--diagnostics-out-dir") + 1])
         output.mkdir(parents=True, exist_ok=True)
         state = json.loads(source.read_text(encoding="utf-8"))
+        if "--apply-loaded-color-pipeline-draft" in command:
+            grading_row = state["color_pipeline_draft"]["lanes"][0]["rows"][0]
+            state["params"]["color_saturation"] = grading_row["parameter_values"][0][
+                "number_value"
+            ]
         requested = state["params"]["explaino_damping"]
         if len(self.commands) == 1:
             state["params"]["explaino_damping"] = 1.0 if self.contradict_requested else float(requested) - 2.0e-8
@@ -75,6 +81,19 @@ class FakeLaunchedProcess:
 
 
 class StateOverrideProofTests(unittest.TestCase):
+    def test_materialization_command_applies_loaded_pipeline_draft_only_when_requested(self) -> None:
+        runtime = Path(r"C:\runtime\fractal_ui.cmd")
+        candidate = Path(r"C:\proof\merged_candidate.json")
+        output = Path(r"C:\proof\materialization")
+        ordinary = build_materialization_command(runtime, candidate, output, apply_loaded_draft=False)
+        pipeline = build_materialization_command(runtime, candidate, output, apply_loaded_draft=True)
+        self.assertNotIn("--apply-loaded-color-pipeline-draft", ordinary)
+        self.assertIn("--apply-loaded-color-pipeline-draft", pipeline)
+        self.assertLess(
+            pipeline.index("--apply-loaded-color-pipeline-draft"),
+            pipeline.index("--capture-diagnostic"),
+        )
+
     def _runtime(self, root: Path) -> Path:
         runtime = root / "runtime"
         (runtime / "ui").mkdir(parents=True)
@@ -85,7 +104,7 @@ class StateOverrideProofTests(unittest.TestCase):
         (runtime / "fractal_ui.exe").write_bytes(b"test runtime")
         return launcher
 
-    def _packet(self, root: Path, runtime: Path) -> Path:
+    def _packet(self, root: Path, runtime: Path, *, with_pipeline: bool = False) -> Path:
         packet = root / "finding" / "packets" / "packet-test"
         packet.mkdir(parents=True)
         state = {
@@ -158,6 +177,53 @@ class StateOverrideProofTests(unittest.TestCase):
             ],
         }
         contract = {"function_library": {"lanes": []}}
+        if with_pipeline:
+            state["params"]["color_saturation"] = 1.0
+            state["color_pipeline_draft"] = {
+                "next_row_id": 2,
+                "lanes": [
+                    {
+                        "lane_id": "grading",
+                        "label": "Grading",
+                        "rows": [
+                            {
+                                "ui_row_id": 1,
+                                "enabled": True,
+                                "function_id": "neutral_finish",
+                                "parameter_values": [
+                                    {
+                                        "path": "grade.saturation",
+                                        "type": "float",
+                                        "number_value": 1.0,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            }
+            contract = {
+                "function_library": {
+                    "lanes": [
+                        {
+                            "id": "grading",
+                            "functions": [
+                                {
+                                    "id": "neutral_finish",
+                                    "params": [
+                                        {
+                                            "path": "grade.saturation",
+                                            "type": "float",
+                                            "min": 0.0,
+                                            "max": 4.0,
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
         catalog = {"schema_version": 1, "entries": []}
         state_bytes = _json_bytes(state)
         surface_bytes = _json_bytes(surface)
@@ -236,6 +302,7 @@ class StateOverrideProofTests(unittest.TestCase):
             self.assertEqual(result.status, "replay_proven")
             self.assertEqual(len(job.commands), 2)
             self.assertNotIn("--color-pipeline-action", job.commands[0])
+            self.assertNotIn("--apply-loaded-color-pipeline-draft", job.commands[0])
             receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
             self.assertEqual(receipt["status"], "replay_proven")
             self.assertEqual(receipt["visual_review"], "pending")
@@ -243,6 +310,47 @@ class StateOverrideProofTests(unittest.TestCase):
             self.assertEqual(
                 receipt["requested_value_receipts"][0]["classification"],
                 "representation_normalization",
+            )
+            self.assertTrue(receipt["replay"]["frame_comparison"]["decoded_equal"])
+            self.assertTrue(
+                receipt["materialization"]["base_to_candidate_frame_comparison"]["decoded_equal"]
+            )
+            self.assertEqual(
+                {path.name for path in result.proof_dir.iterdir()},
+                {
+                    "binding.json",
+                    "override.json",
+                    "merged_candidate.json",
+                    "materialization",
+                    "replay",
+                    "receipt.json",
+                },
+            )
+
+    def test_pipeline_override_uses_engine_apply_operation_only_for_materialization(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = self._runtime(root)
+            packet = self._packet(root, runtime, with_pipeline=True)
+            state = json.loads((packet / "state.json").read_text(encoding="utf-8"))
+            lanes = state["color_pipeline_draft"]["lanes"]
+            lanes[0]["rows"][0]["parameter_values"][0]["number_value"] = 0.25
+            override = json.dumps({"color_pipeline_draft": {"lanes": lanes}})
+            job = FakeProofJob()
+            result = execute_state_override_proof(
+                packet, override, runtime, job, proofs_root=root / "proofs"
+            )
+            self.assertEqual(result.status, "replay_proven")
+            self.assertIn("--apply-loaded-color-pipeline-draft", job.commands[0])
+            self.assertNotIn("--apply-loaded-color-pipeline-draft", job.commands[1])
+            receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
+            self.assertTrue(receipt["override"]["apply_loaded_color_pipeline_draft"])
+            self.assertTrue(receipt["materialization"]["applied_loaded_color_pipeline_draft"])
+            self.assertEqual(
+                json.loads(result.engine_candidate_path.read_text(encoding="utf-8"))["params"][
+                    "color_saturation"
+                ],
+                0.25,
             )
             self.assertTrue(receipt["replay"]["frame_comparison"]["decoded_equal"])
             self.assertTrue(

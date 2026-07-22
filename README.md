@@ -89,13 +89,12 @@ The captured draft owns Color Pipeline topology. The exact deployed UI-Salt
 contract owns function and parameter validity. Python owns no parallel function,
 parameter, default, range, enum, compatibility, or coercion catalog.
 
-Current runtime evidence shows that direct loading preserves an edited
-`color_pipeline_draft` as pending editor state but does not lower it into the
-live serialized color stacks that drive rendering. Proof receipts and the UI
-now expose exact base/candidate pixel equality so this cannot masquerade as a
-visual change. Typed draft authoring is not accepted until an
-engine-authoritative lowering seam is approved; see
-`docs/slice5_real_acceptance_checkpoint.md`.
+The merged runtime exposes an explicit engine-owned loaded-draft application
+operation. State-tool materialization invokes it only when the sparse override
+contains `color_pipeline_draft`; ordinary state loading and action-free replay
+remain non-applying. The engine-emitted complete state is still the sole launch
+candidate. See `docs/slice5_color_pipeline_engine_integration.md` for the real
+draft-to-render proof.
 
 ## Durable evidence
 
@@ -133,7 +132,7 @@ py -3.14 -m cuda_fractal_state_tool.state_override_cli `
   --manifest-sha256 <manifest-sha256>
 ```
 
-Run direct-state materialization and replay proof:
+Run engine materialization and action-free replay proof:
 
 ```powershell
 py -3.14 -m cuda_fractal_state_tool.state_override_proof_cli `

@@ -697,9 +697,9 @@ def _packet_markdown(
     context_lines = [f"- `{name}` — SHA-256 `{file_hashes[name]}`" for name in recommended]
     unavailable_lines = [f"- `{name}`" for name in unavailable]
     example_note = (
-        f"A complete unchanged structural snapshot is attached as `{_PIPELINE_EXAMPLE_FILENAME}` for inspection only. "
-        "The published runtime currently preserves draft edits as pending editor state but does not lower them into "
-        "the live render stacks during direct state loading. Do not return `color_pipeline_draft` in a state override."
+        f"A complete unchanged structural template is attached as `{_PIPELINE_EXAMPLE_FILENAME}`. "
+        "It demonstrates the required whole-array replacement shape; it is not a recommended visual change. "
+        "When you change a function, return the complete parameter list for the new function in exact deployed-contract order."
         if has_pipeline_example
         else "This capture has no complete serialized pipeline draft, so Color Pipeline state override authoring is unavailable."
     )
@@ -734,9 +734,13 @@ def _packet_markdown(
             "For view changes, return each ordinary value and its required serialized companion in the same override:",
             "`center_x` with `center_hp_x`, `center_y` with `center_hp_y`, and `zoom` with `log2_zoom`.",
             "Use the JSON types shown in `state.json`; do not return a companion by itself.",
-            "For color, use only directly serialized paths explicitly listed by `state-override-authoring-surface.json`.",
-            "Do not return `color_pipeline_draft`: direct state loading preserves it as pending editor state but the",
-            "published runtime exposes no authoritative operation here that lowers it into the live render stacks.",
+            "For ordinary color fields, use only directly serialized paths explicitly listed by",
+            "`state-override-authoring-surface.json`. You may return `color_pipeline_draft` only when this packet",
+            "contains a complete draft and the structural template. Return the complete `lanes` array, preserving",
+            "lane/row topology, IDs, labels, ordering, enablement, and row counts. Functions and their complete",
+            "parameter lists may change only as allowed by the attached UI-Salt contract. During proof, the published",
+            "runtime applies that loaded draft through the engine-owned lowering operation; replay then uses the",
+            "complete engine-emitted state without that operation.",
             "",
             "### State Override Example",
             "",

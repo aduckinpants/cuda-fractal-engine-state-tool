@@ -14,6 +14,7 @@ from .agent_bundle import (
     derive_state_override_authoring_surface,
     load_agent_bundle_handoff,
     serialize_state_override_authoring_surface,
+    validate_captured_color_pipeline_draft,
 )
 from .json_utils import loads_strict_no_duplicates
 
@@ -48,6 +49,7 @@ class StateOverrideMaterialization:
     changed_paths: tuple[StateValueChange, ...]
     conceptual_domains: tuple[str, ...]
     camera_edits: tuple[str, ...]
+    apply_loaded_color_pipeline_draft: bool
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,7 @@ class _PacketOverrideAuthorities:
     state_bytes: bytes
     state: dict[str, Any]
     authoring_surface: dict[str, Any]
+    color_pipeline_contract: dict[str, Any]
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -153,13 +156,19 @@ def _load_packet_authorities(
     state_bytes = captured_bytes("state.json")
     parameter_surface_bytes = captured_bytes("fractal-parameter-surface.json")
     ui_schema_bytes = captured_bytes("fractal_binding_surface_v1.ui_schema.json")
-    captured_bytes("color_pipeline_function_library.contract.v1.json")
+    color_pipeline_contract_bytes = captured_bytes(
+        "color_pipeline_function_library.contract.v1.json"
+    )
     bundled_surface_bytes = captured_bytes("state-override-authoring-surface.json")
 
     state = _load_strict_object(state_bytes, "Packet V6 state.json")
     bundled_surface = _load_strict_object(
         bundled_surface_bytes,
         "Packet V6 state-override-authoring-surface.json",
+    )
+    color_pipeline_contract = _load_strict_object(
+        color_pipeline_contract_bytes,
+        "Packet V6 color_pipeline_function_library.contract.v1.json",
     )
     regenerated_surface = derive_state_override_authoring_surface(
         state_bytes,
@@ -176,6 +185,7 @@ def _load_packet_authorities(
         state_bytes=state_bytes,
         state=state,
         authoring_surface=bundled_surface,
+        color_pipeline_contract=color_pipeline_contract,
     )
 
 
@@ -330,6 +340,73 @@ def _deep_merge_existing(target: dict[str, Any], override: dict[str, Any]) -> No
             target[key] = copy.deepcopy(value)
 
 
+def _validate_fixed_pipeline_topology(base_draft: Any, candidate_draft: Any) -> None:
+    if not isinstance(base_draft, dict) or not isinstance(candidate_draft, dict):
+        raise ValueError("Color Pipeline override requires a complete captured draft topology")
+    base_lanes = base_draft.get("lanes")
+    candidate_lanes = candidate_draft.get("lanes")
+    if not isinstance(base_lanes, list) or not isinstance(candidate_lanes, list):
+        raise ValueError("Color Pipeline override requires a complete lanes array")
+    if base_draft.get("next_row_id") != candidate_draft.get("next_row_id"):
+        raise ValueError("Color Pipeline override may not change next_row_id topology")
+    if len(base_lanes) != len(candidate_lanes):
+        raise ValueError("Color Pipeline override may not change lane-count topology")
+    for lane_index, (base_lane, candidate_lane) in enumerate(
+        zip(base_lanes, candidate_lanes, strict=True)
+    ):
+        if not isinstance(base_lane, dict) or not isinstance(candidate_lane, dict):
+            raise ValueError(f"Color Pipeline lane topology is invalid at index {lane_index}")
+        if set(base_lane) != set(candidate_lane):
+            raise ValueError(f"Color Pipeline lane topology keys changed at index {lane_index}")
+        for key, base_value in base_lane.items():
+            if key != "rows" and candidate_lane.get(key) != base_value:
+                raise ValueError(
+                    f"Color Pipeline lane topology changed at index {lane_index}: {key}"
+                )
+        base_rows = base_lane.get("rows")
+        candidate_rows = candidate_lane.get("rows")
+        if not isinstance(base_rows, list) or not isinstance(candidate_rows, list):
+            raise ValueError(f"Color Pipeline row topology is invalid at lane {lane_index}")
+        if len(base_rows) != len(candidate_rows):
+            raise ValueError(f"Color Pipeline row-count topology changed at lane {lane_index}")
+        for row_index, (base_row, candidate_row) in enumerate(
+            zip(base_rows, candidate_rows, strict=True)
+        ):
+            if not isinstance(base_row, dict) or not isinstance(candidate_row, dict):
+                raise ValueError(
+                    f"Color Pipeline row topology is invalid at lane {lane_index}, row {row_index}"
+                )
+            if set(base_row) != set(candidate_row):
+                raise ValueError(
+                    f"Color Pipeline row topology keys changed at lane {lane_index}, row {row_index}"
+                )
+            for key, base_value in base_row.items():
+                if key not in {"function_id", "parameter_values"} and candidate_row.get(key) != base_value:
+                    raise ValueError(
+                        f"Color Pipeline row topology changed at lane {lane_index}, row {row_index}: {key}"
+                    )
+
+
+def _merged_color_pipeline_draft(
+    override_draft: Any,
+    base_state: dict[str, Any],
+    contract: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(override_draft, dict) or set(override_draft) != {"lanes"}:
+        raise ValueError("Color Pipeline override must contain only the complete lanes array")
+    base_draft = base_state.get("color_pipeline_draft")
+    if not isinstance(base_draft, dict):
+        raise ValueError("Base state has no complete color_pipeline_draft to author")
+    candidate_draft = copy.deepcopy(base_draft)
+    candidate_draft["lanes"] = copy.deepcopy(override_draft["lanes"])
+    _validate_fixed_pipeline_topology(base_draft, candidate_draft)
+    validate_captured_color_pipeline_draft(
+        {"color_pipeline_draft": candidate_draft},
+        contract,
+    )
+    return candidate_draft
+
+
 def _diff_values(left: Any, right: Any, prefix: str = "") -> Iterable[tuple[str, Any, Any]]:
     if isinstance(left, dict) and isinstance(right, dict):
         for key in left:
@@ -390,19 +467,23 @@ def materialize_state_override(
     base = authorities.state
     override = parsed.document
 
-    if "color_pipeline_draft" in override:
-        raise ValueError(
-            "color_pipeline_draft state override authoring is unavailable: the published runtime preserves "
-            "loaded draft edits as pending editor state but exposes no authoritative direct-state lowering "
-            "operation for the live render stacks"
-        )
-
     camera_edits = _validate_params_and_view(override, base, authorities.authoring_surface)
     merged = copy.deepcopy(base)
     for domain in ("params", "view"):
         domain_override = override.get(domain)
         if domain_override is not None:
             _deep_merge_existing(merged[domain], domain_override)
+    apply_loaded_color_pipeline_draft = "color_pipeline_draft" in override
+    if apply_loaded_color_pipeline_draft:
+        merged["color_pipeline_draft"] = _merged_color_pipeline_draft(
+            override["color_pipeline_draft"],
+            base,
+            authorities.color_pipeline_contract,
+        )
+        if merged["color_pipeline_draft"] == base.get("color_pipeline_draft"):
+            raise ValueError(
+                "Color Pipeline override must change at least one existing function or parameter value"
+            )
     if not override:
         candidate_bytes = authorities.state_bytes
         empty_override_byte_exact = True
@@ -438,4 +519,5 @@ def materialize_state_override(
         changed_paths=tuple(changes),
         conceptual_domains=tuple(domains),
         camera_edits=camera_edits,
+        apply_loaded_color_pipeline_draft=apply_loaded_color_pipeline_draft,
     )

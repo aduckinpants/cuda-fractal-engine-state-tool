@@ -102,7 +102,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             and app.session.state in {SessionState.VISUAL_REVIEW_PENDING, SessionState.REJECTED}
         ),
         180,
-        "direct-state proof and candidate preview",
+        "engine proof and candidate preview",
     )
     if app.session.state != SessionState.VISUAL_REVIEW_PENDING:
         raise AssertionError(f"State override did not reach visual review: {app.session.status_text}")
