@@ -62,15 +62,27 @@ The sparse override remains a state-shaped object.
 
 - [x] Phase 0 — verify both repository boundaries, merged runtime identities,
   clean state-tool base, and baseline suite.
-- [ ] Phase 1 — add failing importer, bundle, manifest, proof-binding, and packet
+- [x] Phase 1 — add failing importer, bundle, manifest, proof-binding, and packet
   guidance tests.
-- [ ] Phase 2 — implement exact viewport sidecar preservation/runtime derivation,
+- [x] Phase 2 — implement exact viewport sidecar preservation/runtime derivation,
   validation, coherent snapshot recheck, and manifest/proof binding.
-- [ ] Phase 3 — integrate concise all-selector camera-continuity guidance and
+- [x] Phase 3 — integrate concise all-selector camera-continuity guidance and
   update active documentation without changing the accepted UI hierarchy.
-- [ ] Phase 4 — run focused and full tests, generate real representative
+- [x] Phase 4 — run focused and full tests, generate real representative
   high-zoom bundles, perform hostile review, commit/push, and stop at the manual
   web-session review boundary.
+
+## Hostile review findings
+
+- The first V1 viewport validator required all engine fields but would have
+  silently accepted undeclared root fields. A RED regression now proves the
+  validator rejects undeclared V1 fields, preventing packet data from broadening
+  the engine contract.
+- The existing dynamic attachment checklist already surfaced the new required
+  file; no UI hierarchy mutation was needed.
+- Capture-sidecar bytes are preserved only when the exact bound runtime reproduces
+  them for the copied state. Older captures without a sidecar use a clearly
+  identified runtime-derived authority instead of a historical fallback.
 
 ## Boundaries
 
@@ -91,4 +103,3 @@ The implementation closes only when:
 6. real high-zoom bundles across representative selector domains are generated;
 7. repository tests, workflow proof, diff checks, and hostile review pass;
 8. the branch is clean, pushed, and ready for manual agent-session review.
-

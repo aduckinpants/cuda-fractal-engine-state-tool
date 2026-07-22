@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional, Sequence
 
 from PIL import Image, ImageChops, ImageStat
 
-from .agent_bundle import load_agent_bundle_handoff
+from .agent_bundle import BUNDLE_MANIFEST_VERSION, PACKET_VERSION, load_agent_bundle_handoff
 from .async_jobs import AsyncJobRunner, JobCancelledError, JobContext, JobRequestIdentity
 from .json_utils import loads_strict_no_duplicates
 from .runtime_surface import (
@@ -118,8 +118,12 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
     if expected_sha256 is not None and manifest_sha256 != expected_sha256:
         raise StateOverrideProofError("Packet manifest hash does not match the active binding")
     manifest = _load_object(manifest_path, "Packet V6 manifest")
-    if manifest.get("packet_version") != 6:
+    if manifest.get("packet_version") != PACKET_VERSION:
         raise StateOverrideProofError(f"Unsupported packet version: {manifest.get('packet_version')}")
+    if manifest.get("bundle_manifest_version") != BUNDLE_MANIFEST_VERSION:
+        raise StateOverrideProofError(
+            "Unsupported Packet V6 manifest version; rebuild the bundle with the current tool"
+        )
     records = manifest.get("files")
     recorded = {
         record.get("path")
@@ -133,6 +137,7 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
         "fractal_binding_surface_v1.ui_schema.json",
         "color_pipeline_function_library.contract.v1.json",
         "fractal-descriptive-catalog.json",
+        "fractal-viewport-facts.json",
         "state-override-authoring-surface.json",
     }
     missing = sorted(required_authorities - recorded)

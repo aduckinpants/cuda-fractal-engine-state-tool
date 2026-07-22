@@ -245,6 +245,13 @@ class StateOverrideProofTests(unittest.TestCase):
         schema_bytes = _json_bytes(schema)
         contract_bytes = _json_bytes(contract)
         catalog_bytes = _json_bytes(catalog)
+        viewport_facts_bytes = _json_bytes(
+            {
+                "schema_version": 1,
+                "mapping_id": "cuda_fractal_renderer_pixel_center_v1",
+                "selected_fractal_type": "explaino_all",
+            }
+        )
         frame_buffer = io.BytesIO()
         Image.new("RGB", (6, 4), (40, 80, 120)).save(frame_buffer, format="PNG")
         frame_bytes = frame_buffer.getvalue()
@@ -265,6 +272,7 @@ class StateOverrideProofTests(unittest.TestCase):
             "fractal_binding_surface_v1.ui_schema.json": schema_bytes,
             "color_pipeline_function_library.contract.v1.json": contract_bytes,
             "fractal-descriptive-catalog.json": catalog_bytes,
+            "fractal-viewport-facts.json": viewport_facts_bytes,
             "state-override-authoring-surface.json": authoring_bytes,
             "frame.png": frame_bytes,
         }
@@ -273,7 +281,7 @@ class StateOverrideProofTests(unittest.TestCase):
         identity = build_runtime_identity(runtime, runtime.parent)
         summary = runtime_identity_summary(identity)
         manifest = {
-            "bundle_manifest_version": 1,
+            "bundle_manifest_version": 2,
             "packet_version": 6,
             "packet_id": packet.name,
             "finding_id": "finding-test",
@@ -285,6 +293,7 @@ class StateOverrideProofTests(unittest.TestCase):
                 "ui_schema_sha256": _sha256(schema_bytes),
                 "ui_salt_contract_sha256": _sha256(contract_bytes),
                 "fractal_descriptive_catalog_sha256": _sha256(catalog_bytes),
+                "fractal_viewport_facts_sha256": _sha256(viewport_facts_bytes),
                 "state_override_authoring_surface_sha256": _sha256(authoring_bytes),
             },
             "required_attachments": [name for name in files if name != "packet.md"],
@@ -322,6 +331,13 @@ class StateOverrideProofTests(unittest.TestCase):
             self.assertEqual(receipt["status"], "replay_proven")
             self.assertEqual(receipt["visual_review"], "pending")
             self.assertFalse(receipt["launch_ready"])
+            viewport_hash = receipt["binding"]["authority_identities"][
+                "fractal_viewport_facts_sha256"
+            ]
+            self.assertEqual(
+                viewport_hash,
+                hashlib.sha256((packet / "fractal-viewport-facts.json").read_bytes()).hexdigest(),
+            )
             self.assertEqual(
                 receipt["requested_value_receipts"][0]["classification"],
                 "representation_normalization",

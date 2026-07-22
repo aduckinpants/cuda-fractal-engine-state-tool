@@ -15,6 +15,7 @@ from typing import Any, Callable, Optional
 
 from .async_jobs import JobContext
 from .fractal_descriptive_catalog import validate_catalog_bytes
+from .fractal_viewport_facts import validate_viewport_facts_bytes
 from .json_utils import loads_no_duplicates
 from .runtime_surface import (
     build_runtime_command,
@@ -27,13 +28,14 @@ from .runtime_surface import (
 
 
 PACKET_VERSION = 6
-BUNDLE_MANIFEST_VERSION = 1
+BUNDLE_MANIFEST_VERSION = 2
 AUTHORING_SURFACE_VERSION = 2
 
 _SCHEMA_FILENAME = "fractal_binding_surface_v1.ui_schema.json"
 _UI_SALT_FILENAME = "color_pipeline_function_library.contract.v1.json"
 _PARAMETER_SURFACE_FILENAME = "fractal-parameter-surface.json"
 _CATALOG_FILENAME = "fractal-descriptive-catalog.json"
+_VIEWPORT_FACTS_FILENAME = "fractal-viewport-facts.json"
 _AUTHORING_SURFACE_FILENAME = "state-override-authoring-surface.json"
 _PIPELINE_EXAMPLE_FILENAME = "state-override-example-color-pipeline.json"
 
@@ -101,6 +103,10 @@ def load_agent_bundle_handoff(packet_dir: Path) -> AgentBundleHandoff:
     manifest = _load_json_object(manifest_path.read_bytes(), "Packet V6 manifest")
     if manifest.get("packet_version") != PACKET_VERSION:
         raise ValueError(f"Unsupported packet version: {manifest.get('packet_version')}")
+    if manifest.get("bundle_manifest_version") != BUNDLE_MANIFEST_VERSION:
+        raise ValueError(
+            "Unsupported Packet V6 manifest version; rebuild the bundle with the current tool"
+        )
     records = manifest.get("files")
     if not isinstance(records, list):
         raise ValueError("Packet V6 manifest has no files array")
@@ -647,10 +653,16 @@ def _capture_export(
     job: Optional[JobContext],
     timeout_seconds: float,
     temp_root: Path,
+    *extra_args: str,
 ) -> bytes:
     with tempfile.TemporaryDirectory(prefix=".agent-bundle-export-", dir=temp_root) as temp_dir:
         output_path = Path(temp_dir) / filename
-        command = build_runtime_command(runtime_cmd_path, flag, str(output_path.resolve()))
+        command = build_runtime_command(
+            runtime_cmd_path,
+            flag,
+            str(output_path.resolve()),
+            *extra_args,
+        )
         if job is not None:
             result = job.run_process(command, runtime_cmd_path.parent, timeout_seconds=timeout_seconds)
             exit_code = result.exit_code
@@ -714,6 +726,7 @@ def _packet_markdown(
     finding_id: str,
     state: dict[str, Any],
     selected_entry: dict[str, Any],
+    viewport_facts: dict[str, Any],
     authoring_surface: dict[str, Any],
     required: list[str],
     recommended: list[str],
@@ -725,6 +738,9 @@ def _packet_markdown(
     params = state.get("params") if isinstance(state.get("params"), dict) else {}
     render = state.get("render") if isinstance(state.get("render"), dict) else {}
     authorable_paths = [entry["path"] for entry in authoring_surface["entries"]]
+    viewport_camera = viewport_facts["camera"]
+    viewport_frame = viewport_facts["local_frame"]
+    viewport_basis = viewport_facts["complex_pixel_basis"]
     draft = state.get("color_pipeline_draft")
     pipeline_summary: list[str] = []
     if isinstance(draft, dict) and isinstance(draft.get("lanes"), list):
@@ -785,6 +801,31 @@ def _packet_markdown(
             "  frame does not prove exact self-similarity.",
             "- Use engine help no more broadly than its words. Separate serialized facts, visual observations, grounded",
             "  inferences, and hypotheses.",
+            "",
+            "## Dynamics and viewport continuity — read before any non-color override",
+            "",
+            "This rule applies to every fractal selector, not only one family:",
+            "",
+            "- A color-only change preserves the exact camera unless the user separately asks to reframe.",
+            "- For every non-color dynamics change at meaningful zoom, state one camera intent in prose:",
+            "  `same_window_comparison`, `feature_tracking`, or `transition_survey`. Camera intent is explanation,",
+            "  not a JSON field.",
+            "- Small numerical changes do not establish small visual changes. At high zoom, a small parameter change",
+            "  can move, split, merge, remove, or reorganize the visible subject far outside the current frame.",
+            "- Feature tracking requires an estimated before/after location. Recenter only for a uniquely continued",
+            "  feature. For a split, merge, disappearance, or ambiguity, frame the complete branch set or transition",
+            "  neighborhood rather than claiming one unchanged object.",
+            "- Use `fractal-viewport-facts.json` for the exact renderer mapping, aspect ratio, spans, pixel basis,",
+            "  corners, bounds, and inverse-fit equation. Do not invent a universal zoom formula.",
+            "- If the feature location cannot be derived from attached engine authority and transparent mathematics,",
+            "  say so. Preserve a comparison window or choose an honestly wider survey frame; do not fabricate precision.",
+            "",
+            "Current engine viewport facts:",
+            f"- Mapping: `{viewport_facts['mapping_id']}`",
+            f"- High-precision center: `({viewport_camera['center_hp_x']}, {viewport_camera['center_hp_y']})`",
+            f"- `log2_zoom`: `{viewport_camera['log2_zoom']}`; resolved zoom: `{viewport_camera['resolved_zoom']}`",
+            f"- Complex frame size: `{viewport_frame['full_width']} × {viewport_frame['full_height']}`",
+            f"- Complex units per pixel: X `{viewport_basis['units_per_pixel_x']}`, Y `{viewport_basis['units_per_pixel_y']}`",
             "",
             "## Output trigger and contract",
             "",
@@ -869,6 +910,7 @@ def _packet_markdown(
             "- `color_pipeline_function_library.contract.v1.json`: Color Pipeline function and parameter authority.",
             "- `state-override-authoring-surface.json`: finding-specific index of mechanically resolvable state paths.",
             "- `fractal-descriptive-catalog.json`: engine-owned mathematical background.",
+            "- `fractal-viewport-facts.json`: engine-owned exact camera geometry and inverse-fit authority.",
             "- Captured frame: direct visual evidence.",
             "",
             f"Packet ID: `{packet_id}`",
@@ -900,6 +942,7 @@ def build_agent_bundle(
     source_paths["state.json"] = state_path
     optional_sources = {
         "fractal-state.json": "review_fractal_state",
+        _VIEWPORT_FACTS_FILENAME: "fractal_viewport_facts",
         "finding.json": "finding_manifest",
         "field-notes.md": "field_notes",
     }
@@ -967,6 +1010,49 @@ def build_agent_bundle(
         selected = state.get("fractal_type")
         if not isinstance(selected, str) or not selected:
             raise ValueError("Copied state.json has no selected fractal_type")
+        render = state.get("render")
+        if not isinstance(render, dict):
+            raise ValueError("Copied state.json has no render object")
+        width = render.get("width")
+        height = render.get("height")
+        if (
+            isinstance(width, bool)
+            or not isinstance(width, int)
+            or width <= 0
+            or isinstance(height, bool)
+            or not isinstance(height, int)
+            or height <= 0
+        ):
+            raise ValueError("Copied state.json has invalid render dimensions")
+
+        runtime_viewport_bytes = _capture_export(
+            runtime_cmd_path,
+            "--describe-viewport-facts-json",
+            _VIEWPORT_FACTS_FILENAME,
+            job,
+            timeout_seconds,
+            packets_dir,
+            "--load-state-json",
+            str((stage_dir / "state.json").resolve()),
+        )
+        if _VIEWPORT_FACTS_FILENAME in source_paths:
+            copied_viewport_bytes = (stage_dir / _VIEWPORT_FACTS_FILENAME).read_bytes()
+            if copied_viewport_bytes != runtime_viewport_bytes:
+                raise ValueError(
+                    "Captured finding viewport facts disagree with the current runtime export "
+                    "for the exact copied state"
+                )
+            viewport_facts_origin = "captured_finding_sidecar_verified_against_runtime"
+        else:
+            copied_viewport_bytes = runtime_viewport_bytes
+            _write_bytes(stage_dir / _VIEWPORT_FACTS_FILENAME, copied_viewport_bytes)
+            viewport_facts_origin = "runtime_export_from_copied_state"
+        viewport_facts = validate_viewport_facts_bytes(
+            copied_viewport_bytes,
+            expected_selector=selected,
+            expected_width=width,
+            expected_height=height,
+        )
         catalog_by_selector = validate_catalog_bytes(copied_catalog_bytes)
         selected_entry = catalog_by_selector.get(selected)
         if selected_entry is None:
@@ -1003,6 +1089,7 @@ def build_agent_bundle(
             _SCHEMA_FILENAME,
             _UI_SALT_FILENAME,
             _CATALOG_FILENAME,
+            _VIEWPORT_FACTS_FILENAME,
             _AUTHORING_SURFACE_FILENAME,
             *([frame_filename] if frame_filename else []),
         ]
@@ -1021,6 +1108,7 @@ def build_agent_bundle(
             finding_id,
             state,
             selected_entry,
+            viewport_facts,
             authoring_surface,
             required,
             recommended,
@@ -1042,6 +1130,7 @@ def build_agent_bundle(
             _UI_SALT_FILENAME: "deployed_color_pipeline_authority",
             _PARAMETER_SURFACE_FILENAME: "runtime_parameter_applicability_authority",
             _CATALOG_FILENAME: "runtime_fractal_description_authority",
+            _VIEWPORT_FACTS_FILENAME: "runtime_viewport_geometry_authority",
             _AUTHORING_SURFACE_FILENAME: "finding_specific_state_override_index",
             _PIPELINE_EXAMPLE_FILENAME: "captured_pipeline_whole_array_example",
         }
@@ -1068,6 +1157,7 @@ def build_agent_bundle(
             "finding_id": finding_id,
             "selected_fractal_type": selected,
             "selected_fractal_description_status": selected_entry["description_status"],
+            "viewport_facts_origin": viewport_facts_origin,
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "runtime_identity": runtime_summary,
             "runtime_identity_sha256": runtime_identity_summary_sha256(runtime_summary),
@@ -1077,6 +1167,7 @@ def build_agent_bundle(
                 "ui_schema_sha256": _sha256_bytes(schema_bytes),
                 "ui_salt_contract_sha256": _sha256_bytes(contract_bytes),
                 "fractal_descriptive_catalog_sha256": _sha256_bytes(copied_catalog_bytes),
+                "fractal_viewport_facts_sha256": _sha256_bytes(copied_viewport_bytes),
                 "state_override_authoring_surface_sha256": _sha256_bytes(authoring_surface_bytes),
             },
             "required_attachments": required,
@@ -1102,11 +1193,23 @@ def build_agent_bundle(
             timeout_seconds,
             packets_dir,
         )
+        viewport_after = _capture_export(
+            runtime_cmd_path,
+            "--describe-viewport-facts-json",
+            _VIEWPORT_FACTS_FILENAME,
+            job,
+            timeout_seconds,
+            packets_dir,
+            "--load-state-json",
+            str((stage_dir / "state.json").resolve()),
+        )
         runtime_identity_after = build_runtime_identity(runtime_cmd_path, runtime_cmd_path.parent)
         if parameter_surface_after != copied_parameter_surface_bytes:
             raise ValueError("Runtime parameter-surface export changed during packet construction")
         if catalog_after != copied_catalog_bytes:
             raise ValueError("Runtime descriptive-catalog export changed during packet construction")
+        if viewport_after != copied_viewport_bytes:
+            raise ValueError("Runtime viewport-facts export changed during packet construction")
         if runtime_identity_summary(runtime_identity_after) != runtime_summary:
             raise ValueError("Published runtime identity changed during packet construction")
         if sha256_file(schema_source) != _sha256_bytes(schema_bytes):
