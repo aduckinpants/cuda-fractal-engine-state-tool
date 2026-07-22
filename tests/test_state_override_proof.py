@@ -76,6 +76,21 @@ class FakeProofJob:
         )
 
 
+class FailingProofJob:
+    def run_process(self, command, cwd, timeout_seconds=None, env=None):
+        return ProcessResult(
+            command=list(command),
+            cwd=str(cwd),
+            pid=911,
+            exit_code=1,
+            timed_out=False,
+            elapsed_seconds=0.01,
+            stdout="",
+            stderr="",
+            observed_process_tree=[],
+        )
+
+
 class FakeLaunchedProcess:
     pid = 4321
 
@@ -388,6 +403,27 @@ class StateOverrideProofTests(unittest.TestCase):
                 self.assertIn(expected, result.message)
                 receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
                 self.assertFalse(receipt["launch_ready"])
+
+    def test_runtime_failure_retains_exit_and_missing_artifact_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = self._runtime(root)
+            packet = self._packet(root, runtime)
+            result = execute_state_override_proof(
+                packet,
+                '{"params":{"explaino_damping":0.9}}',
+                runtime,
+                FailingProofJob(),
+                proofs_root=root / "proofs",
+            )
+            self.assertEqual(result.status, "rejected")
+            self.assertIn("exit code 1", result.message)
+            self.assertIn("missing artifacts: state.json, frame.bmp", result.message)
+            self.assertIn("runtime emitted no stdout or stderr", result.message)
+            receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
+            attempt = receipt["runtime_attempts"]["materialization"]
+            self.assertEqual(attempt["exit_code"], 1)
+            self.assertEqual(attempt["missing_artifacts"], ["state.json", "frame.bmp"])
 
     def test_review_acceptance_is_required_and_all_bindings_are_rechecked_for_launch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -111,6 +111,7 @@ class StateOverrideTests(unittest.TestCase):
             "schema_version": 1,
             "panels": [
                 {
+                    "id": "fractal",
                     "controls": [
                         {
                             "id": "explaino_damping",
@@ -469,6 +470,33 @@ class StateOverrideTests(unittest.TestCase):
                 materialize_state_override(packet, "{}", packet / "state.json")
             with self.assertRaisesRegex(ValueError, "immutable Packet V6"):
                 materialize_state_override(packet, "{}", packet / "new-candidate.json")
+
+    def test_older_unsafe_authoring_surface_requires_packet_rebuild(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            packet, _, _, _ = self._packet(Path(temp_dir))
+            surface_path = packet / "state-override-authoring-surface.json"
+            surface = json.loads(surface_path.read_text(encoding="utf-8"))
+            surface["surface_version"] = 1
+            surface_bytes = _json_bytes(surface)
+            surface_path.write_bytes(surface_bytes)
+
+            manifest_path = packet / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            record = next(
+                item
+                for item in manifest["files"]
+                if item["path"] == "state-override-authoring-surface.json"
+            )
+            record["sha256"] = hashlib.sha256(surface_bytes).hexdigest()
+            record["size_bytes"] = len(surface_bytes)
+            manifest_path.write_bytes(_json_bytes(manifest, sort_keys=True))
+
+            with self.assertRaisesRegex(ValueError, "unsafe or unsupported version; rebuild"):
+                materialize_state_override(
+                    packet,
+                    '{"params":{"explaino_damping":0.9}}',
+                    Path(temp_dir) / "candidate.json",
+                )
 
     def test_cli_emits_changed_path_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

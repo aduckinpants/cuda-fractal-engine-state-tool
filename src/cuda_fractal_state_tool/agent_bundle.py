@@ -28,7 +28,7 @@ from .runtime_surface import (
 
 PACKET_VERSION = 6
 BUNDLE_MANIFEST_VERSION = 1
-AUTHORING_SURFACE_VERSION = 1
+AUTHORING_SURFACE_VERSION = 2
 
 _SCHEMA_FILENAME = "fractal_binding_surface_v1.ui_schema.json"
 _UI_SALT_FILENAME = "color_pipeline_function_library.contract.v1.json"
@@ -226,15 +226,21 @@ def _visible_in_state(control: dict[str, Any], state: dict[str, Any]) -> bool:
     return False
 
 
-def _schema_controls(schema: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+def _schema_controls(
+    schema: dict[str, Any],
+) -> tuple[list[tuple[str, dict[str, Any]]], dict[str, dict[str, Any]], dict[str, str]]:
     panels = schema.get("panels")
     if not isinstance(panels, list):
         raise ValueError("Deployed UI schema has no panels array")
-    ordered: list[dict[str, Any]] = []
+    ordered: list[tuple[str, dict[str, Any]]] = []
     indexed: dict[str, dict[str, Any]] = {}
+    panel_by_control_id: dict[str, str] = {}
     for panel_index, panel in enumerate(panels):
         if not isinstance(panel, dict) or not isinstance(panel.get("controls"), list):
             raise ValueError(f"Deployed UI schema panel {panel_index} has no controls array")
+        panel_id = panel.get("id")
+        if not isinstance(panel_id, str) or not panel_id:
+            raise ValueError(f"Deployed UI schema panel {panel_index} has no id")
         for control_index, control in enumerate(panel["controls"]):
             if not isinstance(control, dict) or not isinstance(control.get("id"), str):
                 raise ValueError(
@@ -243,9 +249,10 @@ def _schema_controls(schema: dict[str, Any]) -> tuple[list[dict[str, Any]], dict
             control_id = control["id"]
             if control_id in indexed:
                 raise ValueError(f"Deployed UI schema contains duplicate control id: {control_id}")
-            ordered.append(control)
+            ordered.append((panel_id, control))
             indexed[control_id] = control
-    return ordered, indexed
+            panel_by_control_id[control_id] = panel_id
+    return ordered, indexed, panel_by_control_id
 
 
 def _control_entry(
@@ -298,7 +305,7 @@ def derive_state_override_authoring_surface(
 
     parameter_surface_sha256 = _sha256_bytes(parameter_surface_bytes)
     ui_schema_sha256 = _sha256_bytes(ui_schema_bytes)
-    ordered_schema_controls, schema_by_id = _schema_controls(ui_schema)
+    ordered_schema_controls, schema_by_id, panel_by_control_id = _schema_controls(ui_schema)
     lanes = parameter_surface.get("lanes")
     if not isinstance(lanes, list):
         raise ValueError("Copied parameter surface has no lanes array")
@@ -324,6 +331,8 @@ def derive_state_override_authoring_surface(
         control = schema_by_id.get(control_id)
         if control is None:
             raise ValueError(f"Applicable control {control_id} is absent from the copied UI schema")
+        if panel_by_control_id[control_id] == "color":
+            continue
         binding = control.get("binding")
         if not isinstance(binding, dict) or binding.get("kind") != "param":
             continue
@@ -361,10 +370,11 @@ def derive_state_override_authoring_surface(
         )
         emitted_control_ids.add(control_id)
 
-    for control in ordered_schema_controls:
+    for panel_id, control in ordered_schema_controls:
         control_id = control["id"]
         if (
-            control_id in emitted_control_ids
+            panel_id == "color"
+            or control_id in emitted_control_ids
             or control_id in selected_surface_control_ids
             or control.get("visible_if") is not None
         ):
@@ -437,6 +447,12 @@ def derive_state_override_authoring_surface(
         for rule in companion_rules
         if rule["requires_changed_path"] in seen_paths and _resolve_path(state, rule["path"])[0]
     ]
+    draft = state.get("color_pipeline_draft")
+    color_authoring_mode = (
+        "color_pipeline_draft_only"
+        if isinstance(draft, dict) and isinstance(draft.get("lanes"), list)
+        else "unavailable"
+    )
     return {
         "surface_version": AUTHORING_SURFACE_VERSION,
         "selected_fractal_type": selected,
@@ -449,6 +465,15 @@ def derive_state_override_authoring_surface(
         },
         "entries": entries,
         "companion_rules": companion_rules,
+        "color_authoring": {
+            "mode": color_authoring_mode,
+            "excluded_ui_panel_id": "color",
+            "compatibility_authority": (
+                "color_pipeline_function_library.contract.v1.json"
+                "#/composition_recipe_contract/compatibility"
+            ),
+            "engine_materialization_is_final_authority": True,
+        },
     }
 
 
@@ -480,6 +505,23 @@ def _contract_function_index(contract: dict[str, Any]) -> tuple[list[str], dict[
                 raise ValueError(f"Copied UI-Salt contract repeats function {lane_id}/{function['id']}")
             functions[key] = function
     return lane_order, functions
+
+
+def _validate_color_pipeline_compatibility_authority(contract: dict[str, Any]) -> None:
+    recipe_contract = contract.get("composition_recipe_contract")
+    if not isinstance(recipe_contract, dict):
+        raise ValueError("Copied UI-Salt contract has no composition_recipe_contract object")
+    compatibility = recipe_contract.get("compatibility")
+    if not isinstance(compatibility, list) or not compatibility:
+        raise ValueError(
+            "Copied UI-Salt contract has no composition_recipe_contract.compatibility rows"
+        )
+    for index, row in enumerate(compatibility):
+        if not isinstance(row, dict) or any(
+            not isinstance(row.get(field), str) or not row[field]
+            for field in ("source", "palette", "grading")
+        ):
+            raise ValueError(f"Copied UI-Salt compatibility row {index} is invalid")
 
 
 def validate_captured_color_pipeline_draft(state: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any] | None:
@@ -703,6 +745,27 @@ def _packet_markdown(
         if has_pipeline_example
         else "This capture has no complete serialized pipeline draft, so Color Pipeline state override authoring is unavailable."
     )
+    color_authoring_guidance = (
+        [
+            "This packet's color authoring is Color-Pipeline-only. Do not return flat `params` color controls from",
+            "`state.json` or the UI schema: those fields are replay/compatibility mirrors and are not independently",
+            "state-override-authorable. Return `color_pipeline_draft` with the complete `lanes` array from the attached",
+            "structural template, preserving lane/row topology, IDs, labels, ordering, enablement, and row counts.",
+            "Functions and their complete parameter lists may change only as allowed by the attached UI-Salt contract.",
+            "Function IDs are not freely composable. For function changes, consult",
+            "`composition_recipe_contract.compatibility` in that contract and use a supported Source/Palette pair",
+            "with its matching grading. A parameter-only edit to current functions preserves the captured recipe.",
+            "Contract-valid drafts outside a runtime-supported recipe can still fail closed during engine proof.",
+            "During proof, the published runtime applies that loaded draft through the engine-owned lowering operation;",
+            "replay then uses the complete engine-emitted state without that operation.",
+        ]
+        if has_pipeline_example
+        else [
+            "Color authoring is unavailable for this packet because no complete serialized Color Pipeline draft exists.",
+            "Do not return flat `params` color controls from `state.json` or the UI schema; they are not an accepted",
+            "state-overlay authority.",
+        ]
+    )
 
     return "\n".join(
         [
@@ -734,13 +797,7 @@ def _packet_markdown(
             "For view changes, return each ordinary value and its required serialized companion in the same override:",
             "`center_x` with `center_hp_x`, `center_y` with `center_hp_y`, and `zoom` with `log2_zoom`.",
             "Use the JSON types shown in `state.json`; do not return a companion by itself.",
-            "For ordinary color fields, use only directly serialized paths explicitly listed by",
-            "`state-override-authoring-surface.json`. You may return `color_pipeline_draft` only when this packet",
-            "contains a complete draft and the structural template. Return the complete `lanes` array, preserving",
-            "lane/row topology, IDs, labels, ordering, enablement, and row counts. Functions and their complete",
-            "parameter lists may change only as allowed by the attached UI-Salt contract. During proof, the published",
-            "runtime applies that loaded draft through the engine-owned lowering operation; replay then uses the",
-            "complete engine-emitted state without that operation.",
+            *color_authoring_guidance,
             "",
             "### State Override Example",
             "",
@@ -935,6 +992,7 @@ def build_agent_bundle(
         draft = validate_captured_color_pipeline_draft(state, contract)
         has_pipeline_example = draft is not None
         if draft is not None:
+            _validate_color_pipeline_compatibility_authority(contract)
             example_bytes = _json_bytes({"color_pipeline_draft": {"lanes": draft["lanes"]}}, sort_keys=False)
             _write_bytes(stage_dir / _PIPELINE_EXAMPLE_FILENAME, example_bytes)
 

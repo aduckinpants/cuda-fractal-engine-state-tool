@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from cuda_fractal_state_tool.agent_bundle import (
+    _validate_color_pipeline_compatibility_authority,
     build_agent_bundle,
     copy_agent_packet,
     derive_state_override_authoring_surface,
@@ -151,6 +152,7 @@ class AgentBundleTests(unittest.TestCase):
             "schema_version": 1,
             "panels": [
                 {
+                    "id": "fractal",
                     "controls": [
                         {
                             "id": "explaino_damping",
@@ -197,8 +199,23 @@ class AgentBundleTests(unittest.TestCase):
                 }
             ],
         }
+        schema_controls = ui_schema["panels"][0]["controls"]
+        exposure_control = next(control for control in schema_controls if control["id"] == "exposure")
+        ui_schema["panels"][0]["controls"] = [
+            control for control in schema_controls if control["id"] != "exposure"
+        ]
+        ui_schema["panels"].append({"id": "color", "controls": [exposure_control]})
         contract = {
             "schema_version": 1,
+            "composition_recipe_contract": {
+                "compatibility": [
+                    {
+                        "source": "identity",
+                        "palette": "identity",
+                        "grading": "contrast_lift",
+                    }
+                ]
+            },
             "function_library": {
                 "lanes": [
                     {"id": lane, "functions": [{"id": "identity", "params": []}]}
@@ -294,7 +311,7 @@ class AgentBundleTests(unittest.TestCase):
             )
             by_path = {entry["path"]: entry for entry in surface["entries"]}
             self.assertIn("params.explaino_damping", by_path)
-            self.assertIn("params.exposure", by_path)
+            self.assertNotIn("params.exposure", by_path)
             self.assertIn("view.center_x", by_path)
             self.assertEqual(by_path["view.center_x"]["companion_paths"], ["view.center_hp_x"])
             self.assertNotIn("params.color_glow", by_path)
@@ -304,6 +321,15 @@ class AgentBundleTests(unittest.TestCase):
                 surface["authority_refs"]["parameter_surface_sha256"],
                 hashlib.sha256(fixture["surface_bytes"]).hexdigest(),
             )
+            self.assertEqual(surface["surface_version"], 2)
+            self.assertEqual(surface["color_authoring"]["mode"], "color_pipeline_draft_only")
+            self.assertEqual(surface["color_authoring"]["excluded_ui_panel_id"], "color")
+            self.assertEqual(
+                surface["color_authoring"]["compatibility_authority"],
+                "color_pipeline_function_library.contract.v1.json"
+                "#/composition_recipe_contract/compatibility",
+            )
+            self.assertTrue(surface["color_authoring"]["engine_materialization_is_final_authority"])
 
     def test_pipeline_example_validation_enforces_contract_carrier_range_and_order(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -321,6 +347,11 @@ class AgentBundleTests(unittest.TestCase):
             value["enum_value"] = "wrong-carrier"
             with self.assertRaisesRegex(ValueError, "wrong numeric carrier"):
                 validate_captured_color_pipeline_draft(bad_state, contract)
+
+            missing_compatibility = json.loads(json.dumps(contract))
+            missing_compatibility.pop("composition_recipe_contract")
+            with self.assertRaisesRegex(ValueError, "composition_recipe_contract"):
+                _validate_color_pipeline_compatibility_authority(missing_compatibility)
 
     def test_build_bundle_preserves_exact_artifacts_and_publishes_coherent_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -368,7 +399,12 @@ class AgentBundleTests(unittest.TestCase):
             self.assertNotIn("proposal_v1", packet)
             self.assertNotIn("capability_profile", packet)
             self.assertNotIn("select_function", packet)
-            self.assertIn("You may return `color_pipeline_draft`", packet)
+            self.assertNotIn("`params.exposure`", packet)
+            self.assertIn("color authoring is Color-Pipeline-only", packet)
+            self.assertIn("Do not return flat `params` color controls", packet)
+            self.assertIn("Function IDs are not freely composable", packet)
+            self.assertIn("composition_recipe_contract.compatibility", packet)
+            self.assertIn("Contract-valid drafts outside a runtime-supported recipe", packet)
             self.assertIn("applies that loaded draft through the engine-owned lowering operation", packet)
             self.assertIn("unchanged structural template", packet)
             self.assertNotIn("pending editor state", packet)
@@ -495,6 +531,13 @@ class AgentBundleTests(unittest.TestCase):
             self.assertIn("- `field-notes.md`", packet)
             self.assertIn("Color Pipeline state override authoring is unavailable", packet)
             self.assertFalse((bundle.packet_dir / "state-override-example-color-pipeline.json").exists())
+            surface = json.loads(
+                (bundle.packet_dir / "state-override-authoring-surface.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(surface["color_authoring"]["mode"], "unavailable")
+            self.assertNotIn("params.exposure", {entry["path"] for entry in surface["entries"]})
 
     def test_handoff_rejects_attachment_tampering(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
