@@ -11,7 +11,9 @@ dependencies = ["Pillow>=12.1,<13"]
 
 [project.scripts]
 cuda-fractal-runtime-probe = "cuda_fractal_state_tool.runtime_probe:main"
-cuda-fractal-color-authority-proof = "cuda_fractal_state_tool.color_authority_cli:main"
+cuda-fractal-agent-bundle = "cuda_fractal_state_tool.agent_bundle_cli:main"
+cuda-fractal-state-override = "cuda_fractal_state_tool.state_override_cli:main"
+cuda-fractal-state-proof = "cuda_fractal_state_tool.state_override_proof_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -1,135 +1,93 @@
-# Finding-to-Proof Desktop Workflow
+# Finding Exploration and State Override Workflow
 
-## Current checkpoint
+## 1. Open the finding
 
-The rescue implementation is operational and waiting for final user UX
-acceptance. Finding import, the web-agent packet, proposal validation, engine
-materialization, action-free replay, repair, and exact-candidate launch gating
-are connected through the single application surface.
+Launch the desktop tool, select a captured finding directory or artifact, and
+open it into the durable workspace. Inspect the finding summary and bounded base
+preview.
 
-Launch from the repository root:
+## 2. Hand the exact bundle to the web agent
 
-```powershell
-.\run_ui.cmd
+After Agent Bundle V6 finishes:
+
+1. Click `Copy Packet` and paste `packet.md` into a fresh web session.
+2. Click `Open Agent Bundle Folder`.
+3. Attach every file shown under `Attach required` plus any useful recommended
+   context files.
+4. Ask the normal exploration question.
+
+Copying `packet.md` alone does not transmit the state, schemas, contracts,
+catalog, authoring surface, or frame.
+
+The agent should begin with curiosity-driven discussion. It should return no
+override until you request a concrete change. Once requested, it returns one
+sparse state-shaped JSON object, for example:
+
+```json
+{
+  "params": {
+    "explaino_damping": 0.9
+  }
+}
 ```
 
-Equivalent module launch:
+The object has no envelope, version, finding ID, hash, capability profile, or
+action list. A path is usable only when the exact packet's
+`state-override-authoring-surface.json` authorizes it.
 
-```powershell
-$env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.app
-```
+## 3. Prove the returned override
 
-## Visible workflow
+Paste the JSON into the empty `Incoming State Override JSON` editor and click
+`Validate & Replay Prove`.
 
-The left side is finding context moving outward:
+The tool:
 
-1. Select a capture artifact or capture directory.
-2. Confirm the separate durable workspace path.
-3. Open the finding. The source remains read-only while required artifacts are
-   mirrored into the workspace.
-4. Inspect the finding summary and bounded frame derivative.
-5. Review and copy the automatically generated outgoing exploration packet.
-   It contains the complete captured `state.json` and, when supplied by Capture
-   Finding, the exact `fractal-state.json` review sidecar. It also contains the
-   engine-generated applicable parameter set and properties for the selected
-   fractal. The frame itself is attached separately to the web conversation.
+1. rechecks the immutable Packet V6 and published runtime identity;
+2. validates the sparse override from the packet's copied authorities;
+3. deterministically merges it into the exact base state;
+4. loads that complete state through the engine without actions;
+5. captures the engine-emitted candidate state and frame;
+6. replays the emitted state without actions;
+7. requires stable authoring state and identical decoded replay pixels.
 
-The right side is agent output moving inward:
+Small runtime numeric representation changes are shown explicitly. Missing,
+reverted, or materially contradictory values reject the proof.
 
-1. Confirm the packet ID, exact packet SHA-256, and capability profile.
-2. Paste proposal JSON into the initially empty editor.
-3. Observe the session move to `PROPOSAL_DIRTY` and run `Validate & Replay Prove`.
-4. For an actionable rejection, review the error and copy the exact bound repair
-   packet back into the same web conversation.
-5. For a proven result, review the receipt and launch the exact candidate in a
-   new viewer. Launch rechecks the candidate, packet, proposal text, runtime,
-   and UI-Salt contract first.
+The proof also compares the captured base frame with the engine-emitted
+candidate. `PIXELS IDENTICAL TO BASE` means the requested state was preserved
+without an observed rendered effect and must not be mistaken for a successful
+visual change.
 
-The session states are `EMPTY`, `FINDING_READY`, `PACKET_READY`,
-`PROPOSAL_DIRTY`, `PROVING`, `PROVEN`, and `REJECTED`.
+## 4. Review the candidate
 
-## Agent behavioral contract
+Replay success does not authorize launch. Compare the base and candidate
+previews, or open either full frame explicitly.
 
-The packet's first section keeps exploratory questions in discussion mode,
-including “What would you try?”, “Show me a good alternative”, and “Could root
-proximity help?”. Proposal output begins only when the user explicitly asks for
-a proposal, asks to apply/try/do a specific change, or unambiguously accepts a
-specific immediately preceding change. Ambiguous intent requires one concise
-clarification and no JSON.
+- `Accept Candidate` writes an immutable accepted review decision and enables
+  launch only after fresh hash and authority checks.
+- `Revision Needed` preserves the proof and decision, keeps launch disabled,
+  and lets you edit or replace the override for a new attempt.
 
-Once triggered, the agent returns a short rationale and exactly one fenced
-`json` block containing a `proposal_version: 1` object. `proposal_v1` is the
-object contract name, not the code-fence language.
+## 5. Launch only the accepted engine state
 
-Packet V5 then supplies exactly one engine-owned description for the selected
-`state.json.fractal_type`. That section is general mathematical background, not
-parameter applicability, current finding state, current Color Pipeline state,
-or proof of what caused the frame. The manifest records the exact descriptive
-catalog hash, selector, and review status.
+`Launch Accepted State` rechecks the bundle, exact override text, merged state,
+engine-emitted state, candidate frame, replay evidence, proof receipt, review
+decision, and current runtime identity. It then launches the exact
+engine-emitted state in a new viewer and writes `launch.json`.
 
-The high-priority contract also requires the agent to keep continuous signals
-distinct from categorical basins, serialized root symmetry distinct from
-visible frame symmetry, nonzero values distinct from proven visual causes,
-signal-processing help distinct from recurrence or geometry authority, engine
-help within its literal scope, global statistics non-spatial, and single-frame
-repetition short of exact self-similarity.
+## Safety boundaries
 
-## Packet and preview safety
-
-- Packet payloads contain the exact captured engine `state.json`, optional exact
-  review-focused `fractal-state.json`, readable finding context, model guidance,
-  compiled UI-Salt descriptions, validated examples, and closing
-  finding/hash/runtime/contract bindings. They do not expose local filesystem
-  paths.
-- `state.json` remains complete replay authority but contains broad shared,
-  inactive, default, compatibility, and derived fields. Presence is not proof
-  of relevance to the current fractal family.
-- The applicable-parameter projection is the positive applicability authority.
-  It is generated per packet by merging the published engine's selected-fractal
-  parameter-surface lane with the deployed UI-schema properties. Controls absent
-  from that projection are not applicable merely because they occur in
-  `state.json`.
-- `fractal-state.json` supplies capture-time review values, derived receipts,
-  and Color Pipeline context. It is not replay input and does not replace the
-  generated applicability projection.
-- Applicability is not counterfactual sensitivity proof. Conditional controls
-  retain their exact visibility surface and `visible_if` metadata in the packet.
-  Relationships among applicable values remain hypotheses unless engine help or
-  a proven comparison supports them.
-- The selected descriptive-catalog row comes only from the configured published
-  runtime. Exact bytes are cached under
-  `cache/fractal-descriptive-catalog-v1/<runtime-identity>/<catalog-hash>/`.
-  Missing reviewed prose is nonfatal; malformed catalog authority, duplicate
-  selectors, or a missing selected identity fail packet generation.
-- The exact copied packet is persisted with a manifest under the mirrored
-  finding.
-- The active capability profile is `finding-color-first-row-v1`; proof receipts
-  bind the exact packet ID and payload, finding and base, runtime and contract,
-  and exact pasted proposal text.
-- Frame decoding runs in an owned subprocess. Tk loads only the cached bounded
-  derivative.
-- Internal preview defaults are 640×480 maximum, no upscaling, 50 million
-  decoded pixels, 16,384 maximum dimension, and a 30-second timeout.
-- Preview failure does not prevent summary or packet use. “Open Full Frame” is
-  an explicit OS-viewer action.
-
-## Reset
-
-Reset invalidates the active session and cancels its owned work. It does not
-delete findings, packets, previews, configuration, or source captures.
-
-## Capability boundary
-
-The current packet may author `params.max_iter`, the bounded legacy color
-surface, and at most one row-0 function selection per shipped Color Pipeline
-lane. Parameters inside Color Pipeline functions, additional rows, recipes,
-arbitrary graph editing, existing-viewer control, and full-resolution in-app
-navigation are intentionally unavailable.
-
-## Acceptance boundary
-
-Review the complete operational round trip: finding context, exact packet and
-web discussion, incoming proposal, accepted proof, actionable repair, and
-exact-candidate launch readiness. No further product mutation is authorized
-after the clean morning-review checkpoint until that review.
+- `fractal_type`, render, lens, diagnostics, and absent optional state are not
+  authorable.
+- Camera high-precision companions are pair-only and are never synthesized by
+  Python.
+- Captured Color Pipeline arrays are complete structural evidence: lane/row
+  topology and enablement belong to the captured draft, not to Python.
+- Direct runtime loading currently preserves an edited Color Pipeline draft as
+  pending editor state without applying it to the live render stacks. Treat
+  draft authoring as unaccepted until the engine exposes an authoritative
+  lowering seam; do not compensate with guessed scalar or stack mirrors.
+- Preview failure does not weaken proof or cause full-resolution Tk decoding.
+- Reset cancels only session-owned work and preserves durable evidence.
+- Historical proposal artifacts are data only and cannot be pasted into the
+  active editor as a compatibility input.

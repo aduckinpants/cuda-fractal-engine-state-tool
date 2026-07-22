@@ -8,11 +8,8 @@ from pathlib import Path
 
 from cuda_fractal_state_tool.finding_workspace import (
     SourceCaptureImporter,
-    build_validation_run_id,
     compute_finding_id,
-    compute_proposal_id,
 )
-from cuda_fractal_state_tool.proposal import parse_proposal_v1
 from cuda_fractal_state_tool.workspace_layout import WORKSPACE_MARKER_FILENAME, initialize_workspace_root
 
 
@@ -70,7 +67,7 @@ class FindingWorkspaceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 importer.resolve_capture(source_root)
 
-    def test_import_is_idempotent_for_same_bundle_and_same_path(self) -> None:
+    def test_import_is_idempotent_and_preserves_an_existing_legacy_proposal_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir) / "workspace"
             capture_root = Path(temp_dir) / "capture"
@@ -79,7 +76,9 @@ class FindingWorkspaceTests(unittest.TestCase):
 
             importer = SourceCaptureImporter(workspace_root)
             first = importer.import_capture(capture_root)
-            (first.finding_dir / "proposals" / "keep.txt").write_text("keep", encoding="utf-8")
+            legacy = first.finding_dir / "proposals"
+            legacy.mkdir()
+            (legacy / "keep.txt").write_text("keep", encoding="utf-8")
             second = importer.import_capture(capture_root)
 
             self.assertEqual(first.finding_id, second.finding_id)
@@ -104,6 +103,24 @@ class FindingWorkspaceTests(unittest.TestCase):
             entry = manifest["source_artifacts"]["review_fractal_state"]
             self.assertEqual(entry["workspace_path"], "source/fractal-state.json")
             self.assertEqual(entry["sha256"], hashlib.sha256(copied.read_bytes()).hexdigest())
+
+    def test_import_adds_optional_field_notes_without_rewriting_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir) / "workspace"
+            capture_root = Path(temp_dir) / "capture"
+            _write_json(capture_root / "state.json", {"state_version": 3, "params": {"max_iter": 500}})
+            notes_bytes = b"First observation.\r\nSecond observation.\r\n"
+            (capture_root / "field-notes.md").write_bytes(notes_bytes)
+
+            imported = SourceCaptureImporter(workspace_root).import_capture(capture_root)
+            copied = imported.finding_dir / "source" / "field-notes.md"
+            manifest = json.loads(imported.workspace_manifest_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(copied.read_bytes(), notes_bytes)
+            self.assertEqual((capture_root / "field-notes.md").read_bytes(), notes_bytes)
+            entry = manifest["source_artifacts"]["field_notes"]
+            self.assertEqual(entry["workspace_path"], "source/field-notes.md")
+            self.assertEqual(entry["sha256"], hashlib.sha256(notes_bytes).hexdigest())
 
     def test_reimport_from_different_path_updates_aliases_same_finding(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -169,28 +186,6 @@ class FindingWorkspaceTests(unittest.TestCase):
         finding_three = compute_finding_id("a", "b", None)
         self.assertEqual(finding_one, finding_two)
         self.assertNotEqual(finding_one, finding_three)
-
-    def test_proposal_id_is_stable_for_equivalent_validated_overrides(self) -> None:
-        text_a = (
-            '{"proposal_version": 1, "base_state": {"finding_id": "fid", "sha256": "sha"}, '
-            '"overrides": {"params.max_iter": 700, "params.color_signal": "iteration_count", '
-            '"params.color_palette": "cyclic_escape", "params.color_grading": "escape_default"}}'
-        )
-        text_b = (
-            '{"proposal_version": 1, "base_state": {"finding_id": "fid", "sha256": "sha"}, '
-            '"overrides": {"params.color_palette": "cyclic_escape", "params.color_grading": "escape_default", '
-            '"params.color_signal": "iteration_count", "params.max_iter": 700}}'
-        )
-        proposal_a = parse_proposal_v1(text_a, "fid", "sha")
-        proposal_b = parse_proposal_v1(text_b, "fid", "sha")
-        id_a = compute_proposal_id(proposal_a, "fid", "sha")
-        id_b = compute_proposal_id(proposal_b, "fid", "sha")
-        self.assertEqual(id_a, id_b)
-
-    def test_validation_run_ids_are_unique(self) -> None:
-        first = build_validation_run_id()
-        second = build_validation_run_id()
-        self.assertNotEqual(first, second)
 
     def test_findings_index_is_rebuildable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

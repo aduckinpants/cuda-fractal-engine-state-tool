@@ -1,229 +1,164 @@
 # CUDA Fractal Engine State Tool
 
-This repository hosts a small experimental Python tool for creating and validating CUDA fractal engine state workflows without duplicating engine-state authority.
+This repository implements one bounded exploration workflow without duplicating
+CUDA-engine state authority:
 
-Current status:
-
-- Phase 0 complete: runtime authority probe committed at `102c5bd`
-- Phase 1 complete: bounded proposal loop, replay proof workflow, and slim desktop UI
-- Phase 2 complete (bounded scope): replay-proven color triplet coverage expansion, promotion profile controls, and CLI-first execution/reporting paths
-- UI rescue implementation is operational on `codex/user-workflow-ui-rescue`; final operational UX acceptance is pending user review. The rejected Phase 3 surface is preserved at `archive/vscode-phase3-ui`.
-- Raw probe outputs live under ignored `.local/`
-- Stable conclusions are tracked in `docs/runtime_authority_probe.md`
-- Phase 2 closure summary is tracked in `docs/phase2_closure.md`
-- Phase 3 start checkpoint is tracked in `docs/phase3_start_checkpoint.md`
-- The approved five-slice rescue contract is tracked in `docs/user_workflow_ui_rescue.md`
-- Web-session copy/paste usage guide is tracked in `USER_GUIDE_WEB_SESSION.md`
-
-## Phase 0 goals
-
-1. Resolve and observe the published runtime launcher.
-2. Capture runtime identity.
-3. Probe no-input diagnostic capture behavior.
-4. Compare repeated captures both raw and semantically.
-5. Replay at least one captured state.
-6. Observe describe-metadata surfaces.
-7. Document what the runtime actually proves.
-
-## Local commands
-
-Run tests:
-
-```powershell
-$env:PYTHONPATH = "src"
-py -3 -m unittest discover -s tests
+```text
+Exact Finding Bundle
++ Sparse Agent State Override
+→ Deterministic Merged Candidate
+→ Engine Materialization
+→ Action-Free Replay
+→ Candidate Preview
+→ User Accept / Revise
+→ Exact-Candidate Launch
 ```
 
-Run the runtime probe:
+The active application contains no proposal envelope, capability profile,
+action-lowering path, repair packet, tuple allowlist, reduced Color Pipeline
+catalog, or legacy workflow entry point. Historical proposal artifacts remain
+untouched in existing workspaces and Git history, but are not active inputs.
 
-```powershell
-py -3 -m cuda_fractal_state_tool.runtime_probe --runtime-cmd "D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd" --output-root ".local\runtime_probe"
-```
+## Launch
 
-Run the Phase 1 integration workflow tests:
-
-```powershell
-$env:PYTHONPATH = "src"
-py -3 -m unittest discover -s tests
-```
-
-Inspect validation runs (summary/list/latest with filters):
-
-```powershell
-$env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.validation_runs
-py -3.14 -m cuda_fractal_state_tool.validation_runs --list --status runtime_proof_succeeded
-py -3.14 -m cuda_fractal_state_tool.validation_runs --list --status runtime_proof_succeeded --limit 5
-py -3.14 -m cuda_fractal_state_tool.validation_runs --latest --promotion-profile observed_runtime_enrichment_v1
-py -3.14 -m cuda_fractal_state_tool.validation_runs --list --since 2026-07-20T00:00:00+00:00 --until 2026-07-21T00:00:00+00:00
-```
-
-Summary output includes draft triage fields:
-
-- `draft_run_count`
-- `draft_lane_total`
-- `latest_draft_run`
-
-Run a proposal workflow from a proposal file (non-UI path):
-
-```powershell
-$env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_proposal.json --promotion-profile none
-py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\example_proposal.json --promotion-profile none --launch-viewer-on-success
-```
-
-Controlled Color Pipeline authority proof (compiled UI-Salt -> engine action -> action-free replay):
-
-```powershell
-$env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.color_authority_cli --runtime-cmd D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd --base-state .local\baselines\runtime-default-v1\state.json --out .local\slice1_color_authority_proof
-```
-
-Prompt-session harness for repeatable agent-style tests:
-
-```powershell
-$env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.prompt_session_cli --pack .local\prompt_session_pack.json
-```
-
-Legacy frozen-baseline agent handoff CLI:
-
-```powershell
-$env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.agent_handoff_cli --baseline-manifest .local\baselines\runtime-default-v1\manifest.json --replay-state .local\runtime_probe\replay_one\state.json --out .local\agent_handoff_packet.md
-```
-
-Give the generated `.local\agent_handoff_packet.md` to a fresh agent session only for the older frozen-baseline CLI workflow.
-It defines terms (`state.json` vs `proposal_v1`), runtime-authoritative loop, output contract, and run commands.
-
-Current runtime note:
-
-- Color Pipeline lane/function authority comes from the deployed compiled UI-Salt contract, not `--describe-functions`.
-- Direct sparse-draft workflow materialization fails closed with `color_pipeline_draft_requires_engine_action_workflow`; the desktop finding workflow lowers bounded row-0 selections through the engine action seam.
-- Bounded scalar/triplet prompt packs run now and are suitable for immediate real-session harness validation.
-
-Example pack schema:
-
-```json
-{
-	"session_id": "noop-smoke-pack",
-	"cases": [
-		{
-			"case_id": "noop",
-			"proposal_path": ".local/proposal_noop.json",
-			"state_id": "noop_run",
-			"promotion_profile": "none",
-			"expected_status": "runtime_proof_succeeded",
-			"expected_runtime_status": "runtime_success"
-		}
-	]
-}
-```
-
-Checked-in starter pack:
-
-- `tests/fixtures/prompt_session_pack.sample.json`
-
-The workflow CLI JSON payload now includes `runtime_metadata_cache` copied from the validation artifact.
-Use this field to verify cache hit/miss behavior and metadata provenance paths before lane-authoring decisions.
-
-Generate proposal examples (for workflow_cli input):
-
-```powershell
-$env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.proposal_cli --example noop --out .local\proposal_noop.json
-py -3.14 -m cuda_fractal_state_tool.proposal_cli --example color-triplet --signal root_proximity --palette cyclic_escape --grading tone_map_default --out .local\proposal_triplet.json
-py -3.14 -m cuda_fractal_state_tool.proposal_cli --list-color-triplets
-py -3.14 -m cuda_fractal_state_tool.workflow_cli --proposal .local\proposal_triplet.json --promotion-profile none
-```
-
-`proposal_v1` remains structurally unchanged. Draft payloads use the exact packet-bound desktop workflow; the legacy direct workflow rejects them rather than writing an incomplete engine state.
-
-Inspect the compiled UI-Salt lane/function authority (fail-closed bounded projection):
-
-```powershell
-$env:PYTHONPATH = "src"
-py -3.14 -m cuda_fractal_state_tool.lane_catalog_cli --ui-salt-contract D:\salt-fractal\cuda_newton_fractal_clone\runtime\ui_salt\generated\color_pipeline_function_library.contract.v1.json
-py -3.14 -m cuda_fractal_state_tool.lane_catalog_cli --ui-salt-contract D:\salt-fractal\cuda_newton_fractal_clone\runtime\ui_salt\generated\color_pipeline_function_library.contract.v1.json --check-lane shape --check-function repeat
-```
-
-When `--check-lane` and `--check-function` are provided, the CLI returns explicit fail-closed statuses for mismatch:
-
-- `lane_unknown`
-- `function_unknown`
-
-Example bounded draft override payload in proposal_v1:
-
-```json
-{
-	"proposal_version": 1,
-	"base_state": {
-		"id": "runtime-default-v1",
-		"sha256": "<baseline sha256>"
-	},
-	"overrides": {
-		"color_pipeline_draft": {
-			"lanes": [
-				{
-					"lane_id": "shape",
-					"function_id": "identity"
-				}
-			]
-		}
-	}
-}
-```
-
-Run the fresh finding-to-proof shell:
+From the repository root:
 
 ```powershell
 .\run_ui.cmd
 ```
 
-The active application has one two-column workflow surface. Opening a finding
-automatically creates an agent exploration packet containing the exact captured
-`state.json`, the optional engine-captured `fractal-state.json` review sidecar,
-an engine-generated applicable-parameter projection for the selected fractal,
-readable finding context, deployed UI-Salt function semantics, parser-validated
-examples, and closing machine-binding metadata. The projection merges the
-published runtime's parameter-surface descriptor with its deployed UI schema,
-including current values and parameter properties. The proposal editor starts
-empty.
-
-Packet V5 begins with a compact behavioral contract and one selected
-engine-owned fractal description before the evidence appendix. It fixes the
-evidence order, keeps questions and requests for ideas in discussion mode,
-defines the exact proposal trigger, requires one fenced `json` block containing
-a `proposal_version: 1` object, and blocks unsupported basin, visible-symmetry,
-nonzero-control, broadened-help, spatial-statistics, and exact-self-similarity
-claims. The descriptive catalog is queried from the published runtime, validated
-fail-closed, selected exactly by `state.json.fractal_type`, and cached by runtime
-identity plus exact catalog hash. A valid unavailable description fails softly;
-there is no historical-file fallback.
-
-`Validate & Replay Prove` binds the exact packet and proposal text, applies
-scalar overrides, lowers bounded Color Pipeline row-0 selections through the
-engine action seam, captures the engine-emitted candidate, and replays that
-candidate without actions. Actionable proposal rejection enables a bound repair
-packet. Successful proof enables launch only for the exact rehashed candidate,
-runtime, contract, packet, and proposal binding.
-
-Durable finding artifacts are laid out under the configured workspace:
-
-- `findings/<finding-id>/source/` — mirrored read-only capture artifacts;
-- `findings/<finding-id>/packets/<packet-id>/` — exact packet, manifest, and raw
-  engine parameter-surface descriptor;
-- `findings/<finding-id>/proofs/<proof-id>/` — binding, proposal, intermediate
-  base, materialization, replay, repair when actionable, proven candidate, and
-  receipt.
-
-Direct module launch (equivalent):
+Open the July 20 review fixture directly:
 
 ```powershell
-$env:PYTHONPATH = "src"
+.\run_ui.cmd `
+  --capture-source "D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-20\192515_961__explaino_all" `
+  --workspace-root "D:\salt-fractal\cuda-fractal-engine-state-tool"
+```
+
+Equivalent module launch:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
 py -3.14 -m cuda_fractal_state_tool.app
 ```
 
-The failed notebook/controller is available only through
-`archive/vscode-phase3-ui`; it is not present in the active application code.
+## Visible workflow
 
+The left side owns the captured finding, bounded base preview, readable context,
+and immutable Agent Bundle V6. `Copy Packet` copies only `packet.md`; `Open Agent
+Bundle Folder` exposes the exact authority files and frame that must be attached
+separately to a web session.
+
+The right side starts with an empty State Override editor. It accepts one sparse
+state-shaped JSON object. Proof performs no action translation: it loads the
+complete deterministic merged state through the published runtime, captures the
+engine-emitted state and frame, and replays that emitted state without actions.
+
+Successful replay stops at:
+
+```text
+OVERRIDE ACCEPTED
+REPLAY PROVEN
+VISUAL REVIEW PENDING
+```
+
+`Accept Candidate` or `Revision Needed` writes one immutable review decision.
+Only acceptance plus fresh binding/hash checks reaches `LAUNCH READY`. Launch
+loads the exact engine-emitted candidate, not the Python merged input.
+
+## Packet V6 and override authority
+
+Each packet directory contains exact finding artifacts, the deployed UI schema,
+the deployed UI-Salt function contract, full engine parameter and descriptive
+catalog exports, and a finding-specific `state-override-authoring-surface.json`.
+The latter is derived only from the neighboring copied bytes.
+
+Allowed override domains are:
+
+- `params` paths present in the packet-derived authoring surface;
+- companion-paired `view` edits;
+- complete fixed-topology `color_pipeline_draft.lanes` replacement when the
+  captured state already contains a complete draft.
+
+Objects merge recursively, arrays replace completely, and unknown, absent,
+read-only, duplicate, null, or non-finite values fail closed. `{}` copies the
+exact base `state.json` bytes. A nonempty candidate uses the documented stable
+UTF-8 serialization.
+
+The captured draft owns Color Pipeline topology. The exact deployed UI-Salt
+contract owns function and parameter validity. Python owns no parallel function,
+parameter, default, range, enum, compatibility, or coercion catalog.
+
+The merged runtime exposes an explicit engine-owned loaded-draft application
+operation. State-tool materialization invokes it only when the sparse override
+contains `color_pipeline_draft`; ordinary state loading and action-free replay
+remain non-applying. The engine-emitted complete state is still the sole launch
+candidate. See `docs/slice5_color_pipeline_engine_integration.md` for the real
+draft-to-render proof.
+
+## Durable evidence
+
+```text
+findings/<finding-id>/source/                 exact mirrored capture artifacts
+findings/<finding-id>/packets/<packet-id>/    immutable Agent Bundle V6
+findings/<finding-id>/proofs/<proof-id>/      binding, override, merged state,
+                                               materialization, replay, receipt,
+                                               review and launch receipts
+```
+
+Reset cancels session-owned work and clears active UI state. It does not delete
+findings, bundles, proofs, caches, source captures, or unrelated viewer
+processes.
+
+## Command-line proof surfaces
+
+Build an exact bundle:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+py -3.14 -m cuda_fractal_state_tool.agent_bundle_cli build `
+  --workspace-root D:\salt-fractal\cuda-fractal-engine-state-tool `
+  --source <capture-directory> `
+  --runtime-cmd D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd
+```
+
+Validate and merge an override without running the engine:
+
+```powershell
+py -3.14 -m cuda_fractal_state_tool.state_override_cli `
+  --packet-dir <packet-v6-directory> `
+  --override <override.json> `
+  --out .local\merged-candidate.json `
+  --manifest-sha256 <manifest-sha256>
+```
+
+Run engine materialization and action-free replay proof:
+
+```powershell
+py -3.14 -m cuda_fractal_state_tool.state_override_proof_cli `
+  --packet-dir <packet-v6-directory> `
+  --override <override.json> `
+  --manifest-sha256 <manifest-sha256>
+```
+
+The proof CLI deliberately stops at visual review pending and never launches.
+
+## Validation
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+py -3.14 -m unittest discover -s tests
+```
+
+Raw local proof and screenshot outputs live under ignored `.local/`. Stable
+slice conclusions are tracked in:
+
+- `docs/agent_state_override_rescue.md`
+- `docs/slice1_packet_v6_manual_gate.md`
+- `docs/slice2_state_override_validation.md`
+- `docs/slice3_state_override_runtime_proof.md`
+- `docs/slice4_atomic_ui_cutover.md`
+- `docs/slice5_real_acceptance_checkpoint.md`
+- `docs/slice5_color_pipeline_engine_integration.md`
+
+Earlier phase documents are historical evidence, not active product contracts.

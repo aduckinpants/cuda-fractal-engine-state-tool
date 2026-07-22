@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -103,6 +104,24 @@ def build_runtime_identity(runtime_cmd_path: Path, cwd: Path) -> dict[str, Any]:
     return identity
 
 
+def runtime_identity_summary(identity: dict[str, Any]) -> dict[str, Any]:
+    """Return the stable runtime fields carried by immutable Packet V6 bindings."""
+    return {
+        "launcher_sha256": identity.get("launcher_sha256"),
+        "resolved_executable_sha256": identity.get("resolved_executable_sha256"),
+        "resolved_executable_file_version": identity.get("resolved_executable_file_version"),
+        "runtime_schema_sha256": identity.get("runtime_schema_sha256"),
+        "ui_salt_contract_sha256": identity.get("ui_salt_contract_sha256"),
+    }
+
+
+def runtime_identity_summary_sha256(summary: dict[str, Any]) -> str:
+    payload = (
+        json.dumps(summary, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False) + "\n"
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def build_runtime_command(runtime_cmd_path: Path, *args: str) -> list[str]:
     return ["cmd.exe", "/d", "/c", str(runtime_cmd_path), *args]
 
@@ -116,6 +135,29 @@ def build_replay_command(runtime_cmd_path: Path, candidate_path: Path, replay_di
         "--diagnostics-out-dir",
         os.path.abspath(str(replay_dir)),
     )
+
+
+def build_materialization_command(
+    runtime_cmd_path: Path,
+    candidate_path: Path,
+    materialization_dir: Path,
+    *,
+    apply_loaded_draft: bool,
+) -> list[str]:
+    args = [
+        "--load-state-json",
+        os.path.abspath(str(candidate_path)),
+    ]
+    if apply_loaded_draft:
+        args.append("--apply-loaded-color-pipeline-draft")
+    args.extend(
+        [
+            "--capture-diagnostic",
+            "--diagnostics-out-dir",
+            os.path.abspath(str(materialization_dir)),
+        ]
+    )
+    return build_runtime_command(runtime_cmd_path, *args)
 
 
 def build_detached_viewer_launch_command(runtime_cmd_path: Path, state_path: Path) -> list[str]:

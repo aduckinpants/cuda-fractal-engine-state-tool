@@ -11,12 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from .proposal import ProposalV1
 from .workspace_layout import initialize_workspace_root
 
 
 FINDING_KEY_SCHEMA = "finding-key-v1"
-PROPOSAL_KEY_SCHEMA = "proposal-key-v1"
 WORKSPACE_MANIFEST_SCHEMA_VERSION = 1
 FINDINGS_INDEX_FILENAME = "findings_index.json"
 WORKSPACE_LOCK_FILENAME = ".workspace-import.lock"
@@ -83,6 +81,7 @@ class ResolvedCapture:
     state_path: Path
     finding_manifest_path: Path | None
     fractal_state_path: Path | None
+    field_notes_path: Path | None
     primary_frame_path: Path | None
 
 
@@ -114,6 +113,7 @@ class SourceCaptureImporter:
         state_sha256 = _sha256_file(resolved.state_path)
         finding_sha256 = _sha256_file(resolved.finding_manifest_path) if resolved.finding_manifest_path else None
         fractal_state_sha256 = _sha256_file(resolved.fractal_state_path) if resolved.fractal_state_path else None
+        field_notes_sha256 = _sha256_file(resolved.field_notes_path) if resolved.field_notes_path else None
         frame_sha256 = _sha256_file(resolved.primary_frame_path) if resolved.primary_frame_path else None
         finding_id = compute_finding_id(state_sha256, finding_sha256, frame_sha256)
 
@@ -123,9 +123,7 @@ class SourceCaptureImporter:
 
         with _workspace_lock(self.workspace_root):
             source_dir.mkdir(parents=True, exist_ok=True)
-            proposals_dir = finding_dir / "proposals"
             packets_dir = finding_dir / "packets"
-            proposals_dir.mkdir(parents=True, exist_ok=True)
             packets_dir.mkdir(parents=True, exist_ok=True)
 
             self._copy_required_source_artifacts(resolved, source_dir)
@@ -136,6 +134,7 @@ class SourceCaptureImporter:
                 state_sha256,
                 finding_sha256,
                 fractal_state_sha256,
+                field_notes_sha256,
                 frame_sha256,
             )
             _atomic_write_json(workspace_manifest_path, manifest_payload)
@@ -189,6 +188,10 @@ class SourceCaptureImporter:
         if fractal_state.exists() and not fractal_state.is_file():
             raise ValueError(f"Capture bundle fractal-state.json is not a file: {fractal_state}")
         fractal_state_path = fractal_state if fractal_state.is_file() else None
+        field_notes = bundle_root / "field-notes.md"
+        if field_notes.exists() and not field_notes.is_file():
+            raise ValueError(f"Capture bundle field-notes.md is not a file: {field_notes}")
+        field_notes_path = field_notes if field_notes.is_file() else None
         return ResolvedCapture(
             input_path=input_path,
             resolution_mode=resolution_mode,
@@ -196,6 +199,7 @@ class SourceCaptureImporter:
             state_path=state_path,
             finding_manifest_path=finding_manifest_path,
             fractal_state_path=fractal_state_path,
+            field_notes_path=field_notes_path,
             primary_frame_path=primary_frame_path,
         )
 
@@ -259,6 +263,8 @@ class SourceCaptureImporter:
             self._copy_if_changed(resolved.finding_manifest_path, source_dir / "finding.json")
         if resolved.fractal_state_path:
             self._copy_if_changed(resolved.fractal_state_path, source_dir / "fractal-state.json")
+        if resolved.field_notes_path:
+            self._copy_if_changed(resolved.field_notes_path, source_dir / "field-notes.md")
         if resolved.primary_frame_path:
             self._copy_if_changed(resolved.primary_frame_path, source_dir / resolved.primary_frame_path.name)
 
@@ -281,6 +287,7 @@ class SourceCaptureImporter:
         state_sha256: str,
         finding_sha256: str | None,
         fractal_state_sha256: str | None,
+        field_notes_sha256: str | None,
         frame_sha256: str | None,
     ) -> dict[str, Any]:
         manifest_path = source_dir.parent / "workspace.json"
@@ -322,6 +329,7 @@ class SourceCaptureImporter:
                 "bundle_root": str(resolved.bundle_root),
                 "state_path": str(resolved.state_path),
                 "finding_manifest_path": str(resolved.finding_manifest_path) if resolved.finding_manifest_path else None,
+                "field_notes_path": str(resolved.field_notes_path) if resolved.field_notes_path else None,
                 "primary_frame_path": str(resolved.primary_frame_path) if resolved.primary_frame_path else None,
             },
             "authoring_base": {
@@ -341,6 +349,10 @@ class SourceCaptureImporter:
                     "workspace_path": "source/fractal-state.json" if fractal_state_sha256 else None,
                     "sha256": fractal_state_sha256,
                 },
+                "field_notes": {
+                    "workspace_path": "source/field-notes.md" if field_notes_sha256 else None,
+                    "sha256": field_notes_sha256,
+                },
                 "primary_frame": {
                     "workspace_path": f"source/{resolved.primary_frame_path.name}" if frame_sha256 and resolved.primary_frame_path else None,
                     "sha256": frame_sha256,
@@ -349,7 +361,13 @@ class SourceCaptureImporter:
             "paths": {
                 "source_dir": "source",
                 "packets_dir": "packets",
-                "proposals_dir": "proposals",
+                "proofs_dir": "proofs",
+                **(
+                    {"legacy_proposals_dir": (previous.get("paths") or {}).get("proposals_dir")}
+                    if isinstance(previous.get("paths"), dict)
+                    and isinstance((previous.get("paths") or {}).get("proposals_dir"), str)
+                    else {}
+                ),
             },
             "source_aliases": deduped_aliases,
         }
@@ -393,28 +411,3 @@ def compute_finding_id(
         "primary_frame_sha256": primary_frame_sha256,
     }
     return _sha256_bytes(_canonical_json_bytes(payload))
-
-
-def canonical_validated_override_map(overrides: dict[str, Any]) -> dict[str, Any]:
-    # Normalize through JSON to ensure deterministic typing and recursive key ordering.
-    return json.loads(_canonical_json_bytes(overrides).decode("utf-8"))
-
-
-def compute_proposal_id(
-    proposal: ProposalV1,
-    finding_id: str,
-    authoring_base_state_sha256: str,
-) -> str:
-    payload = {
-        "key_schema": PROPOSAL_KEY_SCHEMA,
-        "finding_id": finding_id,
-        "authoring_base_state_sha256": authoring_base_state_sha256,
-        "proposal_version": proposal.proposal_version,
-        "overrides": canonical_validated_override_map(dict(proposal.overrides)),
-    }
-    return _sha256_bytes(_canonical_json_bytes(payload))
-
-
-def build_validation_run_id() -> str:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-    return f"{stamp}_{uuid.uuid4().hex[:8]}"

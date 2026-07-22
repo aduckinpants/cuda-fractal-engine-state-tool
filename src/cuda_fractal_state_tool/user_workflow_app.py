@@ -9,18 +9,24 @@ from typing import Callable, Optional
 
 from PIL import Image, ImageTk
 
+from .agent_bundle import (
+    AgentBundle,
+    build_agent_bundle,
+    copy_agent_packet,
+    load_agent_bundle_handoff,
+    open_agent_bundle_folder,
+)
 from .async_jobs import AsyncJobRunner, JobOutcome, JobRequestIdentity, WorkerQueueFullError
 from .preview_service import PreviewService
 from .runtime_surface import DEFAULT_RUNTIME_CMD
-from .user_proof import ProofResult, execute_bound_proof, launch_proven_result
-from .user_workflow import (
-    FindingContext,
-    PacketContext,
-    SessionState,
-    UserWorkflowSession,
-    build_finding_intake_packet,
-    load_finding_context,
+from .state_override_proof import (
+    StateOverrideProofResult,
+    execute_state_override_proof,
+    launch_state_override_candidate,
+    record_state_override_review,
+    validate_state_override_launch_readiness,
 )
+from .user_workflow import FindingContext, SessionState, UserWorkflowSession, load_finding_context
 
 
 DEFAULT_FINDING_WORKSPACE = Path(r"D:\salt-fractal\cuda-fractal-engine-state-tool")
@@ -48,17 +54,23 @@ class UserWorkflowApp:
         self.runner = runner or AsyncJobRunner(self._completion_queue.put)
         self._owns_runner = runner is None
         self._busy_kinds: set[str] = set()
-        self._preview_photo = None
-        self._setting_proposal = False
+        self._base_preview_photo = None
+        self._candidate_preview_photo = None
+        self._candidate_full_frame_opened = False
+        self._setting_override = False
+        self._last_copyable_error = ""
         self._closed = False
 
         self.source_path_var = tk.StringVar(value="")
         self.workspace_root_var = tk.StringVar(value=str(workspace_root.resolve()))
         self.state_var = tk.StringVar(value=SessionState.EMPTY.value)
         self.status_var = tk.StringVar(value=self.session.status_text)
-        self.binding_var = tk.StringVar(value="No packet binding yet.")
-        self.packet_info_var = tk.StringVar(value="Packet is generated automatically after finding import.")
+        self.binding_var = tk.StringVar(value="No Agent Bundle V6 binding yet.")
+        self.packet_info_var = tk.StringVar(value="Bundle is generated automatically after finding import.")
+        self.attachment_var = tk.StringVar(value="Required attachments will appear here.")
         self.preview_status_var = tk.StringVar(value="No finding frame loaded.")
+        self.candidate_preview_status_var = tk.StringVar(value="No candidate frame yet.")
+        self.changed_paths_var = tk.StringVar(value="No override changes have been proven.")
 
         self._configure_root()
         self._build_shell()
@@ -67,22 +79,22 @@ class UserWorkflowApp:
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def _configure_root(self) -> None:
-        self.root.title("CUDA Fractal State Tool — Finding to Proof")
-        self.root.geometry("1440x900")
-        self.root.minsize(1080, 700)
+        self.root.title("CUDA Fractal State Tool — Finding State Override")
+        self.root.geometry("1480x940")
+        self.root.minsize(1120, 720)
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=1)
 
     def _build_shell(self) -> None:
         ttk = self.ttk
-        tk = self.tk
-
         header = ttk.Frame(self.root, padding=(12, 10, 12, 6))
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(1, weight=1)
-        ttk.Label(header, text="Finding → Packet → Proposal → Proof", font=("Segoe UI", 15, "bold")).grid(
-            row=0, column=0, sticky="w"
-        )
+        ttk.Label(
+            header,
+            text="Exact Base State + Sparse Override → Engine Candidate → Visual Review",
+            font=("Segoe UI", 15, "bold"),
+        ).grid(row=0, column=0, sticky="w")
         ttk.Label(header, textvariable=self.state_var, padding=(10, 4)).grid(row=0, column=1, sticky="e")
         self.reset_button = ttk.Button(header, text="Reset Session", command=self.reset_session)
         self.reset_button.grid(row=0, column=2, sticky="e", padx=(12, 0))
@@ -94,17 +106,19 @@ class UserWorkflowApp:
         self.panes.add(self.left, weight=1)
         self.panes.add(self.right, weight=1)
         self._build_finding_side()
-        self._build_proposal_side()
+        self._build_override_side()
 
         footer = ttk.Frame(self.root, padding=(12, 4, 12, 10))
         footer.grid(row=2, column=0, sticky="ew")
         footer.columnconfigure(0, weight=1)
-        ttk.Label(footer, textvariable=self.status_var, wraplength=1200).grid(row=0, column=0, sticky="w")
+        ttk.Label(footer, textvariable=self.status_var, wraplength=1280).grid(row=0, column=0, sticky="w")
+        self.copy_error_button = ttk.Button(footer, text="Copy Error", command=self.copy_last_error)
+        self.copy_error_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
 
     def _build_finding_side(self) -> None:
-        ttk = self.ttk
-        tk = self.tk
         from tkinter.scrolledtext import ScrolledText
+
+        ttk = self.ttk
         self.left.columnconfigure(0, weight=1)
         self.left.rowconfigure(2, weight=2)
         self.left.rowconfigure(3, weight=4)
@@ -117,13 +131,17 @@ class UserWorkflowApp:
         ttk.Button(source, text="Browse File…", command=self._browse_file).grid(row=0, column=2, padx=(6, 0))
         ttk.Button(source, text="Browse Folder…", command=self._browse_folder).grid(row=0, column=3, padx=(6, 0))
         ttk.Label(source, text="Durable workspace").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
-        ttk.Entry(source, textvariable=self.workspace_root_var).grid(row=1, column=1, columnspan=2, sticky="ew", pady=(6, 0))
-        ttk.Button(source, text="Browse…", command=self._browse_workspace).grid(row=1, column=3, padx=(6, 0), pady=(6, 0))
+        ttk.Entry(source, textvariable=self.workspace_root_var).grid(
+            row=1, column=1, columnspan=2, sticky="ew", pady=(6, 0)
+        )
+        ttk.Button(source, text="Browse…", command=self._browse_workspace).grid(
+            row=1, column=3, padx=(6, 0), pady=(6, 0)
+        )
         self.open_finding_button = ttk.Button(source, text="Open Finding", command=self.open_finding)
         self.open_finding_button.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(8, 0))
         ttk.Label(
             source,
-            text="The capture remains read-only; required artifacts are mirrored into the durable workspace.",
+            text="The capture remains read-only; exact artifacts are mirrored into the durable workspace.",
             wraplength=620,
         ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
@@ -134,7 +152,7 @@ class UserWorkflowApp:
         self.summary_text = ScrolledText(summary, height=7, wrap="word", state="disabled")
         self.summary_text.grid(row=0, column=0, sticky="nsew")
 
-        preview = ttk.LabelFrame(self.left, text="Frame preview (bounded derivative)", padding=8)
+        preview = ttk.LabelFrame(self.left, text="Base frame preview (bounded derivative)", padding=8)
         preview.grid(row=2, column=0, sticky="nsew", pady=(0, 8))
         preview.columnconfigure(0, weight=1)
         preview.rowconfigure(0, weight=1)
@@ -145,75 +163,106 @@ class UserWorkflowApp:
         preview_controls.columnconfigure(0, weight=1)
         ttk.Label(preview_controls, textvariable=self.preview_status_var).grid(row=0, column=0, sticky="w")
         self.open_full_frame_button = ttk.Button(
-            preview_controls, text="Open Full Frame", command=self.open_full_frame
+            preview_controls, text="Open Full Base Frame", command=self.open_full_frame
         )
         self.open_full_frame_button.grid(row=0, column=1, sticky="e")
 
-        packet = ttk.LabelFrame(self.left, text="3. Outgoing intake packet", padding=8)
+        packet = ttk.LabelFrame(self.left, text="3. Exact Agent Bundle V6", padding=8)
         packet.grid(row=3, column=0, sticky="nsew")
         packet.columnconfigure(0, weight=1)
-        packet.rowconfigure(1, weight=1)
+        packet.rowconfigure(2, weight=1)
         packet_actions = ttk.Frame(packet)
         packet_actions.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        packet_actions.columnconfigure(0, weight=1)
-        self.build_packet_button = ttk.Button(packet_actions, text="Refresh", command=self.build_packet)
+        packet_actions.columnconfigure(1, weight=1)
+        self.build_packet_button = ttk.Button(packet_actions, text="Refresh Bundle", command=self.build_packet)
         self.build_packet_button.grid(row=0, column=0, sticky="w")
-        ttk.Label(packet_actions, textvariable=self.packet_info_var).grid(row=0, column=1, sticky="e", padx=(8, 8))
+        ttk.Label(packet_actions, textvariable=self.packet_info_var).grid(row=0, column=1, sticky="e", padx=8)
         self.copy_packet_button = ttk.Button(packet_actions, text="Copy Packet", command=self.copy_packet)
-        self.copy_packet_button.grid(row=0, column=2, sticky="e")
-        self.packet_text = ScrolledText(packet, height=20, wrap="word", state="disabled")
-        self.packet_text.grid(row=1, column=0, sticky="nsew")
+        self.copy_packet_button.grid(row=0, column=2, sticky="e", padx=(0, 6))
+        self.open_bundle_button = ttk.Button(
+            packet_actions, text="Open Agent Bundle Folder", command=self.open_bundle_folder
+        )
+        self.open_bundle_button.grid(row=0, column=3, sticky="e")
+        ttk.Label(packet, textvariable=self.attachment_var, wraplength=640).grid(
+            row=1, column=0, sticky="w", pady=(0, 6)
+        )
+        self.packet_text = ScrolledText(packet, height=16, wrap="word", state="disabled")
+        self.packet_text.grid(row=2, column=0, sticky="nsew")
 
-    def _build_proposal_side(self) -> None:
-        ttk = self.ttk
-        tk = self.tk
+    def _build_override_side(self) -> None:
         from tkinter.scrolledtext import ScrolledText
+
+        ttk = self.ttk
         self.right.columnconfigure(0, weight=1)
         self.right.rowconfigure(1, weight=3)
-        self.right.rowconfigure(3, weight=2)
+        self.right.rowconfigure(3, weight=3)
+        self.right.rowconfigure(4, weight=2)
 
-        binding = ttk.LabelFrame(self.right, text="Exact packet binding", padding=8)
+        binding = ttk.LabelFrame(self.right, text="Exact bundle binding", padding=8)
         binding.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         binding.columnconfigure(0, weight=1)
-        ttk.Label(binding, textvariable=self.binding_var, wraplength=650).grid(row=0, column=0, sticky="w")
+        ttk.Label(binding, textvariable=self.binding_var, wraplength=670).grid(row=0, column=0, sticky="w")
 
-        proposal = ttk.LabelFrame(self.right, text="4. Incoming proposal JSON", padding=8)
-        proposal.grid(row=1, column=0, sticky="nsew", pady=(0, 8))
-        proposal.columnconfigure(0, weight=1)
-        proposal.rowconfigure(0, weight=1)
-        self.proposal_text = ScrolledText(proposal, height=22, wrap="none", undo=True)
-        self.proposal_text.grid(row=0, column=0, sticky="nsew")
-        self.proposal_text.bind("<<Modified>>", self._proposal_modified)
+        override = ttk.LabelFrame(self.right, text="4. Incoming State Override JSON", padding=8)
+        override.grid(row=1, column=0, sticky="nsew", pady=(0, 8))
+        override.columnconfigure(0, weight=1)
+        override.rowconfigure(0, weight=1)
+        self.override_text = ScrolledText(override, height=17, wrap="none", undo=True)
+        self.override_text.grid(row=0, column=0, sticky="nsew")
+        self.override_text.bind("<<Modified>>", self._override_modified)
         ttk.Label(
-            proposal,
-            text="Starts empty. Paste only the proposal returned for the exact packet shown above.",
+            override,
+            text="Starts empty. Paste one sparse state-shaped JSON object—no envelope, hashes, or action commands.",
+            wraplength=670,
         ).grid(row=1, column=0, sticky="w", pady=(6, 0))
 
-        actions = ttk.LabelFrame(self.right, text="5. Validate, prove, and launch", padding=8)
+        actions = ttk.LabelFrame(self.right, text="5. Validate and replay-prove", padding=8)
         actions.grid(row=2, column=0, sticky="ew", pady=(0, 8))
-        for column in (0, 1, 2):
-            actions.columnconfigure(column, weight=1)
-        self.prove_button = ttk.Button(actions, text="Validate & Replay Prove", command=self.prove_proposal)
-        self.prove_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
-        self.repair_button = ttk.Button(actions, text="Copy Repair Packet", command=self.copy_repair_packet)
-        self.repair_button.grid(row=0, column=1, sticky="ew", padx=4)
-        self.launch_button = ttk.Button(actions, text="Launch Proven State", command=self.launch_proven_state)
-        self.launch_button.grid(row=0, column=2, sticky="ew", padx=(4, 0))
-        ttk.Label(
-            actions,
-            text="Proof is bound to the exact packet and exact proposal text. Launch rechecks the candidate, runtime, and contract.",
-            wraplength=650,
-        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        actions.columnconfigure(0, weight=1)
+        self.prove_button = ttk.Button(actions, text="Validate & Replay Prove", command=self.prove_override)
+        self.prove_button.grid(row=0, column=0, sticky="ew")
+        ttk.Label(actions, textvariable=self.changed_paths_var, wraplength=670).grid(
+            row=1, column=0, sticky="w", pady=(7, 0)
+        )
 
-        proof = ttk.LabelFrame(self.right, text="Proof status / repair context", padding=8)
-        proof.grid(row=3, column=0, sticky="nsew")
+        candidate = ttk.LabelFrame(self.right, text="6. Engine-emitted candidate preview", padding=8)
+        candidate.grid(row=3, column=0, sticky="nsew", pady=(0, 8))
+        candidate.columnconfigure(0, weight=1)
+        candidate.rowconfigure(0, weight=1)
+        self.candidate_preview_label = ttk.Label(candidate, text="No candidate", anchor="center")
+        self.candidate_preview_label.grid(row=0, column=0, sticky="nsew")
+        candidate_controls = ttk.Frame(candidate)
+        candidate_controls.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        candidate_controls.columnconfigure(0, weight=1)
+        ttk.Label(candidate_controls, textvariable=self.candidate_preview_status_var).grid(
+            row=0, column=0, columnspan=4, sticky="w", pady=(0, 6)
+        )
+        self.open_candidate_frame_button = ttk.Button(
+            candidate_controls, text="Open Full Candidate", command=self.open_candidate_frame
+        )
+        self.open_candidate_frame_button.grid(row=1, column=0, sticky="ew", padx=(0, 3))
+        self.accept_button = ttk.Button(candidate_controls, text="Accept Candidate", command=self.accept_candidate)
+        self.accept_button.grid(row=1, column=1, sticky="ew", padx=3)
+        self.revision_button = ttk.Button(
+            candidate_controls, text="Revision Needed", command=self.request_revision
+        )
+        self.revision_button.grid(row=1, column=2, sticky="ew", padx=3)
+        self.launch_button = ttk.Button(
+            candidate_controls, text="Launch Accepted State", command=self.launch_accepted_state
+        )
+        self.launch_button.grid(row=1, column=3, sticky="ew", padx=(3, 0))
+        for column in range(4):
+            candidate_controls.columnconfigure(column, weight=1)
+
+        proof = ttk.LabelFrame(self.right, text="Proof and review status", padding=8)
+        proof.grid(row=4, column=0, sticky="nsew")
         proof.columnconfigure(0, weight=1)
         proof.rowconfigure(0, weight=1)
-        self.proof_text = ScrolledText(proof, height=12, wrap="word", state="disabled")
+        self.proof_text = ScrolledText(proof, height=10, wrap="word", state="disabled")
         self.proof_text.grid(row=0, column=0, sticky="nsew")
         self._set_text(
             self.proof_text,
-            "No proof has run. Paste proposal_v1 JSON from the agent conversation, then validate and replay-prove it.",
+            "No proof has run. Paste a sparse state override after the exact Agent Bundle V6 is ready.",
         )
 
     def _browse_file(self) -> None:
@@ -221,10 +270,7 @@ class UserWorkflowApp:
 
         path = filedialog.askopenfilename(
             title="Choose finding state, manifest, or frame",
-            filetypes=[
-                ("Finding artifacts", "*.json *.png *.bmp *.jpg *.jpeg"),
-                ("All files", "*.*"),
-            ],
+            filetypes=[("Finding artifacts", "*.json *.png *.bmp *.jpg *.jpeg"), ("All files", "*.*")],
         )
         if path:
             self.source_path_var.set(path)
@@ -255,17 +301,14 @@ class UserWorkflowApp:
         if not source_text or not workspace_text:
             self._set_error("Capture source and durable workspace are both required.")
             return
-        source_path = Path(source_text)
-        workspace_root = Path(workspace_text)
         self.runner.cancel_all()
         self._busy_kinds.clear()
         generation = self.session.begin_finding_change()
-        self._clear_finding_views(retain_proposal=True)
-        identity = JobRequestIdentity(generation=generation)
+        self._clear_finding_views(retain_override=True)
         self._submit(
             "finding_import",
-            identity,
-            lambda context: load_finding_context(source_path, workspace_root),
+            JobRequestIdentity(generation=generation),
+            lambda _context: load_finding_context(Path(source_text), Path(workspace_text)),
             self._finding_loaded,
         )
         self._render()
@@ -287,28 +330,28 @@ class UserWorkflowApp:
         self.session.accept_finding(finding)
         self._set_text(self.summary_text, finding.summary_text)
         if finding.primary_frame_path is not None:
-            self.preview_status_var.set("Building bounded preview…")
-            preview_identity = JobRequestIdentity(
+            self.preview_status_var.set("Building bounded base preview…")
+            identity = JobRequestIdentity(
                 generation=self.session.generation,
                 finding_id=finding.finding_id,
                 authoring_base_sha256=finding.authoring_base_sha256,
             )
             self._submit(
-                "preview",
-                preview_identity,
+                "base_preview",
+                identity,
                 lambda context: self.preview_service.prepare(
                     finding.primary_frame_path,
-                    finding.import_result.finding_dir / "preview_cache",
+                    finding.import_result.finding_dir / "preview_cache" / "base",
                     context,
                 ),
-                self._preview_loaded,
+                self._base_preview_loaded,
             )
         else:
-            self.preview_status_var.set("Finding has no primary frame; packet work remains available.")
+            self.preview_status_var.set("Finding has no primary frame; bundle work remains available.")
         self.build_packet()
         self._render()
 
-    def _preview_loaded(self, outcome: JobOutcome) -> None:
+    def _base_preview_loaded(self, outcome: JobOutcome) -> None:
         self._busy_kinds.discard(outcome.kind)
         finding = self.session.finding
         if (
@@ -322,43 +365,49 @@ class UserWorkflowApp:
             return
         if outcome.error:
             self.preview_status_var.set(f"Preview unavailable: {outcome.error}")
-            self.preview_label.configure(image="", text="Preview unavailable\nOpen Full Frame remains explicit.")
+            self.preview_label.configure(image="", text="Preview unavailable\nOpen Full Base Frame remains explicit.")
             self._render()
             return
         preview = outcome.value
         self.session.accept_preview(preview)
-        with Image.open(preview.preview_path) as image:
-            image.load()
-            displayed = image.copy()
-            displayed.thumbnail((560, 350), Image.Resampling.LANCZOS)
-            self._preview_photo = ImageTk.PhotoImage(displayed)
-        self.preview_label.configure(image=self._preview_photo, text="")
+        self._base_preview_photo = self._photo_from_preview(preview.preview_path, (560, 300))
+        self.preview_label.configure(image=self._base_preview_photo, text="")
         cache_note = "cache hit" if preview.cache_hit else "new cached derivative"
         self.preview_status_var.set(
             f"{preview.source_width}×{preview.source_height} → {preview.preview_width}×{preview.preview_height} ({cache_note})"
         )
         self._render()
 
+    @staticmethod
+    def _photo_from_preview(path: Path, size: tuple[int, int]):
+        with Image.open(path) as image:
+            image.load()
+            displayed = image.copy()
+            displayed.thumbnail(size, Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(displayed)
+
     def build_packet(self) -> None:
         finding = self.session.finding
         if finding is None:
-            self._set_error("Open a finding before building its packet.")
+            self._set_error("Open a finding before building its exact Agent Bundle V6.")
             return
+        self.session.status_text = "Building one coherent immutable authority snapshot…"
         identity = JobRequestIdentity(
             generation=self.session.generation,
             finding_id=finding.finding_id,
             authoring_base_sha256=finding.authoring_base_sha256,
         )
-        self.session.status_text = "Building exact packet and runtime/contract binding…"
         self._submit(
-            "packet",
+            "bundle",
             identity,
-            lambda context: build_finding_intake_packet(finding, self.runtime_cmd_path, job=context),
-            self._packet_built,
+            lambda context: build_agent_bundle(
+                finding.import_result.finding_dir, self.runtime_cmd_path, job=context
+            ),
+            self._bundle_built,
         )
         self._render()
 
-    def _packet_built(self, outcome: JobOutcome) -> None:
+    def _bundle_built(self, outcome: JobOutcome) -> None:
         self._busy_kinds.discard(outcome.kind)
         finding = self.session.finding
         if (
@@ -371,92 +420,109 @@ class UserWorkflowApp:
             self._render()
             return
         if outcome.error:
-            self._set_error(f"Packet generation failed: {outcome.error}")
+            self._set_error(f"Agent Bundle V6 generation failed: {outcome.error}")
             self._render()
             return
-        packet = outcome.value
-        if not isinstance(packet, PacketContext):
-            self._set_error("Packet generation returned an invalid result.")
+        bundle = outcome.value
+        if not isinstance(bundle, AgentBundle):
+            self._set_error("Bundle generation returned an invalid result.")
             self._render()
             return
-        self.session.accept_packet(packet)
-        self._set_text(self.proof_text, "No proof has run for this exact packet binding.")
-        self._set_text(self.packet_text, packet.packet_text)
+        handoff = load_agent_bundle_handoff(bundle.packet_dir)
+        self.session.accept_bundle(bundle)
+        self._set_text(self.packet_text, handoff.packet_text)
+        self._set_text(self.proof_text, "No proof has run for this exact Agent Bundle V6 binding.")
         self.binding_var.set(
-            f"Packet {packet.packet_id}\nSHA-256 {packet.packet_sha256}\nProfile {packet.capability_profile}"
+            f"Packet {bundle.packet_id}\nManifest SHA-256 {bundle.manifest_sha256}\n"
+            f"Finding {bundle.finding_id}\nSelector {bundle.selected_fractal_type}"
         )
-        self.packet_info_var.set(
-            f"{len(packet.packet_text.encode('utf-8')):,} bytes · contract {packet.ui_salt_contract_sha256[:12]}…"
+        self.packet_info_var.set(f"{len(handoff.packet_text.encode('utf-8')):,} byte index")
+        required = ", ".join(handoff.required_attachments)
+        recommended = ", ".join(handoff.recommended_attachments) or "none"
+        unavailable = ", ".join(handoff.unavailable_optional_attachments) or "none"
+        self.attachment_var.set(
+            f"Attach required: {required}\nRecommended: {recommended} · Unavailable optional: {unavailable}"
         )
         self._render()
 
     def copy_packet(self) -> None:
-        packet = self.session.packet
-        if packet is None:
-            self._set_error("Build an exact intake packet before copying it.")
+        bundle = self.session.bundle
+        if bundle is None:
+            self._set_error("Build an exact Agent Bundle V6 before copying packet.md.")
             return
-        self.root.clipboard_clear()
-        self.root.clipboard_append(packet.packet_text)
-        self.root.update_idletasks()
-        self.session.status_text = f"Copied exact packet {packet.packet_id}."
+        copy_agent_packet(bundle.packet_dir, self._write_clipboard)
+        self.session.status_text = (
+            f"Copied packet.md for {bundle.packet_id}. Attach the listed files from the bundle folder separately."
+        )
         self._render()
 
-    def _proposal_modified(self, _event=None) -> None:
-        if self._setting_proposal:
+    def open_bundle_folder(self) -> None:
+        bundle = self.session.bundle
+        if bundle is None:
+            self._set_error("No Agent Bundle V6 folder is active.")
             return
-        if not self.proposal_text.edit_modified():
-            return
-        self.proposal_text.edit_modified(False)
-        self.session.set_proposal_text(self.proposal_text.get("1.0", "end-1c"))
-        self._set_text(self.proof_text, "Proposal changed. Prior proof readiness is invalidated.")
-        self._render()
-
-    def set_proposal_text(self, text: str) -> None:
-        self._setting_proposal = True
         try:
-            self.proposal_text.delete("1.0", "end")
-            self.proposal_text.insert("1.0", text)
-            self.proposal_text.edit_modified(False)
-        finally:
-            self._setting_proposal = False
-        self.session.set_proposal_text(text)
-        self._set_text(self.proof_text, "Proposal changed. Prior proof readiness is invalidated.")
+            open_agent_bundle_folder(bundle.packet_dir)
+            self.session.status_text = f"Opened exact Agent Bundle V6 folder {bundle.packet_id}."
+        except Exception as exc:
+            self._set_error(str(exc))
         self._render()
 
-    def prove_proposal(self) -> None:
+    def _override_modified(self, _event=None) -> None:
+        if self._setting_override or not self.override_text.edit_modified():
+            return
+        self.override_text.edit_modified(False)
+        self.session.set_override_text(self.override_text.get("1.0", "end-1c"))
+        self._clear_candidate_views()
+        self._set_text(self.proof_text, "Override changed. Every prior proof and review binding is invalidated.")
+        self._render()
+
+    def set_override_text(self, text: str) -> None:
+        self._setting_override = True
+        try:
+            self.override_text.delete("1.0", "end")
+            self.override_text.insert("1.0", text)
+            self.override_text.edit_modified(False)
+        finally:
+            self._setting_override = False
+        self.session.set_override_text(text)
+        self._clear_candidate_views()
+        self._set_text(self.proof_text, "Override changed. Every prior proof and review binding is invalidated.")
+        self._render()
+
+    def prove_override(self) -> None:
         finding = self.session.finding
-        packet = self.session.packet
-        proposal_text = self.session.proposal_text
-        if finding is None or packet is None or not proposal_text.strip():
-            self._set_error("Open a finding, copy its exact packet, and paste proposal_v1 JSON before proof.")
+        bundle = self.session.bundle
+        override_text = self.session.override_text
+        if finding is None or bundle is None or not override_text.strip():
+            self._set_error("Open a finding, build its exact bundle, and paste a sparse state override before proof.")
             self._render()
             return
-        proposal_sha256 = hashlib.sha256(proposal_text.encode("utf-8")).hexdigest()
+        override_sha256 = hashlib.sha256(override_text.encode("utf-8")).hexdigest()
         identity = JobRequestIdentity(
             generation=self.session.generation,
             finding_id=finding.finding_id,
             authoring_base_sha256=finding.authoring_base_sha256,
-            packet_id=packet.packet_id,
-            packet_sha256=packet.packet_sha256,
-            proposal_text_sha256=proposal_sha256,
-            runtime_identity_sha256=packet.runtime_identity_sha256,
-            ui_salt_contract_sha256=packet.ui_salt_contract_sha256,
+            packet_id=bundle.packet_id,
+            packet_manifest_sha256=bundle.manifest_sha256,
+            override_text_sha256=override_sha256,
         )
         self.session.begin_proof()
+        self._clear_candidate_views()
         self._set_text(
             self.proof_text,
-            "PROVING\n\nValidating packet and proposal binding, asking the engine to materialize the candidate, "
-            "then replaying that emitted state without actions…",
+            "PROVING\n\nValidating exact Packet V6 authority, deterministically merging the override, "
+            "loading the complete state through the engine without actions, and replaying the engine-emitted state…",
         )
         self._submit(
             "proof",
             identity,
-            lambda context: execute_bound_proof(
-                finding,
-                packet,
-                proposal_text,
+            lambda context: execute_state_override_proof(
+                bundle.packet_dir,
+                override_text,
                 self.runtime_cmd_path,
                 context,
+                expected_manifest_sha256=bundle.manifest_sha256,
             ),
             self._proof_completed,
         )
@@ -465,87 +531,248 @@ class UserWorkflowApp:
     def _proof_completed(self, outcome: JobOutcome) -> None:
         self._busy_kinds.discard(outcome.kind)
         finding = self.session.finding
-        packet = self.session.packet
-        current_proposal_sha = hashlib.sha256(self.session.proposal_text.encode("utf-8")).hexdigest()
+        bundle = self.session.bundle
+        current_override_sha = hashlib.sha256(self.session.override_text.encode("utf-8")).hexdigest()
         if (
             outcome.identity.generation != self.session.generation
             or finding is None
-            or packet is None
+            or bundle is None
             or outcome.identity.finding_id != finding.finding_id
             or outcome.identity.authoring_base_sha256 != finding.authoring_base_sha256
-            or outcome.identity.packet_id != packet.packet_id
-            or outcome.identity.packet_sha256 != packet.packet_sha256
-            or outcome.identity.proposal_text_sha256 != current_proposal_sha
+            or outcome.identity.packet_id != bundle.packet_id
+            or outcome.identity.packet_manifest_sha256 != bundle.manifest_sha256
+            or outcome.identity.override_text_sha256 != current_override_sha
             or outcome.cancelled
         ):
             self._render()
             return
         if outcome.error:
             self.session.state = SessionState.REJECTED
-            self.session.status_text = f"Proof operation failed: {outcome.error}"
+            self._set_error(f"Proof operation failed: {outcome.error}")
             self._set_text(self.proof_text, f"PROOF OPERATION FAILED\n\n{outcome.error}")
             self._render()
             return
         result = outcome.value
-        if not isinstance(result, ProofResult):
+        if not isinstance(result, StateOverrideProofResult):
             self.session.state = SessionState.REJECTED
             self._set_error("Proof operation returned an invalid result.")
             self._render()
             return
         self.session.accept_proof_result(result)
-        if result.status == "proven":
+        if result.status == "replay_proven":
+            receipt = self._read_json(result.receipt_path)
+            normalized = [
+                item
+                for item in receipt.get("requested_value_receipts", [])
+                if item.get("classification") == "representation_normalization"
+            ]
+            changed = receipt.get("override", {}).get("changed_paths", [])
+            paths = [item.get("path", "?") for item in changed]
+            self.changed_paths_var.set("Changed paths: " + (", ".join(paths) if paths else "none (exact no-op)"))
+            normalization_note = (
+                "\nRepresentation normalization:\n"
+                + "\n".join(
+                    f"- {item['path']}: {item['requested_value']!r} → {item['engine_emitted_value']!r}"
+                    for item in normalized
+                )
+                if normalized
+                else ""
+            )
+            materialization_receipt = receipt.get("materialization", {})
+            base_frame_comparison = materialization_receipt.get("base_to_candidate_frame_comparison")
+            if isinstance(base_frame_comparison, dict):
+                if base_frame_comparison.get("decoded_equal") is True:
+                    visual_delta_note = (
+                        "\nCandidate visual delta:\n"
+                        "- IDENTICAL decoded pixels to the captured base frame. "
+                        "The requested state may have been preserved without affecting rendered output."
+                    )
+                else:
+                    visual_delta_note = "\nCandidate visual delta:\n- Decoded pixels differ from the captured base frame."
+            else:
+                visual_delta_note = "\nCandidate visual delta:\n- Captured base-frame comparison unavailable."
+            emitted_differences = [
+                item
+                for item in materialization_receipt.get("merged_to_emitted_state_comparison", {}).get(
+                    "differences", []
+                )
+                if item.get("classification") != "volatile_diagnostic_data"
+            ]
+            emitted_note = ""
+            if emitted_differences:
+                displayed = emitted_differences[:12]
+                emitted_note = (
+                    "\nEngine materialization changes beyond the requested diff:\n"
+                    + "\n".join(
+                        f"- {item.get('path', '?')}: {item.get('left')!r} → {item.get('right')!r} "
+                        f"[{item.get('classification', 'unclassified')}]"
+                        for item in displayed
+                    )
+                )
+                if len(emitted_differences) > len(displayed):
+                    emitted_note += f"\n- … {len(emitted_differences) - len(displayed)} additional changes in receipt"
             self._set_text(
                 self.proof_text,
-                "PROVEN\n\n"
-                f"{result.message}\n\n"
-                f"Candidate SHA-256: {result.candidate_sha256}\n"
-                "Launch readiness: READY (candidate, runtime, contract, packet, and proposal are rechecked on click)\n"
-                f"Receipt: {result.receipt_path}",
+                "OVERRIDE ACCEPTED\nREPLAY PROVEN\nVISUAL REVIEW PENDING\n\n"
+                f"{result.message}\n\nEngine candidate SHA-256: {result.engine_candidate_sha256}"
+                f"{normalization_note}{visual_delta_note}{emitted_note}\n\nReceipt: {result.receipt_path}",
+            )
+            assert result.candidate_frame_path is not None
+            self.candidate_preview_status_var.set("Building bounded candidate preview…")
+            preview_identity = JobRequestIdentity(
+                generation=self.session.generation,
+                finding_id=finding.finding_id,
+                packet_id=bundle.packet_id,
+                packet_manifest_sha256=bundle.manifest_sha256,
+                override_text_sha256=current_override_sha,
+                candidate_sha256=result.engine_candidate_sha256,
+            )
+            self._submit(
+                "candidate_preview",
+                preview_identity,
+                lambda context: self.preview_service.prepare(
+                    result.candidate_frame_path,
+                    finding.import_result.finding_dir
+                    / "preview_cache"
+                    / "candidates"
+                    / (result.engine_candidate_sha256 or "unknown"),
+                    context,
+                ),
+                self._candidate_preview_loaded,
             )
         else:
-            repair_note = "A bound repair packet is ready to copy." if result.repair_packet_text else "No repair packet is available for this operational failure."
+            self._last_copyable_error = result.message
             self._set_text(
                 self.proof_text,
-                "REJECTED\n\n"
-                f"{result.message}\n\n{repair_note}\n"
-                f"Receipt: {result.receipt_path}",
+                f"REJECTED\n\n{result.message}\n\nPreserved receipt: {result.receipt_path}",
             )
         self._render()
 
-    def copy_repair_packet(self) -> None:
+    def _candidate_preview_loaded(self, outcome: JobOutcome) -> None:
+        self._busy_kinds.discard(outcome.kind)
         result = self.session.proof_result
-        if not isinstance(result, ProofResult) or not result.repair_packet_text:
-            self._set_error("No actionable rejection repair packet is available.")
+        bundle = self.session.bundle
+        current_override_sha = hashlib.sha256(self.session.override_text.encode("utf-8")).hexdigest()
+        if (
+            outcome.identity.generation != self.session.generation
+            or result is None
+            or bundle is None
+            or outcome.identity.packet_id != bundle.packet_id
+            or outcome.identity.packet_manifest_sha256 != bundle.manifest_sha256
+            or outcome.identity.override_text_sha256 != current_override_sha
+            or outcome.identity.candidate_sha256 != result.engine_candidate_sha256
+            or outcome.cancelled
+        ):
             self._render()
             return
-        self.root.clipboard_clear()
-        self.root.clipboard_append(result.repair_packet_text)
-        self.root.update_idletasks()
-        self.session.status_text = f"Copied repair packet for rejection {result.proof_id}."
+        if outcome.error:
+            self.candidate_preview_status_var.set(
+                f"Candidate preview unavailable: {outcome.error}. Open Full Candidate remains explicit."
+            )
+            self.candidate_preview_label.configure(image="", text="Candidate preview unavailable")
+            self._render()
+            return
+        preview = outcome.value
+        self.session.accept_candidate_preview(preview)
+        self._candidate_preview_photo = self._photo_from_preview(preview.preview_path, (600, 320))
+        self.candidate_preview_label.configure(image=self._candidate_preview_photo, text="")
+        cache_note = "cache hit" if preview.cache_hit else "new cached derivative"
+        receipt = self._read_json(result.receipt_path)
+        base_frame_comparison = receipt.get("materialization", {}).get(
+            "base_to_candidate_frame_comparison"
+        )
+        pixel_note = (
+            " | PIXELS IDENTICAL TO BASE"
+            if isinstance(base_frame_comparison, dict) and base_frame_comparison.get("decoded_equal") is True
+            else " | pixels differ from base"
+            if isinstance(base_frame_comparison, dict)
+            else ""
+        )
+        self.candidate_preview_status_var.set(
+            f"{preview.source_width}×{preview.source_height} → {preview.preview_width}×{preview.preview_height} "
+            f"({cache_note}){pixel_note}"
+        )
         self._render()
 
-    def launch_proven_state(self) -> None:
+    def accept_candidate(self) -> None:
         result = self.session.proof_result
-        packet = self.session.packet
-        if not isinstance(result, ProofResult) or packet is None:
-            self._set_error("No exact proven candidate is launch-ready.")
+        bundle = self.session.bundle
+        if result is None or bundle is None:
+            self._set_error("No replay-proven candidate is available for review.")
+            return
+        if self.session.candidate_preview is None and not self._candidate_full_frame_opened:
+            self._set_error("Wait for the candidate preview or open the full candidate frame before accepting it.")
             self._render()
             return
         try:
-            process = launch_proven_result(
-                result,
-                packet,
-                self.session.proposal_text,
-                self.runtime_cmd_path,
+            record_state_override_review(result, "accepted")
+            self.session.record_review("accepted")
+            errors = validate_state_override_launch_readiness(
+                result, bundle.packet_dir, self.session.override_text, self.runtime_cmd_path
+            )
+            if errors:
+                raise ValueError("; ".join(errors))
+            self.session.mark_launch_ready()
+            self._set_text(
+                self.proof_text,
+                "OVERRIDE ACCEPTED\nREPLAY PROVEN\nUSER ACCEPTED\nLAUNCH READY\n\n"
+                "The exact candidate, frame, packet, override, proof receipt, review decision, and runtime were rechecked.\n\n"
+                f"Candidate: {result.engine_candidate_path}\nReview decision: {result.proof_dir / 'review-decision.json'}",
             )
         except Exception as exc:
-            self.session.proof_result = None
-            self.session.state = SessionState.PROPOSAL_DIRTY
-            self._set_error(f"Launch readiness invalidated: {exc}. Prove the current binding again.")
-            self._set_text(self.proof_text, f"LAUNCH READINESS INVALIDATED\n\n{exc}\n\nRun proof again.")
+            self.session.state = SessionState.REJECTED
+            self._set_error(f"Review or launch readiness failed: {exc}")
+            self._set_text(self.proof_text, f"LAUNCH READINESS INVALIDATED\n\n{exc}\n\nRun a fresh proof.")
+        self._render()
+
+    def request_revision(self) -> None:
+        result = self.session.proof_result
+        if result is None:
+            self._set_error("No replay-proven candidate is available for review.")
+            return
+        if self.session.candidate_preview is None and not self._candidate_full_frame_opened:
+            self._set_error("Wait for the candidate preview or open the full candidate frame before reviewing it.")
             self._render()
             return
-        self.session.status_text = f"Launched exact proven candidate in a new viewer (PID {process.pid})."
+        try:
+            record_state_override_review(result, "revision_needed")
+            self.session.record_review("revision_needed")
+            self._set_text(
+                self.proof_text,
+                "OVERRIDE ACCEPTED\nREPLAY PROVEN\nREVISION NEEDED\n\n"
+                "This proof remains immutable evidence. Edit the override to begin a new attempt.\n\n"
+                f"Decision: {result.proof_dir / 'review-decision.json'}",
+            )
+        except Exception as exc:
+            self._set_error(str(exc))
+        self._render()
+
+    def launch_accepted_state(self) -> None:
+        result = self.session.proof_result
+        bundle = self.session.bundle
+        if result is None or bundle is None:
+            self._set_error("No exact user-accepted candidate is launch-ready.")
+            return
+        try:
+            process = launch_state_override_candidate(
+                result,
+                bundle.packet_dir,
+                self.session.override_text,
+                self.runtime_cmd_path,
+            )
+            self.session.status_text = (
+                f"Launched exact user-accepted engine candidate in a new viewer (PID {process.pid})."
+            )
+            self._set_text(
+                self.proof_text,
+                "LAUNCH READY → LAUNCHED\n\n"
+                f"PID: {process.pid}\nCandidate: {result.engine_candidate_path}\n"
+                f"Launch receipt: {result.proof_dir / 'launch.json'}",
+            )
+        except Exception as exc:
+            self.session.state = SessionState.REJECTED
+            self._set_error(f"Launch readiness invalidated: {exc}. Run a fresh proof.")
+            self._set_text(self.proof_text, f"LAUNCH READINESS INVALIDATED\n\n{exc}\n\nRun a fresh proof.")
         self._render()
 
     def open_full_frame(self) -> None:
@@ -555,25 +782,59 @@ class UserWorkflowApp:
             return
         os.startfile(str(finding.primary_frame_path))
 
+    def open_candidate_frame(self) -> None:
+        result = self.session.proof_result
+        if result is None or result.candidate_frame_path is None:
+            self._set_error("No engine-emitted candidate frame is available.")
+            return
+        try:
+            os.startfile(str(result.candidate_frame_path))
+            self._candidate_full_frame_opened = True
+            self.session.status_text = "Opened the exact full-resolution engine candidate for visual review."
+        except Exception as exc:
+            self._set_error(f"Could not open the full candidate frame: {exc}")
+        self._render()
+
+    def copy_last_error(self) -> None:
+        if not self._last_copyable_error:
+            return
+        self._write_clipboard(self._last_copyable_error)
+        self.session.status_text = "Copied the exact proof error."
+        self._render()
+
+    def _write_clipboard(self, text: str) -> None:
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self.root.update_idletasks()
+
     def reset_session(self) -> None:
         self.runner.cancel_all()
         self._busy_kinds.clear()
         self.session.reset()
         self.source_path_var.set("")
-        self._clear_finding_views(retain_proposal=False)
+        self._clear_finding_views(retain_override=False)
         self._render()
 
-    def _clear_finding_views(self, retain_proposal: bool) -> None:
+    def _clear_finding_views(self, retain_override: bool) -> None:
         self._set_text(self.summary_text, "")
         self._set_text(self.packet_text, "")
-        self._set_text(self.proof_text, "No proof has run. Paste a bound proposal to begin.")
-        self.binding_var.set("No packet binding yet.")
-        self.packet_info_var.set("Packet is generated automatically after finding import.")
+        self._set_text(self.proof_text, "No proof has run. Paste a sparse state override to begin.")
+        self.binding_var.set("No Agent Bundle V6 binding yet.")
+        self.packet_info_var.set("Bundle is generated automatically after finding import.")
+        self.attachment_var.set("Required attachments will appear here.")
         self.preview_status_var.set("No finding frame loaded.")
         self.preview_label.configure(image="", text="No preview")
-        self._preview_photo = None
-        if not retain_proposal:
-            self.set_proposal_text("")
+        self._base_preview_photo = None
+        self._clear_candidate_views()
+        if not retain_override:
+            self.set_override_text("")
+
+    def _clear_candidate_views(self) -> None:
+        self.candidate_preview_status_var.set("No candidate frame yet.")
+        self.candidate_preview_label.configure(image="", text="No candidate")
+        self.changed_paths_var.set("No override changes have been proven.")
+        self._candidate_preview_photo = None
+        self._candidate_full_frame_opened = False
 
     def _submit(self, kind: str, identity, operation, completion: Callable[[JobOutcome], None]) -> None:
         self._busy_kinds.add(kind)
@@ -595,6 +856,7 @@ class UserWorkflowApp:
         self.root.after(25, self._drain_completions)
 
     def _set_error(self, message: str) -> None:
+        self._last_copyable_error = message
         self.session.status_text = message
 
     @staticmethod
@@ -604,35 +866,43 @@ class UserWorkflowApp:
         widget.insert("1.0", text)
         widget.configure(state="disabled")
 
+    @staticmethod
+    def _read_json(path: Path) -> dict:
+        import json
+
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
+
     def _render(self) -> None:
         self.state_var.set(self.session.state.value)
         self.status_var.set(self.session.status_text)
         finding_ready = self.session.finding is not None
-        packet_ready = self.session.packet is not None
+        bundle_ready = self.session.bundle is not None
+        proof_busy = "proof" in self._busy_kinds
+        result = self.session.proof_result
+        replay_proven = isinstance(result, StateOverrideProofResult) and result.status == "replay_proven"
+        review_surface_seen = self.session.candidate_preview is not None or self._candidate_full_frame_opened
+        undecided = replay_proven and self.session.review_decision is None and review_surface_seen
         self.open_finding_button.configure(state="disabled" if "finding_import" in self._busy_kinds else "normal")
         self.build_packet_button.configure(
-            state="normal" if finding_ready and "packet" not in self._busy_kinds else "disabled"
+            state="normal" if finding_ready and "bundle" not in self._busy_kinds else "disabled"
         )
-        self.copy_packet_button.configure(state="normal" if packet_ready else "disabled")
+        self.copy_packet_button.configure(state="normal" if bundle_ready else "disabled")
+        self.open_bundle_button.configure(state="normal" if bundle_ready else "disabled")
         self.open_full_frame_button.configure(
             state="normal"
             if finding_ready and self.session.finding.primary_frame_path is not None
             else "disabled"
         )
-        proof_busy = "proof" in self._busy_kinds
-        proposal_ready = packet_ready and bool(self.session.proposal_text.strip())
-        result = self.session.proof_result
-        self.prove_button.configure(state="normal" if proposal_ready and not proof_busy else "disabled")
-        self.repair_button.configure(
-            state="normal"
-            if isinstance(result, ProofResult) and bool(result.repair_packet_text) and not proof_busy
-            else "disabled"
-        )
+        override_ready = bundle_ready and bool(self.session.override_text.strip())
+        self.prove_button.configure(state="normal" if override_ready and not proof_busy else "disabled")
+        self.open_candidate_frame_button.configure(state="normal" if replay_proven else "disabled")
+        self.accept_button.configure(state="normal" if undecided and not proof_busy else "disabled")
+        self.revision_button.configure(state="normal" if undecided and not proof_busy else "disabled")
         self.launch_button.configure(
-            state="normal"
-            if isinstance(result, ProofResult) and result.status == "proven" and not proof_busy
-            else "disabled"
+            state="normal" if self.session.state == SessionState.LAUNCH_READY and not proof_busy else "disabled"
         )
+        self.copy_error_button.configure(state="normal" if self._last_copyable_error else "disabled")
 
     def close(self) -> None:
         if self._closed:
