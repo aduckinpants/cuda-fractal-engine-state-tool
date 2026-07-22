@@ -12,7 +12,7 @@ from .async_jobs import JobContext
 from .runtime_surface import sha256_file
 
 
-PREVIEW_SCHEMA = "finding-preview-v1"
+PREVIEW_SCHEMA = "finding-preview-v2"
 
 
 @dataclass(frozen=True)
@@ -56,8 +56,17 @@ class PreviewService:
         preview_path = cache_dir / f"{cache_key}.png"
         metadata_path = cache_dir / f"{cache_key}.json"
         if preview_path.exists() and metadata_path.exists():
-            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            return self._result(source_path, source_sha256, preview_path, metadata, cache_hit=True)
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                if not isinstance(metadata, dict):
+                    raise ValueError("Preview cache metadata must be a JSON object")
+                return self._result(source_path, source_sha256, preview_path, metadata, cache_hit=True)
+            except (OSError, ValueError, TypeError, KeyError):
+                preview_path.unlink(missing_ok=True)
+                metadata_path.unlink(missing_ok=True)
+        elif preview_path.exists() or metadata_path.exists():
+            preview_path.unlink(missing_ok=True)
+            metadata_path.unlink(missing_ok=True)
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         temp_path = cache_dir / f"{cache_key}.tmp.{uuid.uuid4().hex}.png"
@@ -95,6 +104,7 @@ class PreviewService:
             metadata = {
                 "preview_schema": PREVIEW_SCHEMA,
                 "source_sha256": source_sha256,
+                "preview_sha256": sha256_file(temp_path),
                 "source_width": payload["source_width"],
                 "source_height": payload["source_height"],
                 "preview_width": payload["preview_width"],
@@ -119,15 +129,20 @@ class PreviewService:
         metadata: dict,
         cache_hit: bool,
     ) -> PreviewResult:
+        if metadata.get("preview_schema") != PREVIEW_SCHEMA:
+            raise ValueError("Preview cache schema is unsupported")
         if metadata.get("source_sha256") != source_sha256:
             raise ValueError("Preview cache metadata does not match the source image")
         if metadata.get("upscaled") is not False:
             raise ValueError("Preview cache violates the no-upscaling policy")
+        preview_sha256 = sha256_file(preview_path)
+        if metadata.get("preview_sha256") != preview_sha256:
+            raise ValueError("Preview cache derivative hash does not match its metadata")
         return PreviewResult(
             source_path=source_path,
             source_sha256=source_sha256,
             preview_path=preview_path.resolve(),
-            preview_sha256=sha256_file(preview_path),
+            preview_sha256=preview_sha256,
             source_width=int(metadata["source_width"]),
             source_height=int(metadata["source_height"]),
             preview_width=int(metadata["preview_width"]),
