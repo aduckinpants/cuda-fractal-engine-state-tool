@@ -79,7 +79,7 @@ the exact engine-emitted state, and captured the resulting viewer:
 - Review decision: `accepted`
 - Engine launch candidate SHA-256:
   `937954debda158ccf93a329d4d6790493aa67a85c2e07de5adaa96b10fabd98d`
-- Launched PID: `80272`
+- Launcher process PID: `80272`
 - Recapture:
   `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-21\230610_719__explaino_multibrot_root_trap`
 

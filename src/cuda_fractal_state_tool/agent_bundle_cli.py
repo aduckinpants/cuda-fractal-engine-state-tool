@@ -44,35 +44,49 @@ def main(argv: Optional[list[str]] = None) -> int:
     open_parser.add_argument("--packet-dir", type=Path, required=True)
 
     args = parser.parse_args(argv)
-    if args.command == "build":
-        imported = SourceCaptureImporter(args.workspace_root).import_capture(args.source)
-        bundle = build_agent_bundle(
-            imported.finding_dir,
-            args.runtime_cmd,
-            timeout_seconds=args.timeout_seconds,
-        )
-        print(json.dumps(_bundle_summary(bundle), indent=2, sort_keys=True))
-        return 0
-    if args.command == "inspect":
-        handoff = load_agent_bundle_handoff(args.packet_dir)
+    try:
+        if args.command == "build":
+            imported = SourceCaptureImporter(args.workspace_root).import_capture(args.source)
+            bundle = build_agent_bundle(
+                imported.finding_dir,
+                args.runtime_cmd,
+                timeout_seconds=args.timeout_seconds,
+            )
+            print(json.dumps(_bundle_summary(bundle), indent=2, sort_keys=True))
+            return 0
+        if args.command == "inspect":
+            handoff = load_agent_bundle_handoff(args.packet_dir)
+            print(
+                json.dumps(
+                    {
+                        "packet_dir": str(handoff.packet_dir),
+                        "packet_sha256": handoff.packet_sha256,
+                        "required_attachments": list(handoff.required_attachments),
+                        "recommended_attachments": list(handoff.recommended_attachments),
+                        "unavailable_optional_attachments": list(handoff.unavailable_optional_attachments),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
+        if args.command == "open-folder":
+            handoff = open_agent_bundle_folder(args.packet_dir)
+            print(json.dumps({"opened_packet_dir": str(handoff.packet_dir)}, indent=2))
+            return 0
+    except (OSError, UnicodeError, ValueError, RuntimeError, TimeoutError) as exc:
         print(
             json.dumps(
                 {
-                    "packet_dir": str(handoff.packet_dir),
-                    "packet_sha256": handoff.packet_sha256,
-                    "required_attachments": list(handoff.required_attachments),
-                    "recommended_attachments": list(handoff.recommended_attachments),
-                    "unavailable_optional_attachments": list(handoff.unavailable_optional_attachments),
+                    "status": "bundle_error",
+                    "operation": args.command,
+                    "error": str(exc),
                 },
                 indent=2,
-                sort_keys=True,
+                ensure_ascii=False,
             )
         )
-        return 0
-    if args.command == "open-folder":
-        handoff = open_agent_bundle_folder(args.packet_dir)
-        print(json.dumps({"opened_packet_dir": str(handoff.packet_dir)}, indent=2))
-        return 0
+        return 2
     raise ValueError(f"Unknown command: {args.command}")
 
 

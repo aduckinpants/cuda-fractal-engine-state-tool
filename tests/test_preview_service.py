@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import time
 import unittest
@@ -45,6 +46,9 @@ class PreviewServiceTests(unittest.TestCase):
             self.assertFalse(first.cache_hit)
             self.assertTrue(second.cache_hit)
             self.assertEqual(first.preview_sha256, second.preview_sha256)
+            metadata = json.loads(first.preview_path.with_suffix(".json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["preview_schema"], "finding-preview-v2")
+            self.assertEqual(metadata["preview_sha256"], first.preview_sha256)
             self.assertFalse(list((root / "cache").glob("*.tmp.*")))
 
     def test_worker_never_upscales_and_rejects_pixel_and_corrupt_inputs(self) -> None:
@@ -65,6 +69,26 @@ class PreviewServiceTests(unittest.TestCase):
             corrupt.write_bytes(b"not an image")
             with self.assertRaises(Exception):
                 create_preview(corrupt, root / "corrupt-preview.png", 640, 480, 2_000, 100)
+
+    def test_tampered_cached_derivative_is_regenerated_from_the_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "frame.png"
+            Image.new("RGB", (100, 50), (20, 40, 60)).save(source)
+            service = PreviewService(PreviewPolicy(timeout_seconds=10))
+            first = self._run_preview(service, source, root / "cache")
+
+            Image.new("RGB", (100, 50), (255, 0, 255)).save(first.preview_path)
+            tampered_bytes = first.preview_path.read_bytes()
+
+            second = self._run_preview(service, source, root / "cache")
+            self.assertFalse(second.cache_hit)
+            self.assertEqual(first.preview_sha256, second.preview_sha256)
+            self.assertNotEqual(tampered_bytes, second.preview_path.read_bytes())
+
+            third = self._run_preview(service, source, root / "cache")
+            self.assertTrue(third.cache_hit)
+            self.assertEqual(second.preview_sha256, third.preview_sha256)
 
 
 if __name__ == "__main__":
