@@ -245,6 +245,18 @@ def _image_comparison(left_path: Path, right_path: Path) -> dict[str, Any]:
     }
 
 
+def _manifest_file_with_role(manifest: dict[str, Any], role: str) -> str | None:
+    files = manifest.get("files")
+    if not isinstance(files, list):
+        return None
+    matches = [
+        entry.get("path")
+        for entry in files
+        if isinstance(entry, dict) and entry.get("role") == role and isinstance(entry.get("path"), str)
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _process_receipt(result: Any, command: Sequence[str]) -> dict[str, Any]:
     return {
         "command": list(command),
@@ -439,6 +451,13 @@ def execute_state_override_proof(
         materialization_comparison = compare_json_documents(
             merged_path.read_text(encoding="utf-8"), engine_state.read_text(encoding="utf-8")
         )
+        captured_frame_name = _manifest_file_with_role(manifest, "captured_visual_evidence")
+        base_to_candidate_frame_comparison = None
+        if captured_frame_name is not None:
+            captured_frame_path = (packet_dir / captured_frame_name).resolve()
+            if captured_frame_path.parent != packet_dir or not captured_frame_path.is_file():
+                return rejected(["Packet captured visual evidence path is invalid"])
+            base_to_candidate_frame_comparison = _image_comparison(captured_frame_path, engine_frame)
         requested_values, requested_errors = _requested_value_receipts(materialization, emitted)
         if requested_errors:
             return rejected(requested_errors)
@@ -508,6 +527,7 @@ def execute_state_override_proof(
                         asdict(difference) for difference in materialization_comparison.differences
                     ],
                 },
+                "base_to_candidate_frame_comparison": base_to_candidate_frame_comparison,
             },
             "replay": {
                 **_process_receipt(replay_result, replay_command),

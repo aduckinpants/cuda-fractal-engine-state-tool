@@ -5,7 +5,6 @@ import hashlib
 import json
 import math
 import os
-import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,13 +14,11 @@ from .agent_bundle import (
     derive_state_override_authoring_surface,
     load_agent_bundle_handoff,
     serialize_state_override_authoring_surface,
-    validate_captured_color_pipeline_draft,
 )
 from .json_utils import loads_strict_no_duplicates
 
 
 ALLOWED_TOP_LEVEL_DOMAINS = {"params", "view", "color_pipeline_draft"}
-_PIPELINE_CHANGE_RE = re.compile(r"^color_pipeline_draft\.lanes\[(\d+)\]")
 
 
 @dataclass(frozen=True)
@@ -58,7 +55,6 @@ class _PacketOverrideAuthorities:
     state_bytes: bytes
     state: dict[str, Any]
     authoring_surface: dict[str, Any]
-    ui_salt_contract: dict[str, Any]
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -157,7 +153,7 @@ def _load_packet_authorities(
     state_bytes = captured_bytes("state.json")
     parameter_surface_bytes = captured_bytes("fractal-parameter-surface.json")
     ui_schema_bytes = captured_bytes("fractal_binding_surface_v1.ui_schema.json")
-    ui_salt_bytes = captured_bytes("color_pipeline_function_library.contract.v1.json")
+    captured_bytes("color_pipeline_function_library.contract.v1.json")
     bundled_surface_bytes = captured_bytes("state-override-authoring-surface.json")
 
     state = _load_strict_object(state_bytes, "Packet V6 state.json")
@@ -173,7 +169,6 @@ def _load_packet_authorities(
     regenerated_bytes = serialize_state_override_authoring_surface(regenerated_surface)
     if bundled_surface_bytes != regenerated_bytes or bundled_surface != regenerated_surface:
         raise ValueError("Packet V6 authoring surface does not match its copied authority bytes")
-    ui_salt_contract = _load_strict_object(ui_salt_bytes, "Packet V6 UI-Salt contract")
     if manifest_path.read_bytes() != manifest_bytes:
         raise ValueError("Packet V6 manifest changed while loading override authorities")
     load_agent_bundle_handoff(packet_dir)
@@ -181,7 +176,6 @@ def _load_packet_authorities(
         state_bytes=state_bytes,
         state=state,
         authoring_surface=bundled_surface,
-        ui_salt_contract=ui_salt_contract,
     )
 
 
@@ -325,61 +319,6 @@ def _validate_params_and_view(
     return tuple(camera_edits)
 
 
-def _validate_and_order_pipeline_lanes(
-    override_value: dict[str, Any],
-    base: dict[str, Any],
-    contract: dict[str, Any],
-) -> list[dict[str, Any]]:
-    if set(override_value) != {"lanes"} or not isinstance(override_value.get("lanes"), list):
-        raise ValueError("color_pipeline_draft override must contain only a complete lanes array")
-    base_draft = base.get("color_pipeline_draft")
-    if not isinstance(base_draft, dict):
-        raise ValueError("Base state has no complete color_pipeline_draft")
-    validate_captured_color_pipeline_draft(base, contract)
-    base_lanes = base_draft.get("lanes")
-    override_lanes = override_value["lanes"]
-    if not isinstance(base_lanes, list) or len(override_lanes) != len(base_lanes):
-        raise ValueError("Color Pipeline lane count must match the captured draft")
-
-    ordered_lanes: list[dict[str, Any]] = []
-    for lane_index, (base_lane, override_lane) in enumerate(zip(base_lanes, override_lanes, strict=True)):
-        if not isinstance(base_lane, dict) or not isinstance(override_lane, dict):
-            raise ValueError(f"Color Pipeline lane {lane_index} must remain an object")
-        if set(override_lane) != set(base_lane):
-            raise ValueError(f"Color Pipeline lane {lane_index} fields must match the captured topology")
-        for key in base_lane:
-            if key != "rows" and override_lane[key] != base_lane[key]:
-                raise ValueError(f"Color Pipeline lane {lane_index}.{key} is topology and cannot change")
-        base_rows = base_lane.get("rows")
-        override_rows = override_lane.get("rows")
-        if not isinstance(base_rows, list) or not isinstance(override_rows, list) or len(override_rows) != len(base_rows):
-            raise ValueError(f"Color Pipeline row count must match captured lane {base_lane.get('lane_id')}")
-
-        ordered_rows: list[dict[str, Any]] = []
-        for row_index, (base_row, override_row) in enumerate(zip(base_rows, override_rows, strict=True)):
-            if not isinstance(base_row, dict) or not isinstance(override_row, dict):
-                raise ValueError(f"Color Pipeline row {lane_index}[{row_index}] must remain an object")
-            if set(override_row) != set(base_row):
-                raise ValueError(f"Color Pipeline row {lane_index}[{row_index}] fields must match captured topology")
-            for key in base_row:
-                if key not in {"function_id", "parameter_values"} and override_row[key] != base_row[key]:
-                    raise ValueError(
-                        f"Color Pipeline row {lane_index}[{row_index}].{key} is topology and cannot change"
-                    )
-            ordered_row = {key: copy.deepcopy(override_row[key]) for key in base_row}
-            ordered_rows.append(ordered_row)
-        ordered_lane = {
-            key: ordered_rows if key == "rows" else copy.deepcopy(override_lane[key])
-            for key in base_lane
-        }
-        ordered_lanes.append(ordered_lane)
-
-    candidate = copy.deepcopy(base)
-    candidate["color_pipeline_draft"]["lanes"] = ordered_lanes
-    validate_captured_color_pipeline_draft(candidate, contract)
-    return ordered_lanes
-
-
 def _deep_merge_existing(target: dict[str, Any], override: dict[str, Any]) -> None:
     for key, value in override.items():
         if isinstance(value, dict):
@@ -405,7 +344,7 @@ def _diff_values(left: Any, right: Any, prefix: str = "") -> Iterable[tuple[str,
         yield prefix, left, right
 
 
-def _conceptual_domain(path: str, merged: dict[str, Any]) -> str:
+def _conceptual_domain(path: str) -> str:
     if path.startswith("params."):
         return path.split(".", 2)[0] + "." + path.split(".", 2)[1]
     if path.startswith("view.center_x") or path.startswith("view.center_hp_x"):
@@ -414,13 +353,6 @@ def _conceptual_domain(path: str, merged: dict[str, Any]) -> str:
         return "view.center_y"
     if path.startswith("view.zoom") or path.startswith("view.log2_zoom"):
         return "view.zoom"
-    match = _PIPELINE_CHANGE_RE.match(path)
-    if match:
-        lane_index = int(match.group(1))
-        lanes = merged.get("color_pipeline_draft", {}).get("lanes", [])
-        if 0 <= lane_index < len(lanes) and isinstance(lanes[lane_index], dict):
-            return f"color_pipeline_draft.{lanes[lane_index].get('lane_id', lane_index)}"
-        return "color_pipeline_draft"
     return path.split(".", 1)[0]
 
 
@@ -458,20 +390,19 @@ def materialize_state_override(
     base = authorities.state
     override = parsed.document
 
+    if "color_pipeline_draft" in override:
+        raise ValueError(
+            "color_pipeline_draft state override authoring is unavailable: the published runtime preserves "
+            "loaded draft edits as pending editor state but exposes no authoritative direct-state lowering "
+            "operation for the live render stacks"
+        )
+
     camera_edits = _validate_params_and_view(override, base, authorities.authoring_surface)
     merged = copy.deepcopy(base)
     for domain in ("params", "view"):
         domain_override = override.get(domain)
         if domain_override is not None:
             _deep_merge_existing(merged[domain], domain_override)
-    if "color_pipeline_draft" in override:
-        ordered_lanes = _validate_and_order_pipeline_lanes(
-            override["color_pipeline_draft"],
-            base,
-            authorities.ui_salt_contract,
-        )
-        merged["color_pipeline_draft"]["lanes"] = ordered_lanes
-
     if not override:
         candidate_bytes = authorities.state_bytes
         empty_override_byte_exact = True
@@ -485,7 +416,7 @@ def materialize_state_override(
     changes: list[StateValueChange] = []
     domains: list[str] = []
     for path, left, right in _diff_values(base, merged):
-        domain = _conceptual_domain(path, merged)
+        domain = _conceptual_domain(path)
         if domain not in domains:
             domains.append(domain)
         changes.append(

@@ -578,11 +578,44 @@ class UserWorkflowApp:
                 if normalized
                 else ""
             )
+            materialization_receipt = receipt.get("materialization", {})
+            base_frame_comparison = materialization_receipt.get("base_to_candidate_frame_comparison")
+            if isinstance(base_frame_comparison, dict):
+                if base_frame_comparison.get("decoded_equal") is True:
+                    visual_delta_note = (
+                        "\nCandidate visual delta:\n"
+                        "- IDENTICAL decoded pixels to the captured base frame. "
+                        "The requested state may have been preserved without affecting rendered output."
+                    )
+                else:
+                    visual_delta_note = "\nCandidate visual delta:\n- Decoded pixels differ from the captured base frame."
+            else:
+                visual_delta_note = "\nCandidate visual delta:\n- Captured base-frame comparison unavailable."
+            emitted_differences = [
+                item
+                for item in materialization_receipt.get("merged_to_emitted_state_comparison", {}).get(
+                    "differences", []
+                )
+                if item.get("classification") != "volatile_diagnostic_data"
+            ]
+            emitted_note = ""
+            if emitted_differences:
+                displayed = emitted_differences[:12]
+                emitted_note = (
+                    "\nEngine materialization changes beyond the requested diff:\n"
+                    + "\n".join(
+                        f"- {item.get('path', '?')}: {item.get('left')!r} → {item.get('right')!r} "
+                        f"[{item.get('classification', 'unclassified')}]"
+                        for item in displayed
+                    )
+                )
+                if len(emitted_differences) > len(displayed):
+                    emitted_note += f"\n- … {len(emitted_differences) - len(displayed)} additional changes in receipt"
             self._set_text(
                 self.proof_text,
                 "OVERRIDE ACCEPTED\nREPLAY PROVEN\nVISUAL REVIEW PENDING\n\n"
                 f"{result.message}\n\nEngine candidate SHA-256: {result.engine_candidate_sha256}"
-                f"{normalization_note}\n\nReceipt: {result.receipt_path}",
+                f"{normalization_note}{visual_delta_note}{emitted_note}\n\nReceipt: {result.receipt_path}",
             )
             assert result.candidate_frame_path is not None
             self.candidate_preview_status_var.set("Building bounded candidate preview…")
@@ -644,8 +677,20 @@ class UserWorkflowApp:
         self._candidate_preview_photo = self._photo_from_preview(preview.preview_path, (600, 320))
         self.candidate_preview_label.configure(image=self._candidate_preview_photo, text="")
         cache_note = "cache hit" if preview.cache_hit else "new cached derivative"
+        receipt = self._read_json(result.receipt_path)
+        base_frame_comparison = receipt.get("materialization", {}).get(
+            "base_to_candidate_frame_comparison"
+        )
+        pixel_note = (
+            " | PIXELS IDENTICAL TO BASE"
+            if isinstance(base_frame_comparison, dict) and base_frame_comparison.get("decoded_equal") is True
+            else " | pixels differ from base"
+            if isinstance(base_frame_comparison, dict)
+            else ""
+        )
         self.candidate_preview_status_var.set(
-            f"{preview.source_width}×{preview.source_height} → {preview.preview_width}×{preview.preview_height} ({cache_note})"
+            f"{preview.source_width}×{preview.source_height} → {preview.preview_width}×{preview.preview_height} "
+            f"({cache_note}){pixel_note}"
         )
         self._render()
 

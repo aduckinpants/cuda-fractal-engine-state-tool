@@ -89,6 +89,14 @@ The captured draft owns Color Pipeline topology. The exact deployed UI-Salt
 contract owns function and parameter validity. Python owns no parallel function,
 parameter, default, range, enum, compatibility, or coercion catalog.
 
+Current runtime evidence shows that direct loading preserves an edited
+`color_pipeline_draft` as pending editor state but does not lower it into the
+live serialized color stacks that drive rendering. Proof receipts and the UI
+now expose exact base/candidate pixel equality so this cannot masquerade as a
+visual change. Typed draft authoring is not accepted until an
+engine-authoritative lowering seam is approved; see
+`docs/slice5_real_acceptance_checkpoint.md`.
+
 ## Durable evidence
 
 ```text
@@ -151,5 +159,6 @@ slice conclusions are tracked in:
 - `docs/slice2_state_override_validation.md`
 - `docs/slice3_state_override_runtime_proof.md`
 - `docs/slice4_atomic_ui_cutover.md`
+- `docs/slice5_real_acceptance_checkpoint.md`
 
 Earlier phase documents are historical evidence, not active product contracts.

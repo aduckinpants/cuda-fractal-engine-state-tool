@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import tempfile
 import unittest
@@ -163,6 +164,9 @@ class StateOverrideProofTests(unittest.TestCase):
         schema_bytes = _json_bytes(schema)
         contract_bytes = _json_bytes(contract)
         catalog_bytes = _json_bytes(catalog)
+        frame_buffer = io.BytesIO()
+        Image.new("RGB", (6, 4), (40, 80, 120)).save(frame_buffer, format="PNG")
+        frame_bytes = frame_buffer.getvalue()
         authoring_bytes = serialize_state_override_authoring_surface(
             derive_state_override_authoring_surface(state_bytes, surface_bytes, schema_bytes)
         )
@@ -181,6 +185,7 @@ class StateOverrideProofTests(unittest.TestCase):
             "color_pipeline_function_library.contract.v1.json": contract_bytes,
             "fractal-descriptive-catalog.json": catalog_bytes,
             "state-override-authoring-surface.json": authoring_bytes,
+            "frame.png": frame_bytes,
         }
         for name, payload in files.items():
             (packet / name).write_bytes(payload)
@@ -207,7 +212,7 @@ class StateOverrideProofTests(unittest.TestCase):
             "files": [
                 {
                     "path": name,
-                    "role": "fixture",
+                    "role": "captured_visual_evidence" if name == "frame.png" else "fixture",
                     "sha256": _sha256(payload),
                     "size_bytes": len(payload),
                     "web_handoff": "index" if name == "packet.md" else "required",
@@ -240,6 +245,9 @@ class StateOverrideProofTests(unittest.TestCase):
                 "representation_normalization",
             )
             self.assertTrue(receipt["replay"]["frame_comparison"]["decoded_equal"])
+            self.assertTrue(
+                receipt["materialization"]["base_to_candidate_frame_comparison"]["decoded_equal"]
+            )
             self.assertEqual(
                 {path.name for path in result.proof_dir.iterdir()},
                 {

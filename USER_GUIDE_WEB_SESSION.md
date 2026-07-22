@@ -53,6 +53,11 @@ The tool:
 Small runtime numeric representation changes are shown explicitly. Missing,
 reverted, or materially contradictory values reject the proof.
 
+The proof also compares the captured base frame with the engine-emitted
+candidate. `PIXELS IDENTICAL TO BASE` means the requested state was preserved
+without an observed rendered effect and must not be mistaken for a successful
+visual change.
+
 ## 4. Review the candidate
 
 Replay success does not authorize launch. Compare the base and candidate
@@ -76,8 +81,12 @@ engine-emitted state in a new viewer and writes `launch.json`.
   authorable.
 - Camera high-precision companions are pair-only and are never synthesized by
   Python.
-- Color Pipeline arrays replace completely; lane/row topology and enablement are
-  fixed by the captured draft.
+- Captured Color Pipeline arrays are complete structural evidence: lane/row
+  topology and enablement belong to the captured draft, not to Python.
+- Direct runtime loading currently preserves an edited Color Pipeline draft as
+  pending editor state without applying it to the live render stacks. Treat
+  draft authoring as unaccepted until the engine exposes an authoritative
+  lowering seam; do not compensate with guessed scalar or stack mirrors.
 - Preview failure does not weaken proof or cause full-resolution Tk decoding.
 - Reset cancels only session-owned work and preserves durable evidence.
 - Historical proposal artifacts are data only and cannot be pasted into the

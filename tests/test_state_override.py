@@ -377,91 +377,17 @@ class StateOverrideTests(unittest.TestCase):
             self.assertEqual(result.conceptual_domains, ("view.center_x",))
             self.assertEqual(len(result.changed_paths), 2)
 
-    def test_pipeline_allows_function_and_parameter_changes_but_preserves_topology(self) -> None:
+    def test_pipeline_draft_authoring_fails_closed_without_engine_lowering(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             packet, state, _, _ = self._packet(Path(temp_dir))
             override = self._pipeline_override(state)
             grading = override["color_pipeline_draft"]["lanes"][3]["rows"][0]
             grading["parameter_values"][1]["number_value"] = 1.5
-            output = Path(temp_dir) / "pipeline.json"
-            result = materialize_state_override(packet, json.dumps(override), output)
-            self.assertEqual(result.conceptual_domains, ("color_pipeline_draft.grading",))
-            self.assertEqual(
-                result.changed_paths[0].path,
-                "color_pipeline_draft.lanes[3].rows[0].parameter_values[1].number_value",
-            )
-            merged = json.loads(output.read_text())
-            self.assertEqual(list(merged["color_pipeline_draft"]["lanes"][3]), ["lane_id", "label", "rows"])
-            self.assertEqual(
-                list(merged["color_pipeline_draft"]["lanes"][3]["rows"][0]),
-                ["ui_row_id", "enabled", "function_id", "parameter_values"],
-            )
-
-            grading["function_id"] = "identity"
-            grading["parameter_values"] = []
-            switched = materialize_state_override(
-                packet,
-                json.dumps(override),
-                Path(temp_dir) / "pipeline-switched.json",
-            )
-            self.assertIn("color_pipeline_draft.grading", switched.conceptual_domains)
-
-    def test_pipeline_rejects_partial_arrays_topology_and_bad_parameter_sets(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            packet, state, _, _ = self._packet(Path(temp_dir))
-            cases: list[dict] = []
-            partial = self._pipeline_override(state)
-            partial["color_pipeline_draft"]["lanes"].pop()
-            cases.append(partial)
-            relabeled = self._pipeline_override(state)
-            relabeled["color_pipeline_draft"]["lanes"][0]["label"] = "Changed"
-            cases.append(relabeled)
-            disabled = self._pipeline_override(state)
-            disabled["color_pipeline_draft"]["lanes"][0]["rows"][0]["enabled"] = False
-            cases.append(disabled)
-            old_params = self._pipeline_override(state)
-            old_params["color_pipeline_draft"]["lanes"][3]["rows"][0]["function_id"] = "identity"
-            cases.append(old_params)
-            wrong_order = self._pipeline_override(state)
-            wrong_order["color_pipeline_draft"]["lanes"][3]["rows"][0]["parameter_values"].reverse()
-            cases.append(wrong_order)
-            out_of_range = self._pipeline_override(state)
-            out_of_range["color_pipeline_draft"]["lanes"][3]["rows"][0]["parameter_values"][1][
-                "number_value"
-            ] = 4.0
-            cases.append(out_of_range)
-            bad_enum = self._pipeline_override(state)
-            bad_enum["color_pipeline_draft"]["lanes"][2]["rows"][0]["parameter_values"][0][
-                "enum_value"
-            ] = "screen"
-            cases.append(bad_enum)
-            unknown_function = self._pipeline_override(state)
-            unknown_function["color_pipeline_draft"]["lanes"][1]["rows"][0]["function_id"] = "unknown"
-            cases.append(unknown_function)
-            next_row = self._pipeline_override(state)
-            next_row["color_pipeline_draft"]["next_row_id"] = 8
-            cases.append(next_row)
-            for index, override in enumerate(cases):
-                with self.subTest(index=index), self.assertRaises(ValueError):
-                    materialize_state_override(
-                        packet,
-                        json.dumps(override),
-                        Path(temp_dir) / f"bad-pipeline-{index}.json",
-                    )
-
-    def test_pipeline_is_unavailable_when_base_has_no_complete_draft(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            packet, state, surface, schema = self._packet(root)
-            override = self._pipeline_override(state)
-            state.pop("color_pipeline_draft")
-            contract = json.loads((packet / "color_pipeline_function_library.contract.v1.json").read_text())
-            self._write_packet(packet, state, surface, schema, contract)
-            with self.assertRaisesRegex(ValueError, "no complete color_pipeline_draft"):
+            with self.assertRaisesRegex(ValueError, "no authoritative direct-state lowering"):
                 materialize_state_override(
                     packet,
                     json.dumps(override),
-                    root / "candidate.json",
+                    Path(temp_dir) / "pipeline.json",
                 )
 
     def test_copied_schema_change_changes_validation_without_python_metadata(self) -> None:
@@ -479,22 +405,6 @@ class StateOverrideTests(unittest.TestCase):
                     '{"params":{"explaino_damping":1.5}}',
                     Path(temp_dir) / "rejected.json",
                 )
-
-    def test_copied_ui_salt_range_change_changes_pipeline_validation(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            packet, state, surface, schema = self._packet(root)
-            override = self._pipeline_override(state)
-            override["color_pipeline_draft"]["lanes"][3]["rows"][0]["parameter_values"][1][
-                "number_value"
-            ] = 1.5
-            materialize_state_override(packet, json.dumps(override), root / "accepted.json")
-
-            contract = json.loads((packet / "color_pipeline_function_library.contract.v1.json").read_text())
-            contract["function_library"]["lanes"][3]["functions"][1]["params"][1]["max"] = 1.0
-            self._write_packet(packet, state, surface, schema, contract)
-            with self.assertRaisesRegex(ValueError, "above the copied range"):
-                materialize_state_override(packet, json.dumps(override), root / "rejected.json")
 
     def test_manifest_binding_and_candidate_target_are_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

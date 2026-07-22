@@ -697,8 +697,9 @@ def _packet_markdown(
     context_lines = [f"- `{name}` — SHA-256 `{file_hashes[name]}`" for name in recommended]
     unavailable_lines = [f"- `{name}`" for name in unavailable]
     example_note = (
-        f"A complete unchanged structural example is attached as `{_PIPELINE_EXAMPLE_FILENAME}`. "
-        "To request a pipeline change, edit a contract-declared function or parameter while retaining the complete lanes array."
+        f"A complete unchanged structural snapshot is attached as `{_PIPELINE_EXAMPLE_FILENAME}` for inspection only. "
+        "The published runtime currently preserves draft edits as pending editor state but does not lower them into "
+        "the live render stacks during direct state loading. Do not return `color_pipeline_draft` in a state override."
         if has_pipeline_example
         else "This capture has no complete serialized pipeline draft, so Color Pipeline state override authoring is unavailable."
     )
@@ -733,9 +734,9 @@ def _packet_markdown(
             "For view changes, return each ordinary value and its required serialized companion in the same override:",
             "`center_x` with `center_hp_x`, `center_y` with `center_hp_y`, and `zoom` with `log2_zoom`.",
             "Use the JSON types shown in `state.json`; do not return a companion by itself.",
-            "For color, use one representation per conceptual lane. Captured scalar color values summarize the base;",
-            "when a complete draft is present, edit its existing row and complete parameter list without also changing",
-            "a scalar counterpart for that same lane.",
+            "For color, use only directly serialized paths explicitly listed by `state-override-authoring-surface.json`.",
+            "Do not return `color_pipeline_draft`: direct state loading preserves it as pending editor state but the",
+            "published runtime exposes no authoritative operation here that lowers it into the live render stacks.",
             "",
             "### State Override Example",
             "",

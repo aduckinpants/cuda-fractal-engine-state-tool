@@ -1,5 +1,10 @@
 # Slice 2 State Override Validation
 
+> Historical checkpoint: Slice 5 runtime evidence later proved that direct
+> loading preserves draft edits without lowering them into live render stacks.
+> Active `color_pipeline_draft` authoring now fails closed; see
+> `slice5_real_acceptance_checkpoint.md`.
+
 Status: implementation and local acceptance complete; runtime proof remains Slice 3.
 
 ## Implemented boundary
