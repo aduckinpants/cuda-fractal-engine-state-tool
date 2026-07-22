@@ -1,7 +1,7 @@
 # Slice 5B Color Pipeline Engine Integration
 
-Status: implementation and automated real-runtime acceptance complete; manual
-candidate review is pending.
+Status: implementation, automated real-runtime acceptance, manual candidate
+review, exact launch, and launched-viewer recapture acceptance complete.
 
 ## Engine authority
 
@@ -67,6 +67,44 @@ Raw screenshots and their manifest are under:
   manifest.json
 ```
 
-The next approved boundary is user inspection of the base/candidate pair and
-the updated Packet V6 guidance. Acceptance or revision remains a deliberate
-user action.
+## Manual acceptance, launch, and recapture
+
+The user inspected the candidate in the desktop workflow, accepted it, launched
+the exact engine-emitted state, and captured the resulting viewer:
+
+- Packet ID: `2455cfb0-caae-4b81-8bfb-29e4276c0b9c`
+- Packet manifest SHA-256:
+  `3b85e82307decd98eac907b51449322f862c938b85ddce9ec8b0b90c16588432`
+- Proof ID: `7b0b850a-2f8d-466b-a989-6a3439bb4026`
+- Review decision: `accepted`
+- Engine launch candidate SHA-256:
+  `937954debda158ccf93a329d4d6790493aa67a85c2e07de5adaa96b10fabd98d`
+- Launched PID: `80272`
+- Recapture:
+  `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-21\230610_719__explaino_multibrot_root_trap`
+
+The recaptured `state.json` is semantically equal to the launched candidate.
+Its only difference is `stats.last_render_ms`, classified by the state
+comparator as volatile diagnostic data. The candidate BMP and recaptured PNG
+both decode to 4096 x 2559 RGBA pixels with SHA-256:
+
+```text
+9050608c76297d8c6d908d44f546a82405a5580303ab26a5af83bff64e360277
+```
+
+The different encoded image hashes therefore reflect BMP-versus-PNG encoding,
+not a rendered difference. This completes the manual Color Pipeline path:
+
+```text
+fixed-topology draft override
+-> engine-owned application
+-> action-free replay
+-> candidate preview
+-> explicit user acceptance
+-> exact-candidate launch
+-> byte-identical decoded-pixel recapture
+```
+
+The Agent State Override rescue implementation and its planned acceptance work
+are complete. The next boundary is review and merge authorization for the ready
+pull request; no further product mutation is authorized by this plan.

@@ -159,5 +159,6 @@ slice conclusions are tracked in:
 - `docs/slice3_state_override_runtime_proof.md`
 - `docs/slice4_atomic_ui_cutover.md`
 - `docs/slice5_real_acceptance_checkpoint.md`
+- `docs/slice5_color_pipeline_engine_integration.md`
 
 Earlier phase documents are historical evidence, not active product contracts.
