@@ -38,16 +38,18 @@ calibration.
 
 ### Hardened primary calibration packet
 
-- Packet ID: `2a8f4d43-a08b-487b-9ad8-49bd88b8e06f`
-- Packet directory: `D:\salt-fractal\cuda-fractal-engine-state-tool\findings\cc2cb68da25f649f2de674750b04c2b15f5e1416a806a0329b09743491525e63\packets\2a8f4d43-a08b-487b-9ad8-49bd88b8e06f`
-- Manifest SHA-256: `afad5724a217f3f55ae3c09cf819d357966030e29dc15222bfcda3e0fd2cb1d6`
-- Packet SHA-256: `42042589b1c91f0a2ec2bfbf5d6c223551c9b668b17d09d800736580504f7c19`
+- Packet ID: `4101a8d0-5b87-4bf0-af61-b7b1a8149483`
+- Packet directory: `D:\salt-fractal\cuda-fractal-engine-state-tool\findings\cc2cb68da25f649f2de674750b04c2b15f5e1416a806a0329b09743491525e63\packets\4101a8d0-5b87-4bf0-af61-b7b1a8149483`
+- Manifest SHA-256: `411e0d8999e4acc07a4269d3ea88d5c6ae40bbe43d20b8b8fd33fa9b66dc1ceb`
+- Packet SHA-256: `c2a47a21bf4ef1a4980f6e27b72b52de0907cf2e2ddd7ef6a7a9e62e4e49d75f`
 - Runtime identity SHA-256: `140707fd16283ac2db3c58a24146b73a7f29bbd15b0e1b36771c301f8b275e95`
 - Base state SHA-256: `e68e611fd1b8014f98a59af689b53c299585bd62d8ed15dd3b81c1eadaba504d`
 - Viewport-facts SHA-256: `4d40f7c64149ff112842fcefa0f49b0021e6b2a01703058c8267cc328d5eb934`
 
 This new immutable packet is the required input for the next manual session.
-The historical packet and its failed proof remain untouched.
+The historical failed packet and pre-clarification packet
+`2a8f4d43-a08b-487b-9ad8-49bd88b8e06f` remain untouched and must not be used
+for this gate.
 
 ## Contrast fixture — ExplainO Multibrot root-trap
 
@@ -136,6 +138,9 @@ directory.
 - Generic assent after multiple experiments, alternatives, or a multi-value
   sweep produces one clarification question unless the user explicitly
   delegates selection.
+- During that ambiguity exception, the response contains only the clarification
+  question—no five-section preflight and no JSON. Those appear only after one
+  coherent candidate state is selected.
 - The eventual response visibly identifies the chosen experiment, why its paths
   change, its expected effect and largest uncertainty, its camera/viewport
   conclusion, and its hostile self-review conclusion.
@@ -149,6 +154,10 @@ directory.
 - `same_window_comparison` states whether the relevant subject should intersect
   the exact retained viewport. Predictable subject loss is permitted only as an
   explicitly selected fixed-window disappearance control.
+- When derivable, the response reports the predicted subject location or
+  transition set, exact retained viewport bounds, and containment result. When
+  not derivable, it says containment is unestablished and asks or uses an honest
+  survey frame.
 - `feature_tracking` or `transition_survey` prose that requires reframing agrees
   with complete companion-paired `view` changes in the JSON.
 - Small numeric magnitude is not used as evidence of small visual impact.

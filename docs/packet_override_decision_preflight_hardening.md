@@ -82,6 +82,11 @@ clarification question unless the user explicitly delegates the selection.
 A sweep cannot be encoded as one override. The exact single member must be
 selected before JSON is returned.
 
+Ambiguity exception: while selection remains ambiguous, the response is exactly
+one clarification question with no preflight sections and no JSON. The visible
+five-section preflight applies only after one coherent candidate state has been
+selected.
+
 ## Camera decision gate
 
 For `same_window_comparison`, the response reports whether the relevant subject
@@ -97,6 +102,11 @@ disappearance control before returning it. `feature_tracking` and
 
 Color-only changes report that the exact camera is preserved and return no view
 paths unless the user separately requested reframing.
+
+Whenever attached authority and transparent mathematics permit it, the camera
+conclusion reports the predicted subject location or transition set, the exact
+retained viewport bounds, and the containment result. If containment cannot be
+established, it says so and chooses clarification or an honest survey frame.
 
 ## Hostile self-review gate
 
@@ -149,11 +159,11 @@ existing human candidate-preview gate the final visual authority.
 The hardened primary packet is:
 
 ```text
-D:\salt-fractal\cuda-fractal-engine-state-tool\findings\cc2cb68da25f649f2de674750b04c2b15f5e1416a806a0329b09743491525e63\packets\2a8f4d43-a08b-487b-9ad8-49bd88b8e06f
+D:\salt-fractal\cuda-fractal-engine-state-tool\findings\cc2cb68da25f649f2de674750b04c2b15f5e1416a806a0329b09743491525e63\packets\4101a8d0-5b87-4bf0-af61-b7b1a8149483
 ```
 
-- Packet SHA-256: `42042589b1c91f0a2ec2bfbf5d6c223551c9b668b17d09d800736580504f7c19`
-- Manifest SHA-256: `afad5724a217f3f55ae3c09cf819d357966030e29dc15222bfcda3e0fd2cb1d6`
+- Packet SHA-256: `c2a47a21bf4ef1a4980f6e27b72b52de0907cf2e2ddd7ef6a7a9e62e4e49d75f`
+- Manifest SHA-256: `411e0d8999e4acc07a4269d3ea88d5c6ae40bbe43d20b8b8fd33fa9b66dc1ceb`
 - Runtime identity SHA-256: `140707fd16283ac2db3c58a24146b73a7f29bbd15b0e1b36771c301f8b275e95`
 - Runtime executable SHA-256: `ae329398693a5872faced0fa6f9cf57868788fc975b07ece5150954ac4face78`
 - Base state SHA-256: `e68e611fd1b8014f98a59af689b53c299585bd62d8ed15dd3b81c1eadaba504d`
@@ -165,10 +175,13 @@ without refresh. All nine required and three recommended attachments are
 present. The historical packet retained its recorded packet and manifest
 hashes, proving that regeneration did not mutate it.
 
-The front-loaded packet grew from 9,834 to 12,031 UTF-8 bytes (26 additional
-lines). Hostile review accepted that bounded increase because it carries the
+The final front-loaded packet grew from 9,834 to 12,798 UTF-8 bytes. Hostile
+review accepted that bounded increase because it carries the
 five operative decision checks without duplicating any attached authority or
 adding another schema.
+
+Packet `2a8f4d43-a08b-487b-9ad8-49bd88b8e06f` preserves the intermediate text
+before the ambiguity exception was made explicit. It is not an acceptance input.
 
 The execution agent stops here. The user runs the external session described in
 `docs/catalog_viewport_continuity_manual_gate.md`; Slice 3 remains blocked until
