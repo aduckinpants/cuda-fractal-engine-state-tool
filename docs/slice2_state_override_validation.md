@@ -2,10 +2,12 @@
 
 > Historical checkpoint: Slice 5 runtime evidence later proved that direct
 > loading preserves draft edits without lowering them into live render stacks.
-> Active `color_pipeline_draft` authoring now fails closed; see
-> `slice5_real_acceptance_checkpoint.md`.
+> That limitation was subsequently resolved through the engine-owned operation
+> documented in `slice5_color_pipeline_engine_integration.md`; active fixed-
+> topology `color_pipeline_draft` authoring no longer fails closed.
 
-Status: implementation and local acceptance complete; runtime proof remains Slice 3.
+Status: historical Slice 2 implementation and local acceptance complete. Its
+runtime-proof boundary was completed by Slices 3 and 5B.
 
 ## Implemented boundary
 

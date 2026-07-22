@@ -1,7 +1,8 @@
 # Slice 4 Atomic UI Cutover
 
-Status: implementation and local workflow acceptance complete; user visual
-review is the next boundary.
+Status: historical Slice 4 implementation and local workflow acceptance
+complete. The user visual-review boundary was subsequently passed through the
+launch-and-recapture evidence in `slice5_color_pipeline_engine_integration.md`.
 
 ## Active product
 

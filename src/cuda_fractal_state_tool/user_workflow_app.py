@@ -761,12 +761,13 @@ class UserWorkflowApp:
                 self.runtime_cmd_path,
             )
             self.session.status_text = (
-                f"Launched exact user-accepted engine candidate in a new viewer (PID {process.pid})."
+                f"Started the exact-candidate launcher process (PID {process.pid}); viewer health is not machine-verified."
             )
             self._set_text(
                 self.proof_text,
-                "LAUNCH READY → LAUNCHED\n\n"
-                f"PID: {process.pid}\nCandidate: {result.engine_candidate_path}\n"
+                "LAUNCH READY → LAUNCH COMMAND STARTED\n\n"
+                f"Launcher process PID: {process.pid}\nViewer health: not machine-verified\n"
+                f"Candidate: {result.engine_candidate_path}\n"
                 f"Launch receipt: {result.proof_dir / 'launch.json'}",
             )
         except Exception as exc:
@@ -780,7 +781,11 @@ class UserWorkflowApp:
         if finding is None or finding.primary_frame_path is None:
             self._set_error("This finding has no primary frame to open.")
             return
-        os.startfile(str(finding.primary_frame_path))
+        try:
+            os.startfile(str(finding.primary_frame_path))
+        except Exception as exc:
+            self._set_error(f"Could not open the full finding frame: {exc}")
+            self._render()
 
     def open_candidate_frame(self) -> None:
         result = self.session.proof_result

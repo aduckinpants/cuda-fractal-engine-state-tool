@@ -21,6 +21,8 @@ untouched in existing workspaces and Git history, but are not active inputs.
 
 ## Launch
 
+The supported interpreter is Python 3.14.x on Windows.
+
 From the repository root:
 
 ```powershell
@@ -65,6 +67,8 @@ VISUAL REVIEW PENDING
 `Accept Candidate` or `Revision Needed` writes one immutable review decision.
 Only acceptance plus fresh binding/hash checks reaches `LAUNCH READY`. Launch
 loads the exact engine-emitted candidate, not the Python merged input.
+`launch.json` proves creation of the exact-candidate launcher process; it does
+not claim machine-verified viewer startup or rendering.
 
 ## Packet V6 and override authority
 
@@ -160,5 +164,6 @@ slice conclusions are tracked in:
 - `docs/slice4_atomic_ui_cutover.md`
 - `docs/slice5_real_acceptance_checkpoint.md`
 - `docs/slice5_color_pipeline_engine_integration.md`
+- `docs/post_rescue_hardening.md`
 
 Earlier phase documents are historical evidence, not active product contracts.

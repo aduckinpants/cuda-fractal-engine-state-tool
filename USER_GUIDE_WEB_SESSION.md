@@ -72,8 +72,12 @@ previews, or open either full frame explicitly.
 
 `Launch Accepted State` rechecks the bundle, exact override text, merged state,
 engine-emitted state, candidate frame, replay evidence, proof receipt, review
-decision, and current runtime identity. It then launches the exact
-engine-emitted state in a new viewer and writes `launch.json`.
+decision, and current runtime identity. It then starts the published runtime
+launcher with the exact engine-emitted state and writes `launch.json`.
+
+The launch receipt proves launcher-process creation. It does not claim that the
+viewer started or rendered successfully; visual confirmation or a recaptured
+finding supplies that stronger evidence when needed.
 
 ## Safety boundaries
 
@@ -83,10 +87,9 @@ engine-emitted state in a new viewer and writes `launch.json`.
   Python.
 - Captured Color Pipeline arrays are complete structural evidence: lane/row
   topology and enablement belong to the captured draft, not to Python.
-- Direct runtime loading currently preserves an edited Color Pipeline draft as
-  pending editor state without applying it to the live render stacks. Treat
-  draft authoring as unaccepted until the engine exposes an authoritative
-  lowering seam; do not compensate with guessed scalar or stack mirrors.
+- Color Pipeline materialization uses the published engine's explicit loaded-
+  draft application operation. Ordinary state loading and action-free replay
+  remain non-applying; Python never guesses or duplicates scalar/stack mirrors.
 - Preview failure does not weaken proof or cause full-resolution Tk decoding.
 - Reset cancels only session-owned work and preserves durable evidence.
 - Historical proposal artifacts are data only and cannot be pasted into the

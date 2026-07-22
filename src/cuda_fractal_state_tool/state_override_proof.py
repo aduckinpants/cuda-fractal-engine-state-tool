@@ -34,7 +34,7 @@ from .state_override import StateOverrideMaterialization, materialize_state_over
 
 PROOF_RECEIPT_VERSION = 2
 REVIEW_DECISION_VERSION = 1
-LAUNCH_RECEIPT_VERSION = 1
+LAUNCH_RECEIPT_VERSION = 2
 _PATH_PART = re.compile(r"([^.[\]]+)|\[(\d+)\]")
 
 
@@ -773,9 +773,15 @@ def launch_state_override_candidate(
         launch_path,
         {
             "launch_receipt_version": LAUNCH_RECEIPT_VERSION,
+            "launch_status": "launcher_process_created",
             "proof_id": result.proof_id,
             "launched_at_utc": _utc_now(),
+            "launcher_process_pid": process.pid,
             "pid": process.pid,
+            "viewer_health_verified": False,
+            "viewer_health_note": (
+                "The tool proved launcher-process creation only; it did not machine-verify viewer startup or rendering."
+            ),
             "command": command,
             "review_decision_sha256": sha256_file(result.proof_dir / "review-decision.json"),
             "engine_candidate_sha256": result.engine_candidate_sha256,

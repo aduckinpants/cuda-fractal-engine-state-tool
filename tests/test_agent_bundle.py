@@ -393,6 +393,18 @@ class AgentBundleTests(unittest.TestCase):
             self.assertEqual(cli_result["packet_sha256"], bundle.packet_sha256)
             self.assertEqual(cli_result["required_attachments"], list(bundle.required_attachments))
 
+    def test_cli_reports_structured_bundle_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            missing = Path(temp_dir) / "missing-packet"
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                exit_code = agent_bundle_cli_main(["inspect", "--packet-dir", str(missing)])
+            self.assertEqual(exit_code, 2)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["status"], "bundle_error")
+            self.assertEqual(payload["operation"], "inspect")
+            self.assertIn("missing", payload["error"].lower())
+
     def test_runtime_identity_change_discards_staged_packet(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -419,6 +419,12 @@ class StateOverrideProofTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             launch = json.loads((result.proof_dir / "launch.json").read_text(encoding="utf-8"))
             self.assertEqual(launch["engine_candidate_sha256"], result.engine_candidate_sha256)
+            self.assertEqual(launch["launch_receipt_version"], 2)
+            self.assertEqual(launch["launch_status"], "launcher_process_created")
+            self.assertEqual(launch["launcher_process_pid"], 4321)
+            self.assertEqual(launch["pid"], 4321)
+            self.assertFalse(launch["viewer_health_verified"])
+            self.assertIn("process creation only", launch["viewer_health_note"])
 
     def test_revision_and_tampering_never_become_launch_ready(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

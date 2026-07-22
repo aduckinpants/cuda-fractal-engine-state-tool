@@ -107,3 +107,12 @@ table.
    tree.
 5. The final rescue checkpoint is pushed and PR-ready but is not merged without
    separate authorization.
+
+## Final closure
+
+All execution gates above were subsequently passed. The user accepted the final
+Color Pipeline candidate, launched the exact engine-emitted state, and recaptured
+byte-identical decoded pixels. Pull request #2 merged the completed rescue to
+`main` at `781cd0dc9375f8bfefb2c92fbd8af6384127c005`. This document remains the
+historical contract for that completed campaign, not an active list of pending
+work.
