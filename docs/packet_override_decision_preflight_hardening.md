@@ -131,9 +131,9 @@ change appears in JSON, and the largest expected uncertainty is visible.
   active documentation, run focused/full/workflow proof, and checkpoint cleanly.
 - [x] Slice 2 — regenerate the original McMullen packet, verify exact local
   authority and handoff evidence, and stop for the user-run web calibration.
-- [ ] Slice 3 — after primary acceptance, regenerate the remaining fixtures,
-  finish manual acceptance, close documentation, and merge the state-tool PR
-  under the user's standing authorization.
+- [ ] Slice 3 (in progress) — the hardened primary calibration passed end to end. Qualify and
+  run the remaining adversarial fixtures, close documentation, and merge the
+  state-tool PR under the user's standing authorization.
 
 ## Stop conditions
 
@@ -183,6 +183,19 @@ adding another schema.
 Packet `2a8f4d43-a08b-487b-9ad8-49bd88b8e06f` preserves the intermediate text
 before the ambiguity exception was made explicit. It is not an acceptance input.
 
-The execution agent stops here. The user runs the external session described in
-`docs/catalog_viewport_continuity_manual_gate.md`; Slice 3 remains blocked until
-that transcript and candidate result are supplied.
+## Slice 2 primary calibration result
+
+The user completed the hardened McMullen session and accepted proof
+`96ab8393-97e2-4576-85cd-5039123a28d5`. The exact requested dynamics and camera
+paths survived engine materialization, materialization and action-free replay
+were pixel-identical, and the user accepted and launched the exact candidate.
+The independent viewer capture at
+`D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-22\180102_222__mcmullen`
+decoded to the same RGBA hash as the proof frame.
+
+This is the first strong all-around pass of the hardened decision-preflight
+workflow. It closes Slice 2's primary gate without claiming broad model
+acceptance. Slice 3 remains active for a small adversarial ladder covering a
+split or disappearance, an honestly ungroundable high-zoom change, and an
+esoteric ExplainO case. No packet or product mutation is authorized from this
+result alone; fixture qualification and further manual evidence come first.

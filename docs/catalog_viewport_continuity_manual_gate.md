@@ -1,7 +1,8 @@
 # Catalog And Viewport Continuity Manual Gate
 
-Status: calibration reopened after the first downstream session exposed an
-override-decision ambiguity; a hardened primary packet is pending regeneration.
+Status: the hardened primary McMullen calibration is the first strong
+end-to-end pass. Broader adversarial calibration remains open; this pass does
+not by itself close split, disappearance, or ungroundable-feature behavior.
 
 ## What this gate tests
 
@@ -46,10 +47,60 @@ calibration.
 - Base state SHA-256: `e68e611fd1b8014f98a59af689b53c299585bd62d8ed15dd3b81c1eadaba504d`
 - Viewport-facts SHA-256: `4d40f7c64149ff112842fcefa0f49b0021e6b2a01703058c8267cc328d5eb934`
 
-This new immutable packet is the required input for the next manual session.
+This immutable packet is the accepted input for the primary manual session.
 The historical failed packet and pre-clarification packet
 `2a8f4d43-a08b-487b-9ad8-49bd88b8e06f` remain untouched and must not be used
 for this gate.
+
+### Primary calibration result — strong pass
+
+The user ran the hardened packet in a fresh Codex 5.6 Sol High session. The
+session first explored the finding, clarified the selected experiment, reported
+its decision preflight, and returned one sparse override that moved
+`mcmullen_lambda` to the parabolic threshold while recentering the camera on the
+predicted transition neighborhood.
+
+- Proof ID: `96ab8393-97e2-4576-85cd-5039123a28d5`
+- Proof directory: `D:\salt-fractal\cuda-fractal-engine-state-tool\findings\cc2cb68da25f649f2de674750b04c2b15f5e1416a806a0329b09743491525e63\proofs\96ab8393-97e2-4576-85cd-5039123a28d5`
+- Receipt SHA-256: `a180f979fb0d9403981945bc92049df4806060c149a8acd48f42e7c487ef3ab3`
+- Engine candidate SHA-256: `fc8912c6f5071136eef324c6f30b05122a4515ea7b6fd568bded9c7d233c23a6`
+- Candidate encoded frame SHA-256: `95ebfcd3464ae6c7f7dbe9d54d81111e300f41873c4f6286cadc0fd64ae94b84`
+- Candidate decoded RGBA SHA-256: `7aef7c1ab50c108f7d97af9b24585bdabb51e255308419073e6d61e7c16b9147`
+- Review decision: `accepted`
+- Launch PID recorded by the launcher receipt: `76504`
+
+All five requested paths survived engine materialization exactly:
+`params.mcmullen_lambda`, both ordinary center coordinates, and both serialized
+high-precision center companions. Materialization and action-free replay had
+identical encoded frames, identical decoded pixels, and semantically equal
+authoring state after documented volatile diagnostics were excluded. The base
+and candidate frames differed materially.
+
+The user then captured the launched viewer at:
+
+```text
+D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-22\180102_222__mcmullen
+```
+
+- Capture state SHA-256: `b8e5517a180f6fc632a6ba9b74b47510e80a57a29641e8e93af0345afd6d7af3`
+- Capture PNG SHA-256: `9d9a63b6682ef11a3b3fc45ee095126a21ad2bd7291acdba5dd7ece867d116b8`
+- Capture decoded RGBA SHA-256: `7aef7c1ab50c108f7d97af9b24585bdabb51e255308419073e6d61e7c16b9147`
+- Captured center: `2/3 + 0i`
+- Captured `log2_zoom`: `6.6001691399968774`
+- Captured average iterations: `4838` of `5000`
+
+The PNG and proof BMP differ as encoded files but decode to identical 4096 by
+2560 RGBA pixels. This closes the full local chain from exact packet binding,
+through model-selected override, validation, materialization, replay, visual
+review, launch, and independent viewer capture.
+
+The extra pre-render prediction question was useful because it made the
+session state falsifiable before the image existed. Keep it as a manual
+calibration prompt rather than expanding Packet V6. A malformed displayed
+formula in the preserved transcript was traced to response copy/paste handling,
+not packet generation or engine behavior. A repeated JSON block during later
+discussion was harmless conversational overproduction; the discussion-only
+post-render wording below is the preferred control for future tests.
 
 ## Contrast fixture — ExplainO Multibrot root-trap
 
@@ -79,8 +130,12 @@ For each selected fixture:
 
 1. Use `Copy Packet` and paste the text into a fresh target web session.
 2. Use `Open Agent Bundle Folder`.
-3. Attach all nine required files listed by the packet, preserving filenames.
-4. Attach recommended context files when the client permits it.
+3. Attach the entire packet-folder contents when the client permits it,
+   preserving filenames. The packet currently distinguishes nine required
+   authority files from recommended context and generated helper files; nine is
+   a minimum authority set, not the total directory file count.
+4. Confirm that the session can inspect the required files and any recommended
+   context actually attached.
 
 Opening prompt:
 
@@ -111,6 +166,21 @@ Use the lambda = 4/27 point as one frame from the bifurcation experiment.
 
 The test is whether Packet V6 itself causes the agent to perform the viewport
 check and produce the visible decision preflight.
+
+Before rendering an accepted override, ask:
+
+```text
+Before I render this, describe in plain language what you expect to see. Name two to four observable visual or numerical signs and the strongest result that would contradict your interpretation. This is discussion only; do not revise or repeat the override.
+```
+
+After returning the capture, ask:
+
+```text
+Compare this capture with your prediction. Separate what matched, what missed, and what remains uncertain. This is discussion only; do not return another override unless I explicitly request a revision.
+```
+
+These are calibration prompts, not Packet V6 contract text. They should not
+weaken the packet's behavior for models that receive only the normal workflow.
 
 ## Return the override to the exact packet
 
@@ -177,7 +247,7 @@ directory.
 ## Local proof already complete
 
 - Focused importer, bundle, viewport, merge, proof, and UI tests passed.
-- Full Python 3.14 suite passed with 81 tests.
+- Full Python 3.14 suite passed with 82 tests.
 - All three real bundles were generated against the merged published runtime.
 - A real desktop walkthrough generated a new bundle, materialized and replayed a
   scalar override, rendered base and candidate previews, and stopped at
@@ -189,7 +259,21 @@ directory.
   preserved its manifest and finding hashes, and created no replacement packet.
   Evidence is retained under `.local/existing_packet_ui_gate/`.
 
-## Stop condition
+## Remaining adversarial calibration boundary
+
+The primary gate above passed. Before further packet or product mutation,
+qualify a small ladder of real captures that distinguishes:
+
+1. a uniquely trackable feature;
+2. a feature that splits, merges, or disappears;
+3. a high-zoom dynamics change whose feature motion cannot honestly be grounded
+   from the attached authority;
+4. at least one esoteric ExplainO variant with a dense active parameter surface.
+
+Do not turn that ladder into a broad automated sweep until the manual cases
+produce a stable, auditable scoring rubric. Automation may prepare bundles,
+receipts, hashes, prompts, and comparison tables, but it must not self-grade
+feature identity or mathematical coherence.
 
 The user performs the external sessions and reports the response plus validator,
 proof, visual-review, and launch results. Do not fabricate those results. A real
