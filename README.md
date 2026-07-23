@@ -237,5 +237,6 @@ slice conclusions are tracked in:
 - `docs/post_rescue_hardening.md`
 - `docs/catalog_viewport_continuity_integration.md`
 - `docs/compact_web_handoff_hardening.md`
+- `docs/packet_v7_compact_handoff_manual_gate.md`
 
 Earlier phase documents are historical evidence, not active product contracts.

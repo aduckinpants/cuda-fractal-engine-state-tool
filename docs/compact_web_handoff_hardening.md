@@ -156,3 +156,16 @@ active prompt architecture to mask a client transport defect.
 The implementation checkpoint may be described as acceptance-ready only after
 all local rails pass and fresh packets exist. Product acceptance remains
 pending the user's external web-session tests.
+
+## Execution receipt
+
+- Calibration branch merged to main: `3f2bee9`
+- Plan checkpoint: `dcf5c40`
+- Compact Packet V7 authority views: `c102931`
+- Bounded web PNG and verified candidate PNG: `8d8d6de`
+- Full Python 3.14 suite after image hardening: 86 passed
+- Real scalar proof: `33c5381f-3c2d-419d-8f5c-d19b38f8e40e`
+- Fresh manual fixtures: ExplainO Halley, ExplainO Dual Seed, and ExplainO
+  Phoenix
+- Exact manual packet paths and hashes:
+  `docs/packet_v7_compact_handoff_manual_gate.md`
