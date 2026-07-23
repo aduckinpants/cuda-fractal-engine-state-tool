@@ -224,3 +224,20 @@ The deeper Nova reserve, additional old captures, and a new custom fixture are
 deferred to a later round. Slice 3 now stops at the user-run three-session
 manual battery. No packet tweak is authorized unless those sessions reveal a
 genuine packet ambiguity rather than downstream model noncompliance.
+
+### Battery result A — reverse McMullen split
+
+The first blind session passed using the self-contained prompt "Consider
+changing the lambda to 0.15" rather than the history-dependent phrase "Reverse
+the preceding transition." Proof `7f1caa34-d9d3-42af-b65f-5f78abf4736e`
+preserved all requested dynamics and camera values, replayed with identical
+pixels, received explicit user acceptance, and launched the exact candidate.
+The independent capture `2026-07-22\232401_164__mcmullen` decoded to the same
+RGBA hash as the proof frame and reduced average iterations from `4838` to `87`.
+
+The session correctly followed both conjugate branches and selected a survey
+camera containing them. Its initial intentionality claim about the nearest
+binary32 representation of `4/27` and its unmeasured pixel-perfect symmetry
+claim are retained as downstream calibration misses. They do not justify a
+packet change or the suggested new per-family math sidecar. Battery fixtures B
+and C remain pending user execution.

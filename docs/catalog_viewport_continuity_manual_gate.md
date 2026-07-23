@@ -133,6 +133,51 @@ split rather than silently choosing one branch. The evaluator retains the
 expected branch geometry and viewport-containment calculation; it is not added
 to Packet V6.
 
+#### Result — passed with two downstream calibration notes
+
+The blind-session prompt must be self-contained. The executed wording was:
+
+```text
+Consider changing the lambda to 0.15. Follow the complete fixed-point split rather than choosing one branch. What camera strategy and result would you expect?
+```
+
+The earlier wording, "Reverse the preceding transition," incorrectly assumed
+conversation history a fresh session did not have and is retired.
+
+- Proof ID: `7f1caa34-d9d3-42af-b65f-5f78abf4736e`
+- Receipt SHA-256: `ed7a022f382c4aa311a9eb69f1082f5392c737691c17845a7bfc52b1a27c23b5`
+- Candidate state SHA-256: `b7acb38dbffeb1df6409e0bfee9767bae815d25e51481cbbf80418500396eed3`
+- Candidate encoded frame SHA-256: `a68204a34485496f558307857ba0fc9520a432ed4146621e6f7b4f5e12716002`
+- Candidate decoded RGBA SHA-256: `d0198421f8b37006184d7cb06c8c0eb9d8b30d596f83b893438f7bdff3ab8971`
+- Review decision: `accepted`
+- Launch PID: `73244`
+- Follow-up capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-22\232401_164__mcmullen`
+- Capture state SHA-256: `f107d9aa53f8aa287f4767960cb358946db8b17bf7e66b9589c4d196d06a5e7a`
+- Capture PNG SHA-256: `5c9a2add7cd72c38de73981d01881f7d1857298dd9b829602124981d7dc86885`
+
+The sparse override changed lambda, center X and its high-precision companion,
+and zoom and its logarithmic companion. Every requested value survived engine
+materialization. Materialization and action-free replay had identical encoded
+and decoded frames and semantically equal authoring state. The launched PNG and
+proof BMP use different encodings but decode to identical 4096 by 2560 RGBA
+pixels.
+
+The agent selected a transition survey containing both conjugate branches,
+predicted upper/lower reorganization and collapse of the near-parabolic delay,
+and returned a valid camera with Y bounds `[-0.05, 0.05]`. The resulting capture
+contained the paired structure and reduced average iterations from `4838` to
+`87` under the same `5000` cap.
+
+Two statements exceeded the available evidence: the initial response assigned
+intentional significance to the binary32-nearest representation of `4/27`, and
+it claimed pixel-for-pixel symmetry without an image-array comparison. The
+agent identified both defects in its requested performance review. They are
+classified as downstream epistemic-calibration misses, not packet ambiguities;
+the attached state and authority already permit the narrower correct claims.
+The agent's suggestion for a new special-parameter and fixed-point-solver
+sidecar is not accepted by this campaign because it would introduce a new
+per-family derived authority beyond Packet V6's current contract.
+
 ### B — ExplainO Nova high-zoom dynamics
 
 - Source capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-16\105825_478__explaino_nova`
@@ -221,7 +266,7 @@ Use one targeted discussion prompt before the concrete override trigger:
 McMullen:
 
 ```text
-Reverse the preceding transition by returning lambda to 0.15. Follow the complete fixed-point split rather than choosing one branch. What camera strategy and result would you expect?
+Consider changing the lambda to 0.15. Follow the complete fixed-point split rather than choosing one branch. What camera strategy and result would you expect?
 ```
 
 ExplainO Nova:
