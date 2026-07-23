@@ -1,6 +1,6 @@
 # Packet Observability and No-Op Hardening
 
-Status: active bounded continuation of the catalog/viewport manual calibration.
+Status: implementation complete; focused user-run retesting pending.
 
 Branch: `codex/catalog-viewport-continuity-integration`
 
@@ -256,3 +256,20 @@ Repository clean at <commit>; branch pushed.
 User-run web-session retesting is the next approved boundary.
 No engine mutation, new fixture campaign, or broader product work is authorized.
 ```
+
+## Execution receipt
+
+- Plan checkpoint: `9ae3107`
+- Packet decision hardening: `7b68ea6`
+- Explicit base-replay presentation: `9646796`
+- Focused packet tests: 9 passed
+- Merge/proof/workflow/UI focused tests: 29 passed
+- Full Python 3.14 suite: 85 passed
+- Real no-op UI workflow: replay proven, captured-base pixels identical, launch
+  disabled at visual review pending, and `Acknowledge Base Replay` presented
+- C2 packet: `02549bbe-065e-498a-8168-3ac4dd0b5fb3`
+- E3 packet: `43dbf386-4219-4101-8fc7-339a2e8f9bda`
+
+The exact packet paths, hashes, prompts, and pass criteria are recorded in
+`docs/catalog_viewport_continuity_manual_gate.md`. External-session results are
+intentionally absent until supplied by the user.

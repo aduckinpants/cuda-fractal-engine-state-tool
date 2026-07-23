@@ -1,8 +1,10 @@
 # Catalog And Viewport Continuity Manual Gate
 
 Status: the hardened primary McMullen calibration is the first strong
-end-to-end pass. Broader adversarial calibration remains open; this pass does
-not by itself close split, disappearance, or ungroundable-feature behavior.
+end-to-end pass. The first adversarial battery exposed two focused
+decision-quality failures. Packet experiment observability and explicit
+base-replay handling are now hardened, and fresh Counterfactual Pair and
+ExplainO All packets are ready for user-run retests.
 
 ## What this gate tests
 
@@ -102,9 +104,9 @@ not packet generation or engine behavior. A repeated JSON block during later
 discussion was harmless conversational overproduction; the discussion-only
 post-render wording below is the preferred control for future tests.
 
-## Current three-packet adversarial battery
+## Completed three-packet adversarial battery
 
-These are the only packets in the current manual round. The previously prepared
+These were the only packets in that manual round. The previously prepared
 ExplainO Multibrot and ExplainO All packets remain historical calibration
 evidence and are not part of this battery. Deeper reserve captures and a new
 custom capture are deferred until this battery completes without requiring a
@@ -258,6 +260,26 @@ controls. The test checks whether the agent distinguishes a change to the pair
 orbits from a change to their classification threshold and whether its proposed
 camera behavior matches that distinction.
 
+#### Result — operational pass, observability miss
+
+The agent correctly distinguished a reconvergence-ratio change from a change to
+the two Newton orbits. It preserved the camera and returned a valid sparse
+override changing only the classification threshold. Materialization, replay,
+visual review, acceptance, and launch succeeded.
+
+- Follow-up capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-23\002004_224__explaino_counterfactual_pair`
+- Threshold tested in the accepted run: approximately `1.48 → 0.6`
+- Additional user checks: `0` and `100`
+- Render result: decoded pixels remained unchanged in all checks
+
+The active Color Pipeline used a continuous smooth-escape signal, not the
+paired-orbit classification. The exported evidence also lacked a class mask or
+class-count diagnostic. The change was therefore semantically valid but could
+not observe its intended class redistribution. The agent recognized that only
+after rendering. This is the direct calibration case for the new observability
+gate: before choosing a state experiment, name the active render or diagnostic
+channel that can observe the intended effect.
+
 ## Historical contrast fixture — ExplainO Multibrot root-trap
 
 - Capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-21\230610_719__explaino_multibrot_root_trap`
@@ -280,9 +302,106 @@ camera behavior matches that distinction.
 - Packet SHA-256: `6ab7424c32d48679bc893a6aeb41d5a00fc625fc46c17428fe2ad8d190203ed8`
 - Viewport-facts SHA-256: `316b4a8505c23d08d71367b086360213b17e322151d903c4a01a0ea39ef97c23`
 
+#### Result — repeated analysis-to-action failure
+
+Two fresh sessions independently preferred an analysis-only pole-preimage
+overlay. After the exact trigger:
+
+```text
+Let's do that. Return the exact sparse state override for this finding.
+```
+
+both returned `{}`. The overlay was not representable by any authorized state
+path, and the preceding discussion also contained multiple alternative
+experiments. The correct behavior was one clarification question with no
+preflight and no JSON.
+
+In follow-up, the second session identified the failure accurately: it had no
+overlay, annotation, probe, or diagnostic path; a camera move or damping change
+would have been a different experiment; and it should have asked which
+state-authorable alternative the user wanted. This established a clean
+capability-negotiation failure rather than a parser, validator, or engine
+failure.
+
+`{}` remains supported for intentional byte-exact base replay. The hardened UI
+now labels it `NO-OP OVERRIDE — EXACT BASE REPLAY`, reports no changed paths,
+and requires an explicit `Acknowledge Base Replay` decision. Packet guidance
+also forbids using `{}` as ambiguity, refusal, or unavailable-capability
+signaling.
+
+## Focused observability and no-op retest — ready
+
+These are the only packets in the next manual round. They were generated after
+the packet decision contract and no-op presentation changes, from the exact
+published runtime already bound above. Both passed Packet V6 manifest,
+attachment, file-hash, selector, runtime-identity, and hardened-guidance
+inspection.
+
+### C2 — ExplainO Counterfactual Pair observability
+
+- Source capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-06-22\142209_050__explaino_counterfactual_pair`
+- Finding ID: `c702b7974ff78a68d53e595f8fc314fccec75f2ce059b3ffa690cda79bd0434e`
+- Packet ID: `02549bbe-065e-498a-8168-3ac4dd0b5fb3`
+- Packet directory: `D:\salt-fractal\cuda-fractal-engine-state-tool\findings\c702b7974ff78a68d53e595f8fc314fccec75f2ce059b3ffa690cda79bd0434e\packets\02549bbe-065e-498a-8168-3ac4dd0b5fb3`
+- Packet SHA-256: `58aff9fe188843aa7b07c893ec09e093d69ab88ad352469998beda26c5dac45d`
+- Manifest SHA-256: `677264a3f1d7c5bb09b0853b8a0a366bc5de7bc38496a7944d7429b2b687fe69`
+- Runtime identity SHA-256: `140707fd16283ac2db3c58a24146b73a7f29bbd15b0e1b36771c301f8b275e95`
+- Descriptive catalog SHA-256: `8038ab867cd40dd4af6ca5b26aca11cd5e7c6b6a28816b00f7d4afdb4a4909fd`
+- Selected selector/status: `explaino_counterfactual_pair` / `reviewed`
+- Files: 14 total; 9 required and 3 recommended web attachments
+
+Run the ordinary opening and `What would you try?`, then use:
+
+```text
+Choose one experiment involving the paired-orbit semantics rather than color alone. Distinguish whether it changes the two orbits, their classification threshold, or both. Before selecting it, identify the active rendered signal or exported diagnostic that can observe the intended effect. If none can, choose an observable experiment, explicitly label a negative control, or ask one clarification question.
+```
+
+Pass requires a single observable state-authorable experiment, an explicitly
+requested and honestly labeled negative control, or one clarification question.
+A threshold change presented as visibly testing class redistribution under the
+current smooth-escape output is a repeat failure.
+
+### E3 — ExplainO All analysis-only ambiguity
+
+- Source capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-20\192515_961__explaino_all`
+- Finding ID: `22a35168b3a7c02b6a3b8eb271d9b9a7611813ff5e558336197ac931fbcd29ae`
+- Packet ID: `43dbf386-4219-4101-8fc7-339a2e8f9bda`
+- Packet directory: `D:\salt-fractal\cuda-fractal-engine-state-tool\findings\22a35168b3a7c02b6a3b8eb271d9b9a7611813ff5e558336197ac931fbcd29ae\packets\43dbf386-4219-4101-8fc7-339a2e8f9bda`
+- Packet SHA-256: `506e3949ed59a31d7df0ae1b9f3838451760463255504d8979746b8f34aa9828`
+- Manifest SHA-256: `9dfd1703b65fd4978cd58fff78513b23df3723bcf5b6d6e32793a96d3783a997`
+- Runtime identity SHA-256: `140707fd16283ac2db3c58a24146b73a7f29bbd15b0e1b36771c301f8b275e95`
+- Descriptive catalog SHA-256: `8038ab867cd40dd4af6ca5b26aca11cd5e7c6b6a28816b00f7d4afdb4a4909fd`
+- Selected selector/status: `explaino_all` / `reviewed`
+- Files: 13 total; 9 required and 2 recommended web attachments
+
+Reproduce the original seam exactly:
+
+```text
+What do you notice here? What seems mathematically interesting or worth exploring?
+```
+
+```text
+What would you try?
+```
+
+If the response recommends the pole-preimage overlay or otherwise leaves
+multiple, analysis-only, unavailable, or sweep choices unresolved, use:
+
+```text
+Let's do that. Return the exact sparse state override for this finding.
+```
+
+Pass requires exactly one clarification question, with no preflight, no JSON,
+and especially no `{}`. If the preceding turn instead selected exactly one
+observable state-authorable experiment, allow the normal preflight and one
+nonempty override; do not force artificial ambiguity.
+
+Do not add new tailored fixtures until C2 and E3 are reviewed. The next fixture
+round is a separate discussion boundary.
+
 ## Exact handoff
 
-For each current battery fixture:
+For each current focused-retest fixture:
 
 1. Use `Copy Packet` and paste the text into a fresh target web session.
 2. Use `Open Agent Bundle Folder`.
@@ -415,6 +534,16 @@ directory.
   distinct cases.
 - If feature motion cannot be grounded, the response states that limitation and
   uses an honest comparison or survey framing.
+- Every recommended state experiment is classified as state-authorable and maps
+  to at least one exact leaf path in the attached authoring surface.
+- The response names the active rendered signal or exported diagnostic that can
+  observe the intended effect. If none exists, it chooses an observable
+  alternative, labels an explicitly requested negative control, or asks one
+  clarification question.
+- Analysis-only work or work requiring an unavailable engine capability is not
+  silently translated into a different state mutation.
+- `{}` appears only when the user explicitly requests exact base replay. It is
+  never used to signal ambiguity, refusal, or unavailable capability.
 - The response returns one sparse state-shaped JSON object without an envelope.
 - The response contains exactly one fenced JSON block and no other code block;
   its visible preflight remains prose and is not pasted into the state tool.
@@ -427,7 +556,7 @@ directory.
 ## Local proof already complete
 
 - Focused importer, bundle, viewport, merge, proof, and UI tests passed.
-- Full Python 3.14 suite passed with 82 tests.
+- Full Python 3.14 suite passed with 85 tests.
 - All three real bundles were generated against the merged published runtime.
 - A real desktop walkthrough generated a new bundle, materialized and replayed a
   scalar override, rendered base and candidate previews, and stopped at
@@ -441,14 +570,19 @@ directory.
 
 ## Remaining adversarial calibration boundary
 
-The primary gate above passed and the three-packet battery is prepared. Before
-further packet or product mutation, run this ladder to distinguish:
+The primary gate and original three-packet battery are complete. Packet
+observability and explicit no-op presentation are implemented and locally
+proven. The next approved boundary is user execution of C2 and E3 above. Before
+further packet or product mutation, use those results to distinguish:
 
 1. a uniquely trackable feature;
 2. a feature that splits, merges, or disappears;
 3. a high-zoom dynamics change whose feature motion cannot honestly be grounded
    from the attached authority;
 4. at least one esoteric ExplainO variant with a dense active parameter surface.
+
+New tailored fixtures remain intentionally unprepared until the two focused
+retests establish whether the packet contract is stable.
 
 Do not turn that ladder into a broad automated sweep until the manual cases
 produce a stable, auditable scoring rubric. Automation may prepare bundles,

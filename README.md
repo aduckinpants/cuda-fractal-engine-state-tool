@@ -108,6 +108,11 @@ read-only, duplicate, null, or non-finite values fail closed. `{}` copies the
 exact base `state.json` bytes. A nonempty candidate uses the documented stable
 UTF-8 serialization.
 
+An empty override is an explicit base-replay operation, not an ambiguity,
+refusal, or unavailable-capability signal. Its proof remains valid, but the UI
+labels it `NO-OP OVERRIDE — EXACT BASE REPLAY`, reports no changed paths, and
+requires `Acknowledge Base Replay` before launch readiness.
+
 The captured draft owns Color Pipeline topology. The exact deployed UI-Salt
 contract owns function and parameter validity. Python owns no parallel function,
 parameter, default, range, enum, compatibility, or coercion catalog.
@@ -118,13 +123,21 @@ intent in prose: `same_window_comparison`, `feature_tracking`, or
 `transition_survey`. Exact fitting uses the attached engine viewport facts;
 Python does not duplicate renderer camera mathematics or choose a subject.
 
+Exploratory recommendations distinguish `state-authorable`, `analysis-only`,
+and work requiring an unavailable capability. Before emitting an override, the
+agent must map the selected experiment to at least one authorized leaf change
+and identify the active rendered signal or exported diagnostic that can observe
+its intended effect. Otherwise it chooses an observable alternative, labels an
+explicitly requested negative control, or asks one clarification question.
+
 An override response also carries a concise visible decision preflight before
 its single fenced JSON block: the selected experiment, why each path changes,
-the expected effect and uncertainty, the camera/viewport conclusion, and a
-hostile self-review conclusion. Generic assent after multiple experiments or a
-multi-value sweep requires clarification. An unchanged high-zoom window is not
-silently retained when the predicted subject leaves it unless the user
-explicitly selects that disappearance as a fixed-window control.
+the expected effect, observation channel, and uncertainty, the camera/viewport
+conclusion, and a hostile self-review conclusion. Generic assent after multiple
+experiments, a multi-value sweep, analysis-only work, or an unavailable
+operation requires clarification. An unchanged high-zoom window is not silently
+retained when the predicted subject leaves it unless the user explicitly
+selects that disappearance as a fixed-window control.
 
 The merged runtime exposes an explicit engine-owned loaded-draft application
 operation. State-tool materialization invokes it only when the sparse override
