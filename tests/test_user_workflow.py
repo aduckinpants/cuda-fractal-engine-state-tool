@@ -160,6 +160,15 @@ class UserWorkflowTests(unittest.TestCase):
             self.assertIsNone(session.bundle)
             self.assertTrue(session.override_text)
 
+    def test_exact_base_replay_requires_explicit_acknowledgement_status(self) -> None:
+        session = UserWorkflowSession()
+        session.accept_proof_result(
+            SimpleNamespace(status="replay_proven", empty_override_byte_exact=True)
+        )
+        self.assertEqual(session.state, SessionState.VISUAL_REVIEW_PENDING)
+        self.assertIn("Exact base replay", session.status_text)
+        self.assertIn("acknowledge", session.status_text)
+
     def test_existing_packet_load_is_read_only_and_preserves_exact_binding(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

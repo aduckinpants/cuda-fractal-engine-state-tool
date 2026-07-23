@@ -43,6 +43,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "receipt_path": str(result.receipt_path),
                 "engine_candidate_path": str(result.engine_candidate_path) if result.engine_candidate_path else None,
                 "candidate_frame_path": str(result.candidate_frame_path) if result.candidate_frame_path else None,
+                "empty_override_byte_exact": result.empty_override_byte_exact,
                 "visual_review": "pending" if result.status == "replay_proven" else "not_available",
                 "launch_ready": False,
             },

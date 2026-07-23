@@ -61,6 +61,7 @@ class StateOverrideProofResult:
     replay_state_sha256: Optional[str] = None
     replay_frame_path: Optional[Path] = None
     replay_frame_sha256: Optional[str] = None
+    empty_override_byte_exact: bool = False
 
 
 class StateOverrideProofError(ValueError):
@@ -346,6 +347,7 @@ def _proof_result(
     engine_frame: Path | None = None,
     replay_state: Path | None = None,
     replay_frame: Path | None = None,
+    empty_override_byte_exact: bool = False,
 ) -> StateOverrideProofResult:
     return StateOverrideProofResult(
         status=status,
@@ -369,6 +371,7 @@ def _proof_result(
         replay_state_sha256=sha256_file(replay_state) if replay_state and replay_state.is_file() else None,
         replay_frame_path=replay_frame.resolve() if replay_frame and replay_frame.is_file() else None,
         replay_frame_sha256=sha256_file(replay_frame) if replay_frame and replay_frame.is_file() else None,
+        empty_override_byte_exact=empty_override_byte_exact,
     )
 
 
@@ -629,6 +632,7 @@ def execute_state_override_proof(
             engine_frame=engine_frame,
             replay_state=replay_state,
             replay_frame=replay_frame,
+            empty_override_byte_exact=materialization.empty_override_byte_exact,
         )
     except JobCancelledError:
         raise

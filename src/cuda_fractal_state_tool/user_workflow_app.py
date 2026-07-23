@@ -39,6 +39,33 @@ from .user_workflow import (
 DEFAULT_FINDING_WORKSPACE = Path(r"D:\salt-fractal\cuda-fractal-engine-state-tool")
 
 
+def _is_exact_base_replay(result: object | None) -> bool:
+    return bool(getattr(result, "empty_override_byte_exact", False))
+
+
+def _candidate_accept_action_label(result: object | None) -> str:
+    return "Acknowledge Base Replay" if _is_exact_base_replay(result) else "Accept Candidate"
+
+
+def _candidate_preview_pixel_note(
+    result: object | None, base_frame_comparison: object
+) -> str:
+    exact_base_replay = _is_exact_base_replay(result)
+    if not isinstance(base_frame_comparison, dict):
+        return " | EXACT BASE REPLAY | base-frame comparison unavailable" if exact_base_replay else ""
+    if base_frame_comparison.get("decoded_equal") is True:
+        return (
+            " | EXACT BASE REPLAY | PIXELS IDENTICAL TO BASE"
+            if exact_base_replay
+            else " | PIXELS IDENTICAL TO BASE"
+        )
+    return (
+        " | EXACT BASE REPLAY | PIXELS DIFFER FROM CAPTURED BASE"
+        if exact_base_replay
+        else " | pixels differ from base"
+    )
+
+
 class UserWorkflowApp:
     def __init__(
         self,
@@ -626,6 +653,7 @@ class UserWorkflowApp:
         self.session.accept_proof_result(result)
         if result.status == "replay_proven":
             receipt = self._read_json(result.receipt_path)
+            exact_base_replay = _is_exact_base_replay(result)
             normalized = [
                 item
                 for item in receipt.get("requested_value_receipts", [])
@@ -633,7 +661,16 @@ class UserWorkflowApp:
             ]
             changed = receipt.get("override", {}).get("changed_paths", [])
             paths = [item.get("path", "?") for item in changed]
-            self.changed_paths_var.set("Changed paths: " + (", ".join(paths) if paths else "none (exact no-op)"))
+            self.changed_paths_var.set(
+                "Changed paths: "
+                + (
+                    ", ".join(paths)
+                    if paths
+                    else "none — exact base replay"
+                    if exact_base_replay
+                    else "none"
+                )
+            )
             normalization_note = (
                 "\nRepresentation normalization:\n"
                 + "\n".join(
@@ -676,11 +713,21 @@ class UserWorkflowApp:
                 )
                 if len(emitted_differences) > len(displayed):
                     emitted_note += f"\n- … {len(emitted_differences) - len(displayed)} additional changes in receipt"
+            if exact_base_replay:
+                proof_heading = (
+                    "NO-OP OVERRIDE — EXACT BASE REPLAY\n"
+                    "REPLAY PROVEN\n"
+                    "EXPLICIT ACKNOWLEDGEMENT REQUIRED\n\n"
+                    "Merged input is byte-identical to the authoritative base state. "
+                    "The engine-emitted launch candidate may contain documented volatile diagnostic changes.\n\n"
+                )
+            else:
+                proof_heading = "OVERRIDE ACCEPTED\nREPLAY PROVEN\nVISUAL REVIEW PENDING\n\n"
             self._set_text(
                 self.proof_text,
-                "OVERRIDE ACCEPTED\nREPLAY PROVEN\nVISUAL REVIEW PENDING\n\n"
-                f"{result.message}\n\nEngine candidate SHA-256: {result.engine_candidate_sha256}"
-                f"{normalization_note}{visual_delta_note}{emitted_note}\n\nReceipt: {result.receipt_path}",
+                proof_heading
+                + f"{result.message}\n\nEngine candidate SHA-256: {result.engine_candidate_sha256}"
+                + f"{normalization_note}{visual_delta_note}{emitted_note}\n\nReceipt: {result.receipt_path}",
             )
             assert result.candidate_frame_path is not None
             self.candidate_preview_status_var.set("Building bounded candidate preview…")
@@ -746,13 +793,7 @@ class UserWorkflowApp:
         base_frame_comparison = receipt.get("materialization", {}).get(
             "base_to_candidate_frame_comparison"
         )
-        pixel_note = (
-            " | PIXELS IDENTICAL TO BASE"
-            if isinstance(base_frame_comparison, dict) and base_frame_comparison.get("decoded_equal") is True
-            else " | pixels differ from base"
-            if isinstance(base_frame_comparison, dict)
-            else ""
-        )
+        pixel_note = _candidate_preview_pixel_note(result, base_frame_comparison)
         self.candidate_preview_status_var.set(
             f"{preview.source_width}×{preview.source_height} → {preview.preview_width}×{preview.preview_height} "
             f"({cache_note}){pixel_note}"
@@ -770,7 +811,15 @@ class UserWorkflowApp:
             self._render()
             return
         try:
-            record_state_override_review(result, "accepted")
+            record_state_override_review(
+                result,
+                "accepted",
+                (
+                    "User explicitly acknowledged exact base replay."
+                    if _is_exact_base_replay(result)
+                    else ""
+                ),
+            )
             self.session.record_review("accepted")
             errors = validate_state_override_launch_readiness(
                 result, bundle.packet_dir, self.session.override_text, self.runtime_cmd_path
@@ -778,11 +827,16 @@ class UserWorkflowApp:
             if errors:
                 raise ValueError("; ".join(errors))
             self.session.mark_launch_ready()
+            acceptance_heading = (
+                "NO-OP BASE REPLAY ACKNOWLEDGED\nREPLAY PROVEN\nLAUNCH READY\n\n"
+                if _is_exact_base_replay(result)
+                else "OVERRIDE ACCEPTED\nREPLAY PROVEN\nUSER ACCEPTED\nLAUNCH READY\n\n"
+            )
             self._set_text(
                 self.proof_text,
-                "OVERRIDE ACCEPTED\nREPLAY PROVEN\nUSER ACCEPTED\nLAUNCH READY\n\n"
-                "The exact candidate, frame, packet, override, proof receipt, review decision, and runtime were rechecked.\n\n"
-                f"Candidate: {result.engine_candidate_path}\nReview decision: {result.proof_dir / 'review-decision.json'}",
+                acceptance_heading
+                + "The exact candidate, frame, packet, override, proof receipt, review decision, and runtime were rechecked.\n\n"
+                + f"Candidate: {result.engine_candidate_path}\nReview decision: {result.proof_dir / 'review-decision.json'}",
             )
         except Exception as exc:
             self.session.state = SessionState.REJECTED
@@ -802,11 +856,16 @@ class UserWorkflowApp:
         try:
             record_state_override_review(result, "revision_needed")
             self.session.record_review("revision_needed")
+            revision_heading = (
+                "NO-OP BASE REPLAY\nREPLAY PROVEN\nREVISION NEEDED\n\n"
+                if _is_exact_base_replay(result)
+                else "OVERRIDE ACCEPTED\nREPLAY PROVEN\nREVISION NEEDED\n\n"
+            )
             self._set_text(
                 self.proof_text,
-                "OVERRIDE ACCEPTED\nREPLAY PROVEN\nREVISION NEEDED\n\n"
-                "This proof remains immutable evidence. Edit the override to begin a new attempt.\n\n"
-                f"Decision: {result.proof_dir / 'review-decision.json'}",
+                revision_heading
+                + "This proof remains immutable evidence. Edit the override to begin a new attempt.\n\n"
+                + f"Decision: {result.proof_dir / 'review-decision.json'}",
             )
         except Exception as exc:
             self._set_error(str(exc))
@@ -967,6 +1026,7 @@ class UserWorkflowApp:
         override_ready = bundle_ready and bool(self.session.override_text.strip())
         self.prove_button.configure(state="normal" if override_ready and not proof_busy else "disabled")
         self.open_candidate_frame_button.configure(state="normal" if replay_proven else "disabled")
+        self.accept_button.configure(text=_candidate_accept_action_label(result))
         self.accept_button.configure(state="normal" if undecided and not proof_busy else "disabled")
         self.revision_button.configure(state="normal" if undecided and not proof_busy else "disabled")
         self.launch_button.configure(

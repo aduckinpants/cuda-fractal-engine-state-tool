@@ -143,7 +143,11 @@ class UserWorkflowSession:
         self.review_decision = None
         if result.status == "replay_proven":
             self.state = SessionState.VISUAL_REVIEW_PENDING
-            self.status_text = "Override accepted and replay proven. Review the candidate frame before launch."
+            self.status_text = (
+                "Exact base replay proven. Review it and explicitly acknowledge the unchanged-state replay."
+                if getattr(result, "empty_override_byte_exact", False)
+                else "Override accepted and replay proven. Review the candidate frame before launch."
+            )
         else:
             self.state = SessionState.REJECTED
             self.status_text = "State override rejected. Review the preserved proof error."
@@ -157,7 +161,11 @@ class UserWorkflowSession:
         if decision == "accepted":
             self.review_decision = decision
             self.state = SessionState.USER_ACCEPTED
-            self.status_text = "Candidate accepted by the user; rechecking exact launch readiness…"
+            self.status_text = (
+                "Exact base replay acknowledged; rechecking exact launch readiness…"
+                if getattr(self.proof_result, "empty_override_byte_exact", False)
+                else "Candidate accepted by the user; rechecking exact launch readiness…"
+            )
         elif decision == "revision_needed":
             self.review_decision = decision
             self.state = SessionState.REVISION_NEEDED
@@ -169,7 +177,11 @@ class UserWorkflowSession:
         if self.review_decision != "accepted":
             raise ValueError("User acceptance is required before launch readiness")
         self.state = SessionState.LAUNCH_READY
-        self.status_text = "Exact candidate is launch-ready; launch will recheck every binding and hash."
+        self.status_text = (
+            "Acknowledged base replay is launch-ready; launch will recheck every binding and hash."
+            if getattr(self.proof_result, "empty_override_byte_exact", False)
+            else "Exact candidate is launch-ready; launch will recheck every binding and hash."
+        )
 
     def reset(self) -> None:
         self.generation += 1

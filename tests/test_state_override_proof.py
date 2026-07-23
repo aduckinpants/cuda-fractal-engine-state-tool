@@ -324,6 +324,7 @@ class StateOverrideProofTests(unittest.TestCase):
                 packet, override, runtime, job, proofs_root=root / "proofs"
             )
             self.assertEqual(result.status, "replay_proven")
+            self.assertFalse(result.empty_override_byte_exact)
             self.assertEqual(len(job.commands), 2)
             self.assertNotIn("--color-pipeline-action", job.commands[0])
             self.assertNotIn("--apply-loaded-color-pipeline-draft", job.commands[0])
@@ -356,6 +357,30 @@ class StateOverrideProofTests(unittest.TestCase):
                     "replay",
                     "receipt.json",
                 },
+            )
+
+    def test_empty_override_result_is_explicit_exact_base_replay(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = self._runtime(root)
+            packet = self._packet(root, runtime)
+            base_bytes = (packet / "state.json").read_bytes()
+            result = execute_state_override_proof(
+                packet, " { }\r\n", runtime, FakeProofJob(), proofs_root=root / "proofs"
+            )
+
+            self.assertEqual(result.status, "replay_proven")
+            self.assertTrue(result.empty_override_byte_exact)
+            self.assertEqual(result.merged_candidate_path.read_bytes(), base_bytes)
+            self.assertEqual(result.merged_candidate_sha256, _sha256(base_bytes))
+            receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
+            self.assertTrue(receipt["merged_candidate"]["empty_override_byte_exact"])
+            self.assertEqual(receipt["override"]["changed_paths"], [])
+            self.assertEqual(receipt["override"]["requested_paths"], [])
+            record_state_override_review(result, "accepted", "Explicit exact-base replay acknowledgement.")
+            self.assertEqual(
+                validate_state_override_launch_readiness(result, packet, " { }\r\n", runtime),
+                [],
             )
 
     def test_pipeline_override_uses_engine_apply_operation_only_for_materialization(self) -> None:
