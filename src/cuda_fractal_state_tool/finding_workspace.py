@@ -81,6 +81,7 @@ class ResolvedCapture:
     state_path: Path
     finding_manifest_path: Path | None
     fractal_state_path: Path | None
+    fractal_viewport_facts_path: Path | None
     field_notes_path: Path | None
     primary_frame_path: Path | None
 
@@ -113,6 +114,11 @@ class SourceCaptureImporter:
         state_sha256 = _sha256_file(resolved.state_path)
         finding_sha256 = _sha256_file(resolved.finding_manifest_path) if resolved.finding_manifest_path else None
         fractal_state_sha256 = _sha256_file(resolved.fractal_state_path) if resolved.fractal_state_path else None
+        viewport_facts_sha256 = (
+            _sha256_file(resolved.fractal_viewport_facts_path)
+            if resolved.fractal_viewport_facts_path
+            else None
+        )
         field_notes_sha256 = _sha256_file(resolved.field_notes_path) if resolved.field_notes_path else None
         frame_sha256 = _sha256_file(resolved.primary_frame_path) if resolved.primary_frame_path else None
         finding_id = compute_finding_id(state_sha256, finding_sha256, frame_sha256)
@@ -134,6 +140,7 @@ class SourceCaptureImporter:
                 state_sha256,
                 finding_sha256,
                 fractal_state_sha256,
+                viewport_facts_sha256,
                 field_notes_sha256,
                 frame_sha256,
             )
@@ -188,6 +195,10 @@ class SourceCaptureImporter:
         if fractal_state.exists() and not fractal_state.is_file():
             raise ValueError(f"Capture bundle fractal-state.json is not a file: {fractal_state}")
         fractal_state_path = fractal_state if fractal_state.is_file() else None
+        viewport_facts = bundle_root / "fractal-viewport-facts.json"
+        if viewport_facts.exists() and not viewport_facts.is_file():
+            raise ValueError(f"Capture bundle fractal-viewport-facts.json is not a file: {viewport_facts}")
+        fractal_viewport_facts_path = viewport_facts if viewport_facts.is_file() else None
         field_notes = bundle_root / "field-notes.md"
         if field_notes.exists() and not field_notes.is_file():
             raise ValueError(f"Capture bundle field-notes.md is not a file: {field_notes}")
@@ -199,6 +210,7 @@ class SourceCaptureImporter:
             state_path=state_path,
             finding_manifest_path=finding_manifest_path,
             fractal_state_path=fractal_state_path,
+            fractal_viewport_facts_path=fractal_viewport_facts_path,
             field_notes_path=field_notes_path,
             primary_frame_path=primary_frame_path,
         )
@@ -263,6 +275,11 @@ class SourceCaptureImporter:
             self._copy_if_changed(resolved.finding_manifest_path, source_dir / "finding.json")
         if resolved.fractal_state_path:
             self._copy_if_changed(resolved.fractal_state_path, source_dir / "fractal-state.json")
+        if resolved.fractal_viewport_facts_path:
+            self._copy_if_changed(
+                resolved.fractal_viewport_facts_path,
+                source_dir / "fractal-viewport-facts.json",
+            )
         if resolved.field_notes_path:
             self._copy_if_changed(resolved.field_notes_path, source_dir / "field-notes.md")
         if resolved.primary_frame_path:
@@ -287,6 +304,7 @@ class SourceCaptureImporter:
         state_sha256: str,
         finding_sha256: str | None,
         fractal_state_sha256: str | None,
+        viewport_facts_sha256: str | None,
         field_notes_sha256: str | None,
         frame_sha256: str | None,
     ) -> dict[str, Any]:
@@ -329,6 +347,11 @@ class SourceCaptureImporter:
                 "bundle_root": str(resolved.bundle_root),
                 "state_path": str(resolved.state_path),
                 "finding_manifest_path": str(resolved.finding_manifest_path) if resolved.finding_manifest_path else None,
+                "fractal_viewport_facts_path": (
+                    str(resolved.fractal_viewport_facts_path)
+                    if resolved.fractal_viewport_facts_path
+                    else None
+                ),
                 "field_notes_path": str(resolved.field_notes_path) if resolved.field_notes_path else None,
                 "primary_frame_path": str(resolved.primary_frame_path) if resolved.primary_frame_path else None,
             },
@@ -348,6 +371,12 @@ class SourceCaptureImporter:
                 "review_fractal_state": {
                     "workspace_path": "source/fractal-state.json" if fractal_state_sha256 else None,
                     "sha256": fractal_state_sha256,
+                },
+                "fractal_viewport_facts": {
+                    "workspace_path": (
+                        "source/fractal-viewport-facts.json" if viewport_facts_sha256 else None
+                    ),
+                    "sha256": viewport_facts_sha256,
                 },
                 "field_notes": {
                     "workspace_path": "source/field-notes.md" if field_notes_sha256 else None,

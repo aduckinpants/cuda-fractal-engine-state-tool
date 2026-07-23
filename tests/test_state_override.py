@@ -252,6 +252,7 @@ class StateOverrideTests(unittest.TestCase):
             (packet / name).write_bytes(payload)
         required = [name for name in files if name != "packet.md"]
         manifest = {
+            "bundle_manifest_version": 2,
             "packet_version": 6,
             "required_attachments": required,
             "recommended_attachments": [],

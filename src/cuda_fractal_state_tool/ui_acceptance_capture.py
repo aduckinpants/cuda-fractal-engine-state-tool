@@ -126,6 +126,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "receipt_path": str(proof.receipt_path),
         "engine_candidate_sha256": proof.engine_candidate_sha256,
         "candidate_frame_sha256": proof.candidate_frame_sha256,
+        "empty_override_byte_exact": proof.empty_override_byte_exact,
         "visual_review": "pending",
         "launch_ready": False,
         "states": artifacts,

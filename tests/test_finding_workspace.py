@@ -104,6 +104,26 @@ class FindingWorkspaceTests(unittest.TestCase):
             self.assertEqual(entry["workspace_path"], "source/fractal-state.json")
             self.assertEqual(entry["sha256"], hashlib.sha256(copied.read_bytes()).hexdigest())
 
+    def test_import_preserves_optional_engine_viewport_facts_sidecar_exactly(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir) / "workspace"
+            capture_root = Path(temp_dir) / "capture"
+            _write_json(
+                capture_root / "state.json",
+                {"state_version": 3, "fractal_type": "mcmullen", "params": {"max_iter": 500}},
+            )
+            viewport_bytes = b'{\r\n  "schema_version": 1,\r\n  "mapping_id": "cuda_fractal_renderer_pixel_center_v1"\r\n}\r\n'
+            (capture_root / "fractal-viewport-facts.json").write_bytes(viewport_bytes)
+
+            imported = SourceCaptureImporter(workspace_root).import_capture(capture_root)
+            copied = imported.finding_dir / "source" / "fractal-viewport-facts.json"
+            manifest = json.loads(imported.workspace_manifest_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(copied.read_bytes(), viewport_bytes)
+            entry = manifest["source_artifacts"]["fractal_viewport_facts"]
+            self.assertEqual(entry["workspace_path"], "source/fractal-viewport-facts.json")
+            self.assertEqual(entry["sha256"], hashlib.sha256(viewport_bytes).hexdigest())
+
     def test_import_adds_optional_field_notes_without_rewriting_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir) / "workspace"

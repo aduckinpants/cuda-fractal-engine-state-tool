@@ -264,6 +264,53 @@ class AgentBundleTests(unittest.TestCase):
                 }
             ],
         }
+        viewport_facts = {
+            "schema_version": 1,
+            "mapping_id": "cuda_fractal_renderer_pixel_center_v1",
+            "selected_fractal_type": "explaino_all",
+            "render": {"width": 640, "height": 480, "aspect_ratio": 4.0 / 3.0},
+            "camera": {
+                "center_hp_x": -0.5,
+                "center_hp_y": 0.0,
+                "log2_zoom": 2.0,
+                "resolved_zoom": 4.0,
+                "rotation_degrees": 0.0,
+            },
+            "local_frame": {
+                "half_width": 2.0 / 3.0,
+                "half_height": 0.5,
+                "full_width": 4.0 / 3.0,
+                "full_height": 1.0,
+            },
+            "complex_pixel_basis": {
+                "x_step": {"real": 0.0020833333333333333, "imag": 0.0},
+                "y_step": {"real": 0.0, "imag": 0.0020833333333333333},
+                "units_per_pixel_x": 0.0020833333333333333,
+                "units_per_pixel_y": 0.0020833333333333333,
+            },
+            "continuous_edge_corners": [
+                {"real": -1.1666666666666665, "imag": -0.5},
+                {"real": 0.16666666666666663, "imag": -0.5},
+                {"real": 0.16666666666666663, "imag": 0.5},
+                {"real": -1.1666666666666665, "imag": 0.5},
+            ],
+            "pixel_center_corners": [
+                {"real": -1.165625, "imag": -0.49895833333333334},
+                {"real": 0.165625, "imag": -0.49895833333333334},
+                {"real": 0.165625, "imag": 0.49895833333333334},
+                {"real": -1.165625, "imag": 0.49895833333333334},
+            ],
+            "axis_aligned_complex_bounds": {
+                "minimum": {"real": -1.1666666666666665, "imag": -0.5},
+                "maximum": {"real": 0.16666666666666663, "imag": 0.5},
+            },
+            "fit_model": {
+                "forward_mapping": "engine mapping",
+                "pixel_normalization": "engine normalization",
+                "inverse_fit": "engine inverse fit",
+                "point_preparation": "engine point preparation",
+            },
+        }
         runtime = root / "runtime"
         (runtime / "ui").mkdir(parents=True)
         (runtime / "ui_salt" / "generated").mkdir(parents=True)
@@ -298,6 +345,7 @@ class AgentBundleTests(unittest.TestCase):
             "schema_bytes": schema_path.read_bytes(),
             "contract_bytes": contract_path.read_bytes(),
             "catalog_bytes": _json_bytes(catalog),
+            "viewport_facts_bytes": _json_bytes(viewport_facts),
             "runtime_cmd": runtime_cmd,
             "identity": identity,
             "resolution": resolution,
@@ -361,8 +409,10 @@ class AgentBundleTests(unittest.TestCase):
             exports = [
                 fixture["surface_bytes"],
                 fixture["catalog_bytes"],
+                fixture["viewport_facts_bytes"],
                 fixture["surface_bytes"],
                 fixture["catalog_bytes"],
+                fixture["viewport_facts_bytes"],
             ]
             with (
                 patch("cuda_fractal_state_tool.agent_bundle.resolve_launcher", return_value=fixture["resolution"]),
@@ -379,6 +429,7 @@ class AgentBundleTests(unittest.TestCase):
 
             manifest = json.loads(bundle.manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["packet_version"], 6)
+            self.assertEqual(manifest["bundle_manifest_version"], 2)
             recorded = {item["path"]: item for item in manifest["files"]}
             actual = {path.name for path in bundle.packet_dir.iterdir() if path.name != "manifest.json"}
             self.assertEqual(set(recorded), actual)
@@ -395,6 +446,48 @@ class AgentBundleTests(unittest.TestCase):
             )
             packet = bundle.packet_path.read_text(encoding="utf-8")
             self.assertIn("State Override Example", packet)
+            self.assertIn("Dynamics and viewport continuity", packet)
+            self.assertIn("same_window_comparison", packet)
+            self.assertIn("feature_tracking", packet)
+            self.assertIn("transition_survey", packet)
+            self.assertIn("Small numerical changes do not establish small visual changes", packet)
+            self.assertIn("Chosen experiment", packet)
+            self.assertIn("Why this override", packet)
+            self.assertIn("Expected effect, observation channel, and uncertainty", packet)
+            self.assertIn("Camera intent and viewport check", packet)
+            self.assertIn("Hostile self-review conclusion", packet)
+            self.assertIn("state-authorable", packet)
+            self.assertIn("analysis-only", packet)
+            self.assertIn("requires unavailable capability", packet)
+            self.assertIn("at least one authorized leaf change", packet)
+            self.assertIn("active rendered signal or exported diagnostic", packet)
+            self.assertIn("explicitly label a user-requested negative control", packet)
+            self.assertIn("must not be presented as a visual test of the hidden class", packet)
+            self.assertIn("An empty override is an explicit exact-base-replay operation", packet)
+            self.assertIn("never use it as a refusal, ambiguity fallback, capability signal", packet)
+            self.assertIn("ask one clarification question instead", packet)
+            self.assertIn("A sweep cannot be encoded as one override", packet)
+            self.assertIn("Generic assent", packet)
+            self.assertIn("Ambiguity exception", packet)
+            self.assertIn("exactly one clarification question", packet)
+            self.assertIn("no decision-preflight sections and no JSON", packet)
+            self.assertIn("after one coherent candidate state has been selected", packet)
+            self.assertIn("predicted to intersect the exact retained viewport", packet)
+            self.assertIn("intentionally expected to lose the subject", packet)
+            self.assertIn("predicted subject location", packet)
+            self.assertIn("exact retained viewport bounds", packet)
+            self.assertIn("containment cannot be established", packet)
+            self.assertIn("brief audit conclusion", packet)
+            self.assertIn("Do not provide private chain-of-thought", packet)
+            self.assertIn("no other code block", packet)
+            self.assertNotIn('"operation_category"', packet)
+            self.assertNotIn('"base_replay_intent"', packet)
+            self.assertIn("fractal-viewport-facts.json", bundle.required_attachments)
+            self.assertEqual(
+                manifest["authority_identities"]["fractal_viewport_facts_sha256"],
+                hashlib.sha256(fixture["viewport_facts_bytes"]).hexdigest(),
+            )
+            self.assertEqual(manifest["viewport_facts_origin"], "runtime_export_from_copied_state")
             self.assertIn("Copying this Markdown does not transport those files", packet)
             self.assertNotIn("proposal_v1", packet)
             self.assertNotIn("capability_profile", packet)
@@ -459,8 +552,10 @@ class AgentBundleTests(unittest.TestCase):
                     side_effect=[
                         fixture["surface_bytes"],
                         fixture["catalog_bytes"],
+                        fixture["viewport_facts_bytes"],
                         fixture["surface_bytes"],
                         fixture["catalog_bytes"],
+                        fixture["viewport_facts_bytes"],
                     ],
                 ),
             ):
@@ -478,8 +573,10 @@ class AgentBundleTests(unittest.TestCase):
             exports = [
                 fixture["surface_bytes"],
                 fixture["catalog_bytes"],
+                fixture["viewport_facts_bytes"],
                 fixture["surface_bytes"],
                 fixture["catalog_bytes"],
+                fixture["viewport_facts_bytes"],
             ]
 
             def changing_export(*_args, **_kwargs):
@@ -516,8 +613,10 @@ class AgentBundleTests(unittest.TestCase):
                     side_effect=[
                         fixture["surface_bytes"],
                         fixture["catalog_bytes"],
+                        fixture["viewport_facts_bytes"],
                         fixture["surface_bytes"],
                         fixture["catalog_bytes"],
+                        fixture["viewport_facts_bytes"],
                     ],
                 ),
             ):
@@ -552,8 +651,10 @@ class AgentBundleTests(unittest.TestCase):
                     side_effect=[
                         fixture["surface_bytes"],
                         fixture["catalog_bytes"],
+                        fixture["viewport_facts_bytes"],
                         fixture["surface_bytes"],
                         fixture["catalog_bytes"],
+                        fixture["viewport_facts_bytes"],
                     ],
                 ),
             ):
@@ -561,6 +662,58 @@ class AgentBundleTests(unittest.TestCase):
             (bundle.packet_dir / "state.json").write_text("{}\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "changed after publication"):
                 load_agent_bundle_handoff(bundle.packet_dir)
+
+    def test_capture_viewport_sidecar_is_preserved_only_when_runtime_reproduces_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = self._fixture(root)
+            (fixture["capture"] / "fractal-viewport-facts.json").write_bytes(
+                fixture["viewport_facts_bytes"]
+            )
+            imported = SourceCaptureImporter(root / "workspace").import_capture(fixture["capture"])
+            exports = [
+                fixture["surface_bytes"],
+                fixture["catalog_bytes"],
+                fixture["viewport_facts_bytes"],
+                fixture["surface_bytes"],
+                fixture["catalog_bytes"],
+                fixture["viewport_facts_bytes"],
+            ]
+            with (
+                patch("cuda_fractal_state_tool.agent_bundle.resolve_launcher", return_value=fixture["resolution"]),
+                patch("cuda_fractal_state_tool.agent_bundle.build_runtime_identity", return_value=fixture["identity"]),
+                patch("cuda_fractal_state_tool.agent_bundle._capture_export", side_effect=exports),
+            ):
+                bundle = build_agent_bundle(imported.finding_dir, fixture["runtime_cmd"])
+
+            self.assertEqual(
+                (bundle.packet_dir / "fractal-viewport-facts.json").read_bytes(),
+                fixture["viewport_facts_bytes"],
+            )
+            manifest = json.loads(bundle.manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                manifest["viewport_facts_origin"],
+                "captured_finding_sidecar_verified_against_runtime",
+            )
+
+            changed = json.loads(fixture["viewport_facts_bytes"])
+            changed["mapping_id"] = "stale-mapping"
+            (fixture["capture"] / "fractal-viewport-facts.json").write_bytes(_json_bytes(changed))
+            stale = SourceCaptureImporter(root / "stale-workspace").import_capture(fixture["capture"])
+            with (
+                patch("cuda_fractal_state_tool.agent_bundle.resolve_launcher", return_value=fixture["resolution"]),
+                patch("cuda_fractal_state_tool.agent_bundle.build_runtime_identity", return_value=fixture["identity"]),
+                patch(
+                    "cuda_fractal_state_tool.agent_bundle._capture_export",
+                    side_effect=[
+                        fixture["surface_bytes"],
+                        fixture["catalog_bytes"],
+                        fixture["viewport_facts_bytes"],
+                    ],
+                ),
+            ):
+                with self.assertRaisesRegex(ValueError, "Captured finding viewport facts disagree"):
+                    build_agent_bundle(stale.finding_dir, fixture["runtime_cmd"])
 
 
 if __name__ == "__main__":

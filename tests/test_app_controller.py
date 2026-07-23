@@ -27,9 +27,51 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("Candidate visual delta", source)
         self.assertIn("IDENTICAL decoded pixels", source)
         self.assertIn("PIXELS IDENTICAL TO BASE", source)
+        self.assertIn("NO-OP OVERRIDE — EXACT BASE REPLAY", source)
+        self.assertIn("Merged input is byte-identical to the authoritative base state", source)
+        self.assertIn("Acknowledge Base Replay", source)
+        self.assertIn("User explicitly acknowledged exact base replay.", source)
+        self.assertIn("Capture or Packet V6 folder", source)
+        self.assertIn("load_existing_packet_context", source)
+        self.assertIn("without refresh", source)
+        self.assertNotIn("--packet-dir", source)
         self.assertNotIn("proposal_v1", source)
         self.assertNotIn("Repair Packet", source)
         self.assertNotIn("execute_bound_proof", source)
+
+    def test_noop_proof_uses_explicit_base_replay_presentation(self) -> None:
+        from types import SimpleNamespace
+
+        from cuda_fractal_state_tool.user_workflow_app import (
+            _candidate_accept_action_label,
+            _candidate_preview_pixel_note,
+            _is_exact_base_replay,
+        )
+
+        noop = SimpleNamespace(empty_override_byte_exact=True)
+        ordinary = SimpleNamespace(empty_override_byte_exact=False)
+        legacy = SimpleNamespace()
+        self.assertTrue(_is_exact_base_replay(noop))
+        self.assertFalse(_is_exact_base_replay(ordinary))
+        self.assertFalse(_is_exact_base_replay(legacy))
+        self.assertEqual(_candidate_accept_action_label(noop), "Acknowledge Base Replay")
+        self.assertEqual(_candidate_accept_action_label(ordinary), "Accept Candidate")
+        self.assertEqual(
+            _candidate_preview_pixel_note(noop, {"decoded_equal": True}),
+            " | EXACT BASE REPLAY | PIXELS IDENTICAL TO BASE",
+        )
+        self.assertEqual(
+            _candidate_preview_pixel_note(noop, {"decoded_equal": False}),
+            " | EXACT BASE REPLAY | PIXELS DIFFER FROM CAPTURED BASE",
+        )
+        self.assertEqual(
+            _candidate_preview_pixel_note(noop, None),
+            " | EXACT BASE REPLAY | base-frame comparison unavailable",
+        )
+        self.assertEqual(
+            _candidate_preview_pixel_note(ordinary, {"decoded_equal": True}),
+            " | PIXELS IDENTICAL TO BASE",
+        )
 
     def test_proposal_era_modules_are_absent_from_active_package(self) -> None:
         package_dir = Path(inspect.getfile(app_entry)).parent

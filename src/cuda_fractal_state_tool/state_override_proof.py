@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional, Sequence
 
 from PIL import Image, ImageChops, ImageStat
 
-from .agent_bundle import load_agent_bundle_handoff
+from .agent_bundle import BUNDLE_MANIFEST_VERSION, PACKET_VERSION, load_agent_bundle_handoff
 from .async_jobs import AsyncJobRunner, JobCancelledError, JobContext, JobRequestIdentity
 from .json_utils import loads_strict_no_duplicates
 from .runtime_surface import (
@@ -61,6 +61,7 @@ class StateOverrideProofResult:
     replay_state_sha256: Optional[str] = None
     replay_frame_path: Optional[Path] = None
     replay_frame_sha256: Optional[str] = None
+    empty_override_byte_exact: bool = False
 
 
 class StateOverrideProofError(ValueError):
@@ -118,8 +119,12 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
     if expected_sha256 is not None and manifest_sha256 != expected_sha256:
         raise StateOverrideProofError("Packet manifest hash does not match the active binding")
     manifest = _load_object(manifest_path, "Packet V6 manifest")
-    if manifest.get("packet_version") != 6:
+    if manifest.get("packet_version") != PACKET_VERSION:
         raise StateOverrideProofError(f"Unsupported packet version: {manifest.get('packet_version')}")
+    if manifest.get("bundle_manifest_version") != BUNDLE_MANIFEST_VERSION:
+        raise StateOverrideProofError(
+            "Unsupported Packet V6 manifest version; rebuild the bundle with the current tool"
+        )
     records = manifest.get("files")
     recorded = {
         record.get("path")
@@ -133,6 +138,7 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
         "fractal_binding_surface_v1.ui_schema.json",
         "color_pipeline_function_library.contract.v1.json",
         "fractal-descriptive-catalog.json",
+        "fractal-viewport-facts.json",
         "state-override-authoring-surface.json",
     }
     missing = sorted(required_authorities - recorded)
@@ -341,6 +347,7 @@ def _proof_result(
     engine_frame: Path | None = None,
     replay_state: Path | None = None,
     replay_frame: Path | None = None,
+    empty_override_byte_exact: bool = False,
 ) -> StateOverrideProofResult:
     return StateOverrideProofResult(
         status=status,
@@ -364,6 +371,7 @@ def _proof_result(
         replay_state_sha256=sha256_file(replay_state) if replay_state and replay_state.is_file() else None,
         replay_frame_path=replay_frame.resolve() if replay_frame and replay_frame.is_file() else None,
         replay_frame_sha256=sha256_file(replay_frame) if replay_frame and replay_frame.is_file() else None,
+        empty_override_byte_exact=empty_override_byte_exact,
     )
 
 
@@ -624,6 +632,7 @@ def execute_state_override_proof(
             engine_frame=engine_frame,
             replay_state=replay_state,
             replay_frame=replay_frame,
+            empty_override_byte_exact=materialization.empty_override_byte_exact,
         )
     except JobCancelledError:
         raise
