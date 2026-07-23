@@ -270,6 +270,14 @@ No engine mutation, new fixture campaign, or broader product work is authorized.
 - C2 packet: `02549bbe-065e-498a-8168-3ac4dd0b5fb3`
 - E3 packet: `43dbf386-4219-4101-8fc7-339a2e8f9bda`
 
-The exact packet paths, hashes, prompts, and pass criteria are recorded in
-`docs/catalog_viewport_continuity_manual_gate.md`. External-session results are
-intentionally absent until supplied by the user.
+The exact packet paths, hashes, prompts, pass criteria, and user-run results are
+recorded in `docs/catalog_viewport_continuity_manual_gate.md`. C2 passed. The
+initial E3 session produced a useful strict ambiguity miss without returning
+`{}`; a fresh-session rerun passed the clarification gate and produced a
+replay-stable nonempty scalar override. A new ExplainO Bell whole-pipeline
+diagnostic also passed and exposed the need to distinguish resized web-image
+measurements from full-resolution capture authority.
+
+This planned hardening work is complete. Further behavior-prompt mutation is
+not authorized from these results alone. The next bounded campaign is web
+transport consolidation and PNG derivative provenance.

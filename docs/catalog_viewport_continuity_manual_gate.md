@@ -329,7 +329,7 @@ and requires an explicit `Acknowledge Base Replay` decision. Packet guidance
 also forbids using `{}` as ambiguity, refusal, or unavailable-capability
 signaling.
 
-## Focused observability and no-op retest — ready
+## Focused observability and no-op retest — complete
 
 These are the only packets in the next manual round. They were generated after
 the packet decision contract and no-op presentation changes, from the exact
@@ -398,6 +398,87 @@ nonempty override; do not force artificial ambiguity.
 
 Do not add new tailored fixtures until C2 and E3 are reviewed. The next fixture
 round is a separate discussion boundary.
+
+## Focused retest results
+
+### C2 result — pass
+
+- Transcript SHA-256:
+  `17f0ffffc31072a4eb513b0d12faf4cd25ef171b582ff32f2da3017048549047`
+- Proof ID: `a12103ae-5980-45d2-9a25-05159575757d`
+- Follow-up capture:
+  `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-23\103553_859__explaino_counterfactual_pair`
+
+The fresh session did not emit an override in response to the exploration and
+selection prompts. It correctly treated the active smooth-escape signal as an
+indirect observation channel rather than direct evidence of paired-orbit
+classification. After an explicit selection, it returned one coherent
+`world_absolute` to `view_relative` override. The tool accepted the exact
+packet-bound override, materialization and action-free replay succeeded, and
+the follow-up capture showed the intended comparison.
+
+The session initially overinterpreted an apparent 180-degree symmetry without
+measuring it. That is a downstream epistemic-calibration miss, not an
+authoring-surface, packet-ambiguity, validator, or runtime defect.
+
+### E3 initial result — useful strict-gate miss
+
+- Transcript SHA-256:
+  `ee412f1a1a6ec7f360ef66d68a273a0019f3b64269b92aa0526943e3d9f5775a`
+- Proof ID: `a75eb694-9299-4c88-a87d-7ed3ca32d58d`
+- Follow-up capture:
+  `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-23\104438_700__explaino_all`
+
+The session returned a valid, nonempty damping override and never collapsed to
+`{}`. The tool and engine path worked. Under the deliberately strict E3 gate,
+however, the session should have clarified the unresolved analysis-only
+prepole-overlay idea versus the later state-authorable damping alternative
+instead of silently selecting the latter.
+
+### E3 rerun — pass
+
+- Transcript SHA-256:
+  `078fbd96a0e307843d11407d692fb951e6b263446b6bf183ac483992b5b8c99f`
+- Proof ID: `d0a6b0b7-e46a-4b01-9bf8-952f5e24e26b`
+- Follow-up capture:
+  `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-23\111345_171__explaino_all`
+
+The fresh rerun took the ambiguity exit correctly. Generic assent produced a
+clarification question instead of preflight or JSON. After the user selected
+the damping experiment, the session asked which single value to encode; after
+`0.97` was selected it returned one nonempty override. The proof succeeded,
+action-free replay decoded identically, and the engine reported the expected
+float representation normalization to `0.9700000286102295`.
+
+### New ExplainO Bell diagnostic — pass
+
+- Source capture:
+  `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-23\110049_052__explaino_bell`
+- Finding ID:
+  `fd91321945b2f65cb0926984318e523d0d8406d3c51935e39f541a41ea1cd6f3`
+- Authoring-base SHA-256:
+  `a8be540c80e26d068c3cc73f0257769225c3151090b1b898e45cedf65de735e9`
+- Packet ID: `2b64ac39-4e71-411f-98d9-3de7d0660a46`
+- Transcript SHA-256:
+  `6cb4ee83ae3138c858ad816349ec2a41a4d7e949147a79069c592c758c716fb0`
+- Proof ID: `c57de768-7deb-4734-ac7e-fa265aef4cb1`
+- Follow-up capture:
+  `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-23\111731_911__explaino_bell`
+
+The agent selected an exact Color Pipeline diagnostic that changed the source
+from `root_phase` to `root_index`, the palette from `phase_wheel_palette` to
+`root_classic_palette`, and grading from `phase_finish` to `basin_default`.
+Shape and camera stayed unchanged. Materialization and action-free replay
+produced byte-identical encoded frames and identical decoded RGBA pixels. The
+result usefully falsified the stronger phase-nexus interpretation while
+preserving the geometric question.
+
+The web-session response reported that its four most common exact colors
+covered roughly 96.9 percent of the image. A direct count on the full
+4096-by-2560 captured PNG measured approximately 98.24 percent. The most likely
+cause is the web client's resized image derivative. Future packets must label a
+bounded web image as a discussion derivative and forbid presenting exact
+full-resolution pixel statistics from it.
 
 ## Exact handoff
 
@@ -568,28 +649,20 @@ directory.
   preserved its manifest and finding hashes, and created no replacement packet.
   Evidence is retained under `.local/existing_packet_ui_gate/`.
 
-## Remaining adversarial calibration boundary
+## Calibration closure
 
-The primary gate and original three-packet battery are complete. Packet
-observability and explicit no-op presentation are implemented and locally
-proven. The next approved boundary is user execution of C2 and E3 above. Before
-further packet or product mutation, use those results to distinguish:
+The primary gate, the three-packet adversarial battery, C2, the E3 rerun, and
+the new ExplainO Bell diagnostic are complete. The results establish:
 
-1. a uniquely trackable feature;
-2. a feature that splits, merges, or disappears;
-3. a high-zoom dynamics change whose feature motion cannot honestly be grounded
-   from the attached authority;
-4. at least one esoteric ExplainO variant with a dense active parameter surface.
+1. strict ambiguity handling can recover without `{}`;
+2. exact sparse scalar and whole-pipeline overrides survive engine replay;
+3. the packet can support a diagnostic that falsifies an attractive visual
+   interpretation;
+4. web-image resizing makes exact pixel-statistic claims unreliable unless the
+   derivative's dimensions and provenance are explicit.
 
-New tailored fixtures remain intentionally unprepared until the two focused
-retests establish whether the packet contract is stable.
-
-Do not turn that ladder into a broad automated sweep until the manual cases
-produce a stable, auditable scoring rubric. Automation may prepare bundles,
-receipts, hashes, prompts, and comparison tables, but it must not self-grade
-feature identity or mathematical coherence.
-
-The user performs the external sessions and reports the response plus validator,
-proof, visual-review, and launch results. Do not fabricate those results. A real
-packet ambiguity may reopen this bounded integration; model noncompliance alone
-does not justify adding another surrogate authority.
+No further packet-behavior instruction change is justified by these sessions.
+The next approved product boundary is transport hardening: reduce the web upload
+count without hiding or replacing exact local authorities, and supply a bounded
+PNG discussion derivative with explicit provenance. New manual fixtures should
+use captures not already repeated in this calibration round.
