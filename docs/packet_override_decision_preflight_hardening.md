@@ -241,3 +241,23 @@ binary32 representation of `4/27` and its unmeasured pixel-perfect symmetry
 claim are retained as downstream calibration misses. They do not justify a
 packet change or the suggested new per-family math sidecar. Battery fixtures B
 and C remain pending user execution.
+
+### Battery result B — ExplainO Nova
+
+The targeted "Choose one" prompt reasonably delegated selection and served as
+the concrete trigger, so immediate JSON did not violate the workflow. Proof
+`560dd86f-6451-45b8-a7e8-34f50fc61df6` accepted the sparse Nova/zoom override,
+reported the engine's representation normalization, replayed with identical
+pixels, received user acceptance, and launched the exact candidate. The fresh
+capture `2026-07-22\235345_959__explaino_nova` decoded to the same RGBA hash as
+the proof frame.
+
+Operationally this passed. Scientifically it was partial: the agent correctly
+selected an honest survey instead of inventing feature tracking, but widened
+the view by 256 per dimension and reduced the original subject to about 16 by
+10 authoritative render pixels while still predicting recognizability. The
+camera and dynamics changed together without a same-camera survey baseline.
+Unsupported quantitative claims in the opening analysis were also downstream
+evidence-discipline violations. Existing packet rules already prohibit those
+failures, so no Packet V6 change is authorized before Battery C determines
+whether the pattern repeats.

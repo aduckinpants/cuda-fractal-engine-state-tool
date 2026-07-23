@@ -196,6 +196,50 @@ Nova and ExplainO dynamics controls plus camera companions. The test asks for a
 non-color dynamics experiment and checks whether the agent distinguishes a
 grounded feature track from an honestly ungroundable high-zoom survey.
 
+#### Result — operational pass, experiment-design partial
+
+The targeted wording "Choose one mathematically motivated Nova dynamics
+experiment" delegated experiment selection and reasonably acted as the concrete
+trigger. The agent's immediate preflight and JSON were therefore not premature;
+the later generic "Let's do that" prompt was redundant for this case.
+
+- Proof ID: `560dd86f-6451-45b8-a7e8-34f50fc61df6`
+- Receipt SHA-256: `1fe1091a9dba11d87ce1320b9f3af821d8f86e83674a3f244220b99fe5ad445a`
+- Candidate state SHA-256: `19c1bef77ad87b6cea0d9e7e70c9588e1f0fe741db96f12640353d6696752c31`
+- Candidate encoded frame SHA-256: `2609bb8d27b9be0f0315e454e6bc211599609379c04608fd9f5a004bb654cc95`
+- Candidate decoded RGBA SHA-256: `9bbdec490e3129ef8f504406c4599b6072ffa0af1bedfcfe313e57a845be5928`
+- Review decision: `accepted`
+- Launch PID: `71980`
+- Follow-up capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-07-22\235345_959__explaino_nova`
+- Capture state SHA-256: `f17eded0968a9d7b2c091143b625423772400861461bfea51eeb0ac091a8e4a2`
+- Capture PNG SHA-256: `34839984dde18e3d1d2a2a1454373c17664d0e87033515c3df49a4414782a062`
+
+The sparse override changed `nova_alpha` and the zoom pair. Both camera values
+survived exactly; `nova_alpha = 0.70321` received the documented engine
+representation normalization to `0.7032099962234497`. Materialization and
+action-free replay were pixel-identical and semantically equal. The launched
+PNG and proof BMP decode to identical 4096 by 2560 RGBA pixels. Average
+iterations changed from `458` to `77`, but that statistic is not a controlled
+dynamics comparison because the spatial window also changed.
+
+The agent correctly refused to invent a feature track and selected a survey.
+Its survey was too wide to test the proposed local continuation: reducing
+`log2_zoom` by exactly eight octaves expanded each dimension by `256`, leaving
+the old window only about 16 by 10 pixels in the authoritative source render.
+That contradicted its pre-render prediction of a recognizable central
+continuation and made the alpha change inseparable from the newly sampled
+surroundings. A paired baseline at the same survey camera would be needed for a
+controlled alpha comparison.
+
+The opening analysis also supplied unproven autocorrelation offsets and
+pointwise iteration counts without a reproducible computation. Those claims,
+the footprint/preflight mismatch, and a later display-resolution arithmetic
+error are downstream evidence-discipline failures already prohibited by the
+packet's hierarchy and hostile-review rules. They do not yet establish a packet
+ambiguity. Retain pixel-footprint and paired-camera guidance as possible
+follow-up hardening only if the remaining battery reproduces the same pattern;
+do not mutate Packet V6 during this manual round.
+
 ### C — ExplainO Counterfactual Pair
 
 - Source capture: `D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-06-22\142209_050__explaino_counterfactual_pair`
@@ -261,7 +305,10 @@ Follow-up:
 What would you try?
 ```
 
-Use one targeted discussion prompt before the concrete override trigger:
+Use one targeted prompt after the exploratory opening and follow-up. Each
+targeted prompt explicitly delegates selection of one experiment and therefore
+may itself serve as the concrete override trigger. If the agent returns a valid
+preflight and JSON immediately, do not add the redundant generic trigger.
 
 McMullen:
 
@@ -281,7 +328,8 @@ ExplainO Counterfactual Pair:
 Choose one experiment involving the paired-orbit semantics rather than color alone. Distinguish whether it changes the two orbits, their classification threshold, or both, and account for the camera accordingly.
 ```
 
-When the agent has described one concrete change worth testing:
+When the agent has described one concrete change without already returning its
+override, use:
 
 ```text
 Let's do that. Return the exact sparse state override for this finding.
