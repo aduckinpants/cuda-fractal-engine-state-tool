@@ -105,7 +105,7 @@ def build_runtime_identity(runtime_cmd_path: Path, cwd: Path) -> dict[str, Any]:
 
 
 def runtime_identity_summary(identity: dict[str, Any]) -> dict[str, Any]:
-    """Return the stable runtime fields carried by immutable Packet V6 bindings."""
+    """Return the stable runtime fields carried by immutable agent-packet bindings."""
     return {
         "launcher_sha256": identity.get("launcher_sha256"),
         "resolved_executable_sha256": identity.get("resolved_executable_sha256"),

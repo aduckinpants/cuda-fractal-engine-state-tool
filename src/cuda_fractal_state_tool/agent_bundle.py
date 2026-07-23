@@ -6,6 +6,7 @@ import math
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -42,6 +43,10 @@ _PIPELINE_EXAMPLE_FILENAME = "state-override-example-color-pipeline.json"
 _STATE_AUTHORING_TRANSPORT_FILENAME = "state-authoring-authorities.md"
 _COLOR_PIPELINE_TRANSPORT_FILENAME = "color-pipeline-authority.md"
 _FINDING_CONTEXT_TRANSPORT_FILENAME = "finding-context.md"
+_WEB_FRAME_FILENAME = "web-agent-frame.png"
+_WEB_FRAME_MAX_LONG_EDGE = 2048
+_IMAGE_MAX_DECODED_PIXELS = 50_000_000
+_IMAGE_MAX_DIMENSION = 16_384
 
 
 @dataclass(frozen=True)
@@ -728,6 +733,93 @@ def _capture_export(
         return output_path.read_bytes()
 
 
+def _create_web_frame_derivative(
+    stage_dir: Path,
+    frame_filename: str,
+    job: Optional[JobContext],
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    source_path = (stage_dir / frame_filename).resolve()
+    output_path = (stage_dir / _WEB_FRAME_FILENAME).resolve()
+    command = [
+        sys.executable,
+        "-m",
+        "cuda_fractal_state_tool.preview_worker",
+        "--source",
+        str(source_path),
+        "--out",
+        str(output_path),
+        "--max-width",
+        str(_WEB_FRAME_MAX_LONG_EDGE),
+        "--max-height",
+        str(_WEB_FRAME_MAX_LONG_EDGE),
+        "--max-pixels",
+        str(_IMAGE_MAX_DECODED_PIXELS),
+        "--max-dimension",
+        str(_IMAGE_MAX_DIMENSION),
+    ]
+    if job is not None:
+        result = job.run_process(command, cwd=stage_dir, timeout_seconds=timeout_seconds)
+        exit_code = result.exit_code
+        timed_out = result.timed_out
+        stdout = result.stdout
+        stderr = result.stderr
+    else:
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=str(stage_dir),
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError("Web-agent frame derivative generation timed out") from exc
+        exit_code = completed.returncode
+        timed_out = False
+        stdout = completed.stdout
+        stderr = completed.stderr
+    if timed_out or exit_code != 0 or not output_path.is_file():
+        detail = stderr.strip() or stdout.strip()
+        suffix = f": {detail}" if detail else ""
+        raise ValueError(f"Web-agent frame derivative generation failed{suffix}")
+    try:
+        worker_result = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Web-agent frame worker returned invalid JSON") from exc
+    if not isinstance(worker_result, dict) or worker_result.get("status") != "ok":
+        raise ValueError("Web-agent frame worker returned an invalid result")
+    if worker_result.get("upscaled") is not False:
+        raise ValueError("Web-agent frame worker violated the no-upscaling contract")
+    if max(int(worker_result["preview_width"]), int(worker_result["preview_height"])) > _WEB_FRAME_MAX_LONG_EDGE:
+        raise ValueError("Web-agent frame worker exceeded the maximum long edge")
+    return {
+        "status": "discussion_derivative_not_full_resolution_authority",
+        "source_path": frame_filename,
+        "source_sha256": sha256_file(source_path),
+        "source_size_bytes": source_path.stat().st_size,
+        "source_format": worker_result["source_format"],
+        "source_width": int(worker_result["source_width"]),
+        "source_height": int(worker_result["source_height"]),
+        "derivative_path": _WEB_FRAME_FILENAME,
+        "derivative_sha256": sha256_file(output_path),
+        "derivative_size_bytes": output_path.stat().st_size,
+        "derivative_width": int(worker_result["preview_width"]),
+        "derivative_height": int(worker_result["preview_height"]),
+        "upscaled": False,
+        "resampling": worker_result["resampling"],
+        "pixel_mode": worker_result["pixel_mode"],
+        "orientation_handling": worker_result["orientation_handling"],
+        "policy": {
+            "maximum_long_edge": _WEB_FRAME_MAX_LONG_EDGE,
+            "maximum_decoded_pixels": _IMAGE_MAX_DECODED_PIXELS,
+            "maximum_dimension": _IMAGE_MAX_DIMENSION,
+            "timeout_seconds": timeout_seconds,
+        },
+    }
+
+
 def _artifact_path(finding_dir: Path, manifest: dict[str, Any], key: str) -> Path | None:
     artifacts = manifest.get("source_artifacts")
     item = artifacts.get(key) if isinstance(artifacts, dict) else None
@@ -968,6 +1060,7 @@ def _packet_markdown(
     unavailable: list[str],
     file_hashes: dict[str, str],
     has_pipeline_example: bool,
+    web_frame_derivative: dict[str, Any] | None,
 ) -> str:
     fractal_type = state["fractal_type"]
     params = state.get("params") if isinstance(state.get("params"), dict) else {}
@@ -989,6 +1082,24 @@ def _packet_markdown(
     attachment_lines = [f"- `{name}` — SHA-256 `{file_hashes[name]}`" for name in required]
     context_lines = [f"- `{name}` — SHA-256 `{file_hashes[name]}`" for name in recommended]
     unavailable_lines = [f"- `{name}`" for name in unavailable]
+    if web_frame_derivative is None:
+        web_frame_lines = [
+            "No captured frame was available, so this packet has no web discussion image.",
+        ]
+    else:
+        web_frame_lines = [
+            f"`{_WEB_FRAME_FILENAME}` is a bounded discussion derivative of "
+            f"`{web_frame_derivative['source_path']}`.",
+            f"- Source: `{web_frame_derivative['source_width']} × {web_frame_derivative['source_height']}`; "
+            f"SHA-256 `{web_frame_derivative['source_sha256']}`",
+            f"- Derivative: `{web_frame_derivative['derivative_width']} × "
+            f"{web_frame_derivative['derivative_height']}`; "
+            f"SHA-256 `{web_frame_derivative['derivative_sha256']}`",
+            f"- Resampling: `{web_frame_derivative['resampling']}`; upscaled: `false`",
+            "Use it for visual discussion, not as full-resolution pixel authority. Exact color counts,",
+            "pixel frequencies, and other resolution-sensitive measurements describe this derivative only",
+            "unless the full source frame is separately supplied and explicitly identified.",
+        ]
     example_note = (
         f"A complete unchanged structural template is embedded in `{_COLOR_PIPELINE_TRANSPORT_FILENAME}` "
         f"and retained locally as `{_PIPELINE_EXAMPLE_FILENAME}`. "
@@ -1164,6 +1275,10 @@ def _packet_markdown(
             "",
             *pipeline_summary,
             "",
+            "### Web discussion image",
+            "",
+            *web_frame_lines,
+            "",
             "### State-override-authorable paths",
             "",
             *([f"- `{path}`" for path in authorable_paths] or ["- No ordinary state paths resolved for this capture."]),
@@ -1200,7 +1315,8 @@ def _packet_markdown(
             f"- `{_STATE_AUTHORING_TRANSPORT_FILENAME}`: exact embedded parameter surface, UI schema, and finding-specific authoring index.",
             f"- `{_COLOR_PIPELINE_TRANSPORT_FILENAME}`: exact embedded UI-Salt contract and current pipeline editing context.",
             f"- `{_FINDING_CONTEXT_TRANSPORT_FILENAME}`: finding manifest, field notes, and selected engine-owned description.",
-            "- Captured frame: direct visual evidence; source-frame transport is replaced by a bounded PNG in the next hardening slice.",
+            f"- `{_WEB_FRAME_FILENAME}`: bounded PNG discussion derivative with explicit source and resampling provenance.",
+            "- The exact captured source frame remains local immutable visual evidence and is not silently replaced.",
             "- The individual JSON and context files remain local immutable proof authorities even when they are not web uploads.",
             "",
             f"Packet ID: `{packet_id}`",
@@ -1372,6 +1488,11 @@ def build_agent_bundle(
             example_bytes = _json_bytes({"color_pipeline_draft": {"lanes": draft["lanes"]}}, sort_keys=False)
             _write_bytes(stage_dir / _PIPELINE_EXAMPLE_FILENAME, example_bytes)
 
+        web_frame_derivative = (
+            _create_web_frame_derivative(stage_dir, frame_filename, job, timeout_seconds)
+            if frame_filename is not None
+            else None
+        )
         unavailable = [
             name
             for name in ("fractal-state.json", "finding.json", "field-notes.md", "frame")
@@ -1395,7 +1516,7 @@ def build_agent_bundle(
             _STATE_AUTHORING_TRANSPORT_FILENAME,
             _COLOR_PIPELINE_TRANSPORT_FILENAME,
             _FINDING_CONTEXT_TRANSPORT_FILENAME,
-            *([frame_filename] if frame_filename else []),
+            *([_WEB_FRAME_FILENAME] if web_frame_derivative else []),
         ]
         recommended: list[str] = []
         hash_names = required + recommended
@@ -1412,6 +1533,7 @@ def build_agent_bundle(
             unavailable,
             file_hashes,
             has_pipeline_example,
+            web_frame_derivative,
         )
         packet_bytes = packet_text.encode("utf-8")
         _write_bytes(stage_dir / "packet.md", packet_bytes)
@@ -1436,6 +1558,8 @@ def build_agent_bundle(
         }
         if frame_filename:
             roles[frame_filename] = "captured_visual_evidence"
+        if web_frame_derivative:
+            roles[_WEB_FRAME_FILENAME] = "web_discussion_derivative"
         for path in sorted(item for item in stage_dir.iterdir() if item.is_file()):
             file_records.append(
                 {
@@ -1478,6 +1602,7 @@ def build_agent_bundle(
                 "fractal_viewport_facts_sha256": _sha256_bytes(copied_viewport_bytes),
                 "state_override_authoring_surface_sha256": _sha256_bytes(authoring_surface_bytes),
             },
+            "web_frame_derivative": web_frame_derivative,
             "required_attachments": required,
             "recommended_attachments": recommended,
             "unavailable_optional_attachments": unavailable,

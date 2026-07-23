@@ -99,7 +99,7 @@ class UserWorkflowApp:
         self.workspace_root_var = tk.StringVar(value=str(workspace_root.resolve()))
         self.state_var = tk.StringVar(value=SessionState.EMPTY.value)
         self.status_var = tk.StringVar(value=self.session.status_text)
-        self.binding_var = tk.StringVar(value="No Agent Bundle V6 binding yet.")
+        self.binding_var = tk.StringVar(value="No Agent Bundle binding yet.")
         self.packet_info_var = tk.StringVar(value="Bundle is generated automatically after finding import.")
         self.attachment_var = tk.StringVar(value="Required attachments will appear here.")
         self.preview_status_var = tk.StringVar(value="No finding frame loaded.")
@@ -204,7 +204,7 @@ class UserWorkflowApp:
         )
         self.open_full_frame_button.grid(row=0, column=1, sticky="e")
 
-        packet = ttk.LabelFrame(self.left, text="3. Exact Agent Bundle V6", padding=8)
+        packet = ttk.LabelFrame(self.left, text="3. Exact Agent Bundle V7", padding=8)
         packet.grid(row=3, column=0, sticky="nsew")
         packet.columnconfigure(0, weight=1)
         packet.rowconfigure(2, weight=1)
@@ -299,7 +299,7 @@ class UserWorkflowApp:
         self.proof_text.grid(row=0, column=0, sticky="nsew")
         self._set_text(
             self.proof_text,
-            "No proof has run. Paste a sparse state override after the exact Agent Bundle V6 is ready.",
+            "No proof has run. Paste a sparse state override after the exact Agent Bundle V7 is ready.",
         )
 
     def _browse_file(self) -> None:
@@ -338,7 +338,7 @@ class UserWorkflowApp:
         self._busy_kinds.clear()
         generation = self.session.begin_finding_change()
         self._clear_finding_views(retain_override=True)
-        self.session.status_text = "Loading one existing immutable Agent Bundle V6 binding…"
+        self.session.status_text = "Loading one existing immutable agent-packet binding…"
         self._submit(
             "packet_load",
             JobRequestIdentity(generation=generation),
@@ -398,7 +398,7 @@ class UserWorkflowApp:
             self._render()
             return
         if outcome.error:
-            self._set_error(f"Existing Agent Bundle V6 load failed: {outcome.error}")
+            self._set_error(f"Existing agent-packet load failed: {outcome.error}")
             self._render()
             return
         context = outcome.value
@@ -473,7 +473,7 @@ class UserWorkflowApp:
     def build_packet(self) -> None:
         finding = self.session.finding
         if finding is None:
-            self._set_error("Open a finding before building its exact Agent Bundle V6.")
+            self._set_error("Open a finding before building its exact Agent Bundle V7.")
             return
         self.session.status_text = "Building one coherent immutable authority snapshot…"
         identity = JobRequestIdentity(
@@ -504,7 +504,7 @@ class UserWorkflowApp:
             self._render()
             return
         if outcome.error:
-            self._set_error(f"Agent Bundle V6 generation failed: {outcome.error}")
+            self._set_error(f"Agent Bundle V7 generation failed: {outcome.error}")
             self._render()
             return
         bundle = outcome.value
@@ -519,7 +519,7 @@ class UserWorkflowApp:
         handoff = load_agent_bundle_handoff(bundle.packet_dir)
         self.session.accept_bundle(bundle)
         self._set_text(self.packet_text, handoff.packet_text)
-        self._set_text(self.proof_text, "No proof has run for this exact Agent Bundle V6 binding.")
+        self._set_text(self.proof_text, "No proof has run for this exact Agent Bundle binding.")
         self.binding_var.set(
             f"Packet {bundle.packet_id}\nManifest SHA-256 {bundle.manifest_sha256}\n"
             f"Finding {bundle.finding_id}\nSelector {bundle.selected_fractal_type}"
@@ -533,14 +533,14 @@ class UserWorkflowApp:
         )
         if loaded_existing:
             self.session.status_text = (
-                f"Loaded existing immutable Agent Bundle V6 {bundle.packet_id}; "
+                f"Loaded existing immutable Agent Bundle V{bundle.packet_version} {bundle.packet_id}; "
                 "paste the override returned for this exact packet."
             )
 
     def copy_packet(self) -> None:
         bundle = self.session.bundle
         if bundle is None:
-            self._set_error("Build an exact Agent Bundle V6 before copying packet.md.")
+            self._set_error("Build an exact Agent Bundle V7 before copying packet.md.")
             return
         copy_agent_packet(bundle.packet_dir, self._write_clipboard)
         self.session.status_text = (
@@ -551,11 +551,13 @@ class UserWorkflowApp:
     def open_bundle_folder(self) -> None:
         bundle = self.session.bundle
         if bundle is None:
-            self._set_error("No Agent Bundle V6 folder is active.")
+            self._set_error("No Agent Bundle folder is active.")
             return
         try:
             open_agent_bundle_folder(bundle.packet_dir)
-            self.session.status_text = f"Opened exact Agent Bundle V6 folder {bundle.packet_id}."
+            self.session.status_text = (
+                f"Opened exact Agent Bundle V{bundle.packet_version} folder {bundle.packet_id}."
+            )
         except Exception as exc:
             self._set_error(str(exc))
         self._render()
@@ -913,15 +915,17 @@ class UserWorkflowApp:
 
     def open_candidate_frame(self) -> None:
         result = self.session.proof_result
-        if result is None or result.candidate_frame_path is None:
-            self._set_error("No engine-emitted candidate frame is available.")
+        if result is None or result.candidate_display_path is None:
+            self._set_error("No verified candidate PNG display derivative is available.")
             return
         try:
-            os.startfile(str(result.candidate_frame_path))
+            os.startfile(str(result.candidate_display_path))
             self._candidate_full_frame_opened = True
-            self.session.status_text = "Opened the exact full-resolution engine candidate for visual review."
+            self.session.status_text = (
+                "Opened the full-resolution PNG whose decoded RGBA pixels match the engine candidate."
+            )
         except Exception as exc:
-            self._set_error(f"Could not open the full candidate frame: {exc}")
+            self._set_error(f"Could not open the verified candidate PNG: {exc}")
         self._render()
 
     def copy_last_error(self) -> None:
@@ -948,7 +952,7 @@ class UserWorkflowApp:
         self._set_text(self.summary_text, "")
         self._set_text(self.packet_text, "")
         self._set_text(self.proof_text, "No proof has run. Paste a sparse state override to begin.")
-        self.binding_var.set("No Agent Bundle V6 binding yet.")
+        self.binding_var.set("No Agent Bundle binding yet.")
         self.packet_info_var.set("Bundle is generated automatically after finding import.")
         self.attachment_var.set("Required attachments will appear here.")
         self.preview_status_var.set("No finding frame loaded.")

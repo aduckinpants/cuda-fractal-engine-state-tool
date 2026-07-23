@@ -50,6 +50,9 @@ def create_preview(
                 "preview_width": image.width,
                 "preview_height": image.height,
                 "upscaled": image.width > source_width or image.height > source_height,
+                "resampling": "pillow_lanczos_thumbnail",
+                "pixel_mode": "RGBA",
+                "orientation_handling": "pillow_exif_transpose",
             }
     finally:
         Image.MAX_IMAGE_PIXELS = previous_pillow_limit

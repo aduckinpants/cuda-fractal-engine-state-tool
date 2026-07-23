@@ -32,6 +32,8 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("Acknowledge Base Replay", source)
         self.assertIn("User explicitly acknowledged exact base replay.", source)
         self.assertIn("Capture or Agent Packet folder", source)
+        self.assertIn("result.candidate_display_path", source)
+        self.assertIn("decoded RGBA pixels match the engine candidate", source)
         self.assertIn("load_existing_packet_context", source)
         self.assertIn("without refresh", source)
         self.assertNotIn("--packet-dir", source)
