@@ -467,9 +467,9 @@ class StateOverrideTests(unittest.TestCase):
                     Path(temp_dir) / "bad.json",
                     expected_manifest_sha256="0" * 64,
                 )
-            with self.assertRaisesRegex(ValueError, "immutable Packet V6"):
+            with self.assertRaisesRegex(ValueError, "immutable agent-packet"):
                 materialize_state_override(packet, "{}", packet / "state.json")
-            with self.assertRaisesRegex(ValueError, "immutable Packet V6"):
+            with self.assertRaisesRegex(ValueError, "immutable agent-packet"):
                 materialize_state_override(packet, "{}", packet / "new-candidate.json")
 
     def test_older_unsafe_authoring_surface_requires_packet_rebuild(self) -> None:

@@ -31,7 +31,7 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("Merged input is byte-identical to the authoritative base state", source)
         self.assertIn("Acknowledge Base Replay", source)
         self.assertIn("User explicitly acknowledged exact base replay.", source)
-        self.assertIn("Capture or Packet V6 folder", source)
+        self.assertIn("Capture or Agent Packet folder", source)
         self.assertIn("load_existing_packet_context", source)
         self.assertIn("without refresh", source)
         self.assertNotIn("--packet-dir", source)

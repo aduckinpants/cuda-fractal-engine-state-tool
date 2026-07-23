@@ -298,23 +298,23 @@ def load_existing_packet_context(packet_dir: Path) -> ExistingPacketContext:
     workspace_root = findings_dir.parent
     if packets_dir.name != "packets" or findings_dir.name != "findings":
         raise ValueError(
-            "Existing Packet V6 must use <workspace>/findings/<finding-id>/packets/<packet-id>"
+            "Existing agent packet must use <workspace>/findings/<finding-id>/packets/<packet-id>"
         )
     if finding_dir.name != bundle.finding_id:
-        raise ValueError("Packet V6 finding_id does not match its durable finding directory")
+        raise ValueError("Agent packet finding_id does not match its durable finding directory")
     workspace_manifest_path = finding_dir / "workspace.json"
     workspace_manifest = _load_object(workspace_manifest_path, "Finding workspace manifest")
     if workspace_manifest.get("finding_id") != bundle.finding_id:
-        raise ValueError("Packet V6 finding_id disagrees with the durable workspace manifest")
+        raise ValueError("Agent packet finding_id disagrees with the durable workspace manifest")
     authoring_base = workspace_manifest.get("authoring_base")
     if not isinstance(authoring_base, dict) or not isinstance(authoring_base.get("sha256"), str):
         raise ValueError("Finding workspace manifest has no authoring-base hash")
-    manifest = _load_object(bundle.manifest_path, "Packet V6 manifest")
+    manifest = _load_object(bundle.manifest_path, "Agent packet manifest")
     authority_identities = manifest.get("authority_identities")
     if not isinstance(authority_identities, dict):
-        raise ValueError("Packet V6 manifest has no authority_identities")
+        raise ValueError("Agent packet manifest has no authority_identities")
     if authority_identities.get("state_sha256") != authoring_base["sha256"]:
-        raise ValueError("Packet V6 base state does not match its durable finding")
+        raise ValueError("Agent packet base state does not match its durable finding")
     import_result = ImportResult(
         finding_id=bundle.finding_id,
         finding_dir=finding_dir,
@@ -326,5 +326,5 @@ def load_existing_packet_context(packet_dir: Path) -> ExistingPacketContext:
     finding = _load_finding_context_from_import(import_result, workspace_root)
     state = _load_object(finding.authoring_base_state_path, "Authoring base state")
     if state.get("fractal_type") != bundle.selected_fractal_type:
-        raise ValueError("Packet V6 selected fractal disagrees with its durable authoring base")
+        raise ValueError("Agent packet selected fractal disagrees with its durable authoring base")
     return ExistingPacketContext(finding=finding, bundle=bundle)

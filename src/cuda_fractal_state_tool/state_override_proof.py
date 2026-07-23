@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional, Sequence
 
 from PIL import Image, ImageChops, ImageStat
 
-from .agent_bundle import BUNDLE_MANIFEST_VERSION, PACKET_VERSION, load_agent_bundle_handoff
+from .agent_bundle import SUPPORTED_PACKET_MANIFEST_VERSIONS, load_agent_bundle_handoff
 from .async_jobs import AsyncJobRunner, JobCancelledError, JobContext, JobRequestIdentity
 from .json_utils import loads_strict_no_duplicates
 from .runtime_surface import (
@@ -118,12 +118,14 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
     manifest_sha256 = sha256_file(manifest_path)
     if expected_sha256 is not None and manifest_sha256 != expected_sha256:
         raise StateOverrideProofError("Packet manifest hash does not match the active binding")
-    manifest = _load_object(manifest_path, "Packet V6 manifest")
-    if manifest.get("packet_version") != PACKET_VERSION:
-        raise StateOverrideProofError(f"Unsupported packet version: {manifest.get('packet_version')}")
-    if manifest.get("bundle_manifest_version") != BUNDLE_MANIFEST_VERSION:
+    manifest = _load_object(manifest_path, "Agent packet manifest")
+    packet_version = manifest.get("packet_version")
+    expected_manifest_version = SUPPORTED_PACKET_MANIFEST_VERSIONS.get(packet_version)
+    if expected_manifest_version is None:
+        raise StateOverrideProofError(f"Unsupported packet version: {packet_version}")
+    if manifest.get("bundle_manifest_version") != expected_manifest_version:
         raise StateOverrideProofError(
-            "Unsupported Packet V6 manifest version; rebuild the bundle with the current tool"
+            f"Unsupported Packet V{packet_version} manifest version"
         )
     records = manifest.get("files")
     recorded = {
@@ -143,7 +145,9 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
     }
     missing = sorted(required_authorities - recorded)
     if missing:
-        raise StateOverrideProofError(f"Packet V6 is missing required authority files: {', '.join(missing)}")
+        raise StateOverrideProofError(
+            f"Packet V{packet_version} is missing required authority files: {', '.join(missing)}"
+        )
     return manifest, manifest_sha256
 
 

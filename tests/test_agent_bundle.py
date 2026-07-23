@@ -428,8 +428,9 @@ class AgentBundleTests(unittest.TestCase):
             self.assertEqual((bundle.packet_dir / "frame.png").read_bytes(), fixture["frame_bytes"])
 
             manifest = json.loads(bundle.manifest_path.read_text(encoding="utf-8"))
-            self.assertEqual(manifest["packet_version"], 6)
-            self.assertEqual(manifest["bundle_manifest_version"], 2)
+            self.assertEqual(bundle.packet_version, 7)
+            self.assertEqual(manifest["packet_version"], 7)
+            self.assertEqual(manifest["bundle_manifest_version"], 3)
             recorded = {item["path"]: item for item in manifest["files"]}
             actual = {path.name for path in bundle.packet_dir.iterdir() if path.name != "manifest.json"}
             self.assertEqual(set(recorded), actual)
@@ -484,6 +485,19 @@ class AgentBundleTests(unittest.TestCase):
             self.assertNotIn('"base_replay_intent"', packet)
             self.assertIn("fractal-viewport-facts.json", bundle.required_attachments)
             self.assertEqual(
+                bundle.required_attachments,
+                (
+                    "state.json",
+                    "fractal-state.json",
+                    "fractal-viewport-facts.json",
+                    "state-authoring-authorities.md",
+                    "color-pipeline-authority.md",
+                    "finding-context.md",
+                    "frame.png",
+                ),
+            )
+            self.assertEqual(bundle.recommended_attachments, ())
+            self.assertEqual(
                 manifest["authority_identities"]["fractal_viewport_facts_sha256"],
                 hashlib.sha256(fixture["viewport_facts_bytes"]).hexdigest(),
             )
@@ -502,7 +516,35 @@ class AgentBundleTests(unittest.TestCase):
             self.assertIn("unchanged structural template", packet)
             self.assertNotIn("pending editor state", packet)
             self.assertNotIn("state-override-example-color-pipeline.json", bundle.required_attachments)
-            self.assertIn("state-override-example-color-pipeline.json", bundle.recommended_attachments)
+            self.assertEqual(
+                recorded["state-override-example-color-pipeline.json"]["web_handoff"],
+                "generated_helper",
+            )
+            self.assertEqual(
+                recorded["fractal-parameter-surface.json"]["web_handoff"],
+                "local_authority",
+            )
+            self.assertEqual(recorded["state-authoring-authorities.md"]["web_handoff"], "required")
+            authoring_transport = (bundle.packet_dir / "state-authoring-authorities.md").read_bytes()
+            self.assertIn(fixture["surface_bytes"], authoring_transport)
+            self.assertIn(fixture["schema_bytes"], authoring_transport)
+            self.assertIn(
+                (bundle.packet_dir / "state-override-authoring-surface.json").read_bytes(),
+                authoring_transport,
+            )
+            color_transport = (bundle.packet_dir / "color-pipeline-authority.md").read_bytes()
+            self.assertIn(fixture["contract_bytes"], color_transport)
+            self.assertIn(
+                (bundle.packet_dir / "state-override-example-color-pipeline.json").read_bytes(),
+                color_transport,
+            )
+            context_transport = (bundle.packet_dir / "finding-context.md").read_bytes()
+            self.assertIn(fixture["finding_bytes"], context_transport)
+            self.assertIn(fixture["notes_bytes"], context_transport)
+            self.assertIn(
+                hashlib.sha256(fixture["catalog_bytes"]).hexdigest().encode("ascii"),
+                context_transport,
+            )
 
             copied: list[str] = []
             handoff = copy_agent_packet(bundle.packet_dir, copied.append)
@@ -629,6 +671,13 @@ class AgentBundleTests(unittest.TestCase):
             packet = bundle.packet_path.read_text(encoding="utf-8")
             self.assertIn("- `field-notes.md`", packet)
             self.assertIn("Color Pipeline state override authoring is unavailable", packet)
+            context_transport = (bundle.packet_dir / "finding-context.md").read_text(encoding="utf-8")
+            self.assertIn("`finding.json` unavailable", context_transport)
+            self.assertIn("`field-notes.md` unavailable", context_transport)
+            pipeline_transport = (bundle.packet_dir / "color-pipeline-authority.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("Pipeline structural example unavailable", pipeline_transport)
             self.assertFalse((bundle.packet_dir / "state-override-example-color-pipeline.json").exists())
             surface = json.loads(
                 (bundle.packet_dir / "state-override-authoring-surface.json").read_text(

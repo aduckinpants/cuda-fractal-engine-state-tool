@@ -160,7 +160,7 @@ class UserWorkflowApp:
         source = ttk.LabelFrame(self.left, text="1. Finding intake", padding=8)
         source.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         source.columnconfigure(1, weight=1)
-        ttk.Label(source, text="Capture or Packet V6 folder").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        ttk.Label(source, text="Capture or Agent Packet folder").grid(row=0, column=0, sticky="w", padx=(0, 8))
         ttk.Entry(source, textvariable=self.source_path_var).grid(row=0, column=1, sticky="ew")
         ttk.Button(source, text="Browse File…", command=self._browse_file).grid(row=0, column=2, padx=(6, 0))
         ttk.Button(source, text="Browse Folder…", command=self._browse_folder).grid(row=0, column=3, padx=(6, 0))
@@ -177,7 +177,7 @@ class UserWorkflowApp:
             source,
             text=(
                 "Captures remain read-only and are mirrored into the durable workspace. "
-                "An existing Packet V6 folder is bound read-only without refresh."
+                "An existing supported agent packet folder is bound read-only without refresh."
             ),
             wraplength=620,
         ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(6, 0))
@@ -315,7 +315,7 @@ class UserWorkflowApp:
     def _browse_folder(self) -> None:
         from tkinter import filedialog
 
-        path = filedialog.askdirectory(title="Choose capture bundle or existing Packet V6 folder")
+        path = filedialog.askdirectory(title="Choose capture bundle or existing agent packet folder")
         if path:
             self.source_path_var.set(path)
 
@@ -351,7 +351,7 @@ class UserWorkflowApp:
         source_text = self.source_path_var.get().strip()
         workspace_text = self.workspace_root_var.get().strip()
         if not source_text:
-            self._set_error("A capture source or existing Packet V6 folder is required.")
+            self._set_error("A capture source or existing agent packet folder is required.")
             return
         source_path = Path(source_text)
         if source_path.is_dir() and (source_path / "packet.md").is_file() and (source_path / "manifest.json").is_file():
@@ -603,7 +603,7 @@ class UserWorkflowApp:
         self._clear_candidate_views()
         self._set_text(
             self.proof_text,
-            "PROVING\n\nValidating exact Packet V6 authority, deterministically merging the override, "
+            "PROVING\n\nValidating exact agent-packet authority, deterministically merging the override, "
             "loading the complete state through the engine without actions, and replaying the engine-emitted state…",
         )
         self._submit(
