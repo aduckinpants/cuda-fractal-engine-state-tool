@@ -179,7 +179,7 @@ regenerate them from the current runtime.
 
 - [x] Slice 0 - contract lock, architecture audit, baseline, and clean
   checkpoint.
-- [ ] Slice 1 - authority-container codec, Packet V8 staged builder, manifest,
+- [x] Slice 1 - authority-container codec, Packet V8 staged builder, manifest,
   and bounded PNG transport.
 - [ ] Slice 2 - V8 override/proof extraction, central runtime compatibility
   policy, receipts, and UI cutover.
@@ -190,9 +190,9 @@ regenerate them from the current runtime.
 
 ## Current Phase
 
-Slice 0 is complete pending its Git checkpoint. Slice 1 is the next queued
-owner after that clean checkpoint. The clean baseline is 87 passing Python
-3.14 unit tests at `a440f257a51dd958b273f034d3edb13f0fe01648`.
+Slice 1 is complete pending its Git checkpoint. Slice 2 is the next queued
+owner after that clean checkpoint. The suite now contains 94 passing Python
+3.14 tests.
 
 ## Architecture Audit
 
@@ -320,7 +320,12 @@ the bounded derivative as full-resolution evidence.
   tracked; 87 tests passed; no engine files or runtime bytes changed.
 - Slice 1 proof target: exact-byte container round trips, hostile malformed
   inputs, exactly seven/six physical files, source-frame provenance, staged
-  snapshot race rejection, real V8 packet generation.
+  snapshot race rejection, real V8 packet generation. Result: 7 codec tests
+  cover exact round trip, opaque marker-shaped payloads, duplicates, unsafe
+  names, invalid UTF-8, missing/unknown records, truncation, metadata, fence,
+  length, and hash tampering. Packet tests prove seven files with a frame, six
+  without one, manifest/container identity linkage, source-relative full-frame
+  provenance, and V7 construction-race rejection carried forward.
 - Slice 2 proof target: V8 authority extraction drives the same validator and
   proof; development drift attempts and records; strict drift stops; runtime
   changes during proof and before launch still invalidate.
@@ -345,9 +350,21 @@ commits, pushes, and proves a clean tree before continuing.
 
 ## Resume Point
 
-After the Slice 0 checkpoint, resume Slice 1 by adding focused Packet V8
-container RED tests. Implement the shared exact-byte codec before changing the
-builder, then make the builder publish exactly the locked seven/six files.
+After the Slice 1 checkpoint, resume Slice 2 by adding V8 authority-extraction
+RED tests in `state_override.py`, then add runtime-compatibility policy RED
+tests in `state_override_proof.py`. The validator and proof must consume only
+container-extracted V8 bytes while V6/V7 retain filename-based loading.
 
-Continuation decision: `continue_to=slice1_container_and_builder` after the
-Slice 0 commit, push, and clean-tree proof.
+Real Slice 1 workflow proof:
+
+- finding: `fd91321945b2f65cb0926984318e523d0d8406d3c51935e39f541a41ea1cd6f3`
+  (`explaino_bell`);
+- Packet V8: `93554065-f13b-45bf-acfc-f9d5558caadb`;
+- manifest SHA-256:
+  `6556945178ba48ab79aa92f3bf518d1330b0c8679ca3a46472bb87f57fcf9eba`;
+- exact physical result: seven files, including `packet.md`, `manifest.json`,
+  the standalone state, three authority containers, and the bounded PNG;
+- published-runtime generation and independent CLI inspection both passed.
+
+Continuation decision: `continue_to=slice2_proof_and_ui_cutover` after the
+Slice 1 commit, push, and clean-tree proof.

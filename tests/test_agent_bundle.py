@@ -24,6 +24,7 @@ from cuda_fractal_state_tool.agent_bundle import (
     validate_captured_color_pipeline_draft,
 )
 from cuda_fractal_state_tool.agent_bundle_cli import main as agent_bundle_cli_main
+from cuda_fractal_state_tool.authority_container import parse_authority_container
 from cuda_fractal_state_tool.finding_workspace import SourceCaptureImporter
 
 
@@ -442,28 +443,49 @@ class AgentBundleTests(unittest.TestCase):
                 bundle = build_agent_bundle(imported.finding_dir, fixture["runtime_cmd"])
 
             self.assertEqual((bundle.packet_dir / "state.json").read_bytes(), fixture["state_bytes"])
-            self.assertEqual((bundle.packet_dir / "fractal-state.json").read_bytes(), fixture["review_bytes"])
-            self.assertEqual((bundle.packet_dir / "finding.json").read_bytes(), fixture["finding_bytes"])
-            self.assertEqual((bundle.packet_dir / "field-notes.md").read_bytes(), fixture["notes_bytes"])
-            self.assertEqual((bundle.packet_dir / "frame.png").read_bytes(), fixture["frame_bytes"])
 
             manifest = json.loads(bundle.manifest_path.read_text(encoding="utf-8"))
-            self.assertEqual(bundle.packet_version, 7)
-            self.assertEqual(manifest["packet_version"], 7)
-            self.assertEqual(manifest["bundle_manifest_version"], 3)
+            self.assertEqual(bundle.packet_version, 8)
+            self.assertEqual(manifest["packet_version"], 8)
+            self.assertEqual(manifest["bundle_manifest_version"], 4)
+            self.assertEqual(manifest["authority_container_version"], 1)
             recorded = {item["path"]: item for item in manifest["files"]}
             actual = {path.name for path in bundle.packet_dir.iterdir() if path.name != "manifest.json"}
             self.assertEqual(set(recorded), actual)
+            self.assertEqual(
+                {path.name for path in bundle.packet_dir.iterdir()},
+                {
+                    "packet.md",
+                    "manifest.json",
+                    "state.json",
+                    "state-authoring-authorities.md",
+                    "color-pipeline-authority.md",
+                    "finding-context.md",
+                    "web-agent-frame.png",
+                },
+            )
             for name, item in recorded.items():
                 payload = (bundle.packet_dir / name).read_bytes()
                 self.assertEqual(item["sha256"], hashlib.sha256(payload).hexdigest())
                 self.assertEqual(item["size_bytes"], len(payload))
             self.assertNotIn("manifest.json", recorded)
 
-            surface = json.loads((bundle.packet_dir / "state-override-authoring-surface.json").read_text())
+            authoring_container = parse_authority_container(
+                (bundle.packet_dir / "state-authoring-authorities.md").read_bytes(),
+                expected_filenames={
+                    "state-override-authoring-surface.json",
+                    "fractal_binding_surface_v1.ui_schema.json",
+                    "fractal-parameter-surface.json",
+                },
+            )
+            surface = json.loads(
+                authoring_container.artifacts[
+                    "state-override-authoring-surface.json"
+                ].payload.decode("utf-8")
+            )
             self.assertEqual(
                 surface["authority_refs"]["ui_schema_sha256"],
-                hashlib.sha256((bundle.packet_dir / "fractal_binding_surface_v1.ui_schema.json").read_bytes()).hexdigest(),
+                hashlib.sha256(fixture["schema_bytes"]).hexdigest(),
             )
             packet = bundle.packet_path.read_text(encoding="utf-8")
             self.assertIn("State Override Example", packet)
@@ -503,26 +525,27 @@ class AgentBundleTests(unittest.TestCase):
             self.assertIn("no other code block", packet)
             self.assertNotIn('"operation_category"', packet)
             self.assertNotIn('"base_replay_intent"', packet)
-            self.assertIn("fractal-viewport-facts.json", bundle.required_attachments)
+            self.assertNotIn("fractal-viewport-facts.json", bundle.required_attachments)
             self.assertEqual(
                 bundle.required_attachments,
                 (
+                    "packet.md",
+                    "manifest.json",
                     "state.json",
-                    "fractal-state.json",
-                    "fractal-viewport-facts.json",
                     "state-authoring-authorities.md",
                     "color-pipeline-authority.md",
                     "finding-context.md",
                     "web-agent-frame.png",
                 ),
             )
+            self.assertEqual(manifest["drag_all_attachments"], list(bundle.required_attachments))
             self.assertEqual(bundle.recommended_attachments, ())
             self.assertEqual(
                 manifest["authority_identities"]["fractal_viewport_facts_sha256"],
                 hashlib.sha256(fixture["viewport_facts_bytes"]).hexdigest(),
             )
             self.assertEqual(manifest["viewport_facts_origin"], "runtime_export_from_copied_state")
-            self.assertIn("Copying this Markdown does not transport those files", packet)
+            self.assertIn("primary handoff is drag-all", packet)
             self.assertNotIn("proposal_v1", packet)
             self.assertNotIn("capability_profile", packet)
             self.assertNotIn("select_function", packet)
@@ -535,21 +558,14 @@ class AgentBundleTests(unittest.TestCase):
             self.assertIn("applies that loaded draft through the engine-owned lowering operation", packet)
             self.assertIn("unchanged structural template", packet)
             self.assertNotIn("pending editor state", packet)
-            self.assertNotIn("state-override-example-color-pipeline.json", bundle.required_attachments)
-            self.assertEqual(
-                recorded["state-override-example-color-pipeline.json"]["web_handoff"],
-                "generated_helper",
-            )
-            self.assertEqual(
-                recorded["fractal-parameter-surface.json"]["web_handoff"],
-                "local_authority",
-            )
+            self.assertNotIn("state-override-example-color-pipeline.json", recorded)
+            self.assertNotIn("fractal-parameter-surface.json", recorded)
             self.assertEqual(recorded["state-authoring-authorities.md"]["web_handoff"], "required")
-            self.assertEqual(recorded["frame.png"]["web_handoff"], "local_authority")
             self.assertEqual(recorded["web-agent-frame.png"]["web_handoff"], "required")
             web_frame = manifest["web_frame_derivative"]
             self.assertEqual(web_frame["status"], "discussion_derivative_not_full_resolution_authority")
-            self.assertEqual(web_frame["source_path"], "frame.png")
+            self.assertEqual(web_frame["source_finding_relative_path"], "source/frame.png")
+            self.assertNotIn(":", web_frame["source_finding_relative_path"])
             self.assertEqual((web_frame["source_width"], web_frame["source_height"]), (100, 50))
             self.assertEqual((web_frame["derivative_width"], web_frame["derivative_height"]), (100, 50))
             self.assertFalse(web_frame["upscaled"])
@@ -558,26 +574,56 @@ class AgentBundleTests(unittest.TestCase):
                 web_frame["derivative_sha256"],
                 hashlib.sha256((bundle.packet_dir / "web-agent-frame.png").read_bytes()).hexdigest(),
             )
-            authoring_transport = (bundle.packet_dir / "state-authoring-authorities.md").read_bytes()
-            self.assertIn(fixture["surface_bytes"], authoring_transport)
-            self.assertIn(fixture["schema_bytes"], authoring_transport)
-            self.assertIn(
-                (bundle.packet_dir / "state-override-authoring-surface.json").read_bytes(),
-                authoring_transport,
+            self.assertEqual(
+                authoring_container.artifacts["fractal-parameter-surface.json"].payload,
+                fixture["surface_bytes"],
             )
-            color_transport = (bundle.packet_dir / "color-pipeline-authority.md").read_bytes()
-            self.assertIn(fixture["contract_bytes"], color_transport)
-            self.assertIn(
-                (bundle.packet_dir / "state-override-example-color-pipeline.json").read_bytes(),
-                color_transport,
+            self.assertEqual(
+                authoring_container.artifacts[
+                    "fractal_binding_surface_v1.ui_schema.json"
+                ].payload,
+                fixture["schema_bytes"],
             )
-            context_transport = (bundle.packet_dir / "finding-context.md").read_bytes()
-            self.assertIn(fixture["finding_bytes"], context_transport)
-            self.assertIn(fixture["notes_bytes"], context_transport)
-            self.assertIn(
-                hashlib.sha256(fixture["catalog_bytes"]).hexdigest().encode("ascii"),
-                context_transport,
+            color_container = parse_authority_container(
+                (bundle.packet_dir / "color-pipeline-authority.md").read_bytes(),
+                expected_filenames={
+                    "current-color-pipeline-topology-index.json",
+                    "state-override-example-color-pipeline.json",
+                    "color_pipeline_function_library.contract.v1.json",
+                },
             )
+            self.assertEqual(
+                color_container.artifacts[
+                    "color_pipeline_function_library.contract.v1.json"
+                ].payload,
+                fixture["contract_bytes"],
+            )
+            context_container = parse_authority_container(
+                (bundle.packet_dir / "finding-context.md").read_bytes(),
+                expected_filenames={
+                    "selected-fractal-description.json",
+                    "fractal-state.json",
+                    "fractal-viewport-facts.json",
+                    "finding.json",
+                    "field-notes.md",
+                    "fractal-descriptive-catalog.json",
+                },
+            )
+            self.assertEqual(context_container.artifacts["finding.json"].payload, fixture["finding_bytes"])
+            self.assertEqual(context_container.artifacts["field-notes.md"].payload, fixture["notes_bytes"])
+            self.assertEqual(
+                context_container.artifacts["fractal-state.json"].payload,
+                fixture["review_bytes"],
+            )
+            self.assertEqual(
+                context_container.artifacts["fractal-descriptive-catalog.json"].payload,
+                fixture["catalog_bytes"],
+            )
+            embedded = {item["artifact_filename"]: item for item in manifest["embedded_artifacts"]}
+            for container in (authoring_container, color_container, context_container):
+                for name, artifact in container.artifacts.items():
+                    self.assertEqual(embedded[name]["sha256"], artifact.sha256)
+                    self.assertEqual(embedded[name]["size_bytes"], artifact.byte_length)
             self.assertIn("discussion derivative", packet)
             self.assertIn("not as full-resolution pixel authority", packet)
 
@@ -700,6 +746,21 @@ class AgentBundleTests(unittest.TestCase):
                 bundle = build_agent_bundle(imported.finding_dir, fixture["runtime_cmd"])
             self.assertEqual(bundle.recommended_attachments, ())
             self.assertEqual(
+                {path.name for path in bundle.packet_dir.iterdir()},
+                {
+                    "packet.md",
+                    "manifest.json",
+                    "state.json",
+                    "state-authoring-authorities.md",
+                    "color-pipeline-authority.md",
+                    "finding-context.md",
+                },
+            )
+            self.assertEqual(
+                set(bundle.required_attachments),
+                {path.name for path in bundle.packet_dir.iterdir()},
+            )
+            self.assertEqual(
                 bundle.unavailable_optional_attachments,
                 ("fractal-state.json", "finding.json", "field-notes.md"),
             )
@@ -715,10 +776,18 @@ class AgentBundleTests(unittest.TestCase):
             )
             self.assertIn("Pipeline structural example unavailable", pipeline_transport)
             self.assertFalse((bundle.packet_dir / "state-override-example-color-pipeline.json").exists())
+            authoring_container = parse_authority_container(
+                (bundle.packet_dir / "state-authoring-authorities.md").read_bytes(),
+                expected_filenames={
+                    "state-override-authoring-surface.json",
+                    "fractal_binding_surface_v1.ui_schema.json",
+                    "fractal-parameter-surface.json",
+                },
+            )
             surface = json.loads(
-                (bundle.packet_dir / "state-override-authoring-surface.json").read_text(
-                    encoding="utf-8"
-                )
+                authoring_container.artifacts[
+                    "state-override-authoring-surface.json"
+                ].payload.decode("utf-8")
             )
             self.assertEqual(surface["color_authoring"]["mode"], "unavailable")
             self.assertNotIn("params.exposure", {entry["path"] for entry in surface["entries"]})
@@ -771,8 +840,19 @@ class AgentBundleTests(unittest.TestCase):
             ):
                 bundle = build_agent_bundle(imported.finding_dir, fixture["runtime_cmd"])
 
+            context_container = parse_authority_container(
+                (bundle.packet_dir / "finding-context.md").read_bytes(),
+                expected_filenames={
+                    "selected-fractal-description.json",
+                    "fractal-state.json",
+                    "fractal-viewport-facts.json",
+                    "finding.json",
+                    "field-notes.md",
+                    "fractal-descriptive-catalog.json",
+                },
+            )
             self.assertEqual(
-                (bundle.packet_dir / "fractal-viewport-facts.json").read_bytes(),
+                context_container.artifacts["fractal-viewport-facts.json"].payload,
                 fixture["viewport_facts_bytes"],
             )
             manifest = json.loads(bundle.manifest_path.read_text(encoding="utf-8"))
