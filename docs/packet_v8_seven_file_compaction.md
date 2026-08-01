@@ -59,10 +59,9 @@ central compatibility policy:
   development use, with a configurable strict mode that warns and stops.
 - [done] Preserve Packet V6 and V7 readability without rewriting historical
   packet directories or silently regenerating their authority.
-- [in progress] Run the bounded slices through local acceptance, inventory the
-  newer captures, then stop for a dedicated user selection of the next manual
-  web-session fixtures. The inventory is complete; fixture selection remains
-  user-owned.
+- [done] Run the bounded slices through local acceptance, inventory the newer
+  captures, receive explicit user selection, prepare exactly those six Packet
+  V8 fixtures and their manual gate, then stop for user-run web sessions.
 
 ## Locked Public Contract
 
@@ -186,16 +185,17 @@ regenerate them from the current runtime.
   policy, receipts, and UI cutover.
 - [x] Slice 3 - navigation/status hardening, backward compatibility, local
   workflow acceptance, and stale-architecture audit.
-- [ ] Slice 4 - inventory newer captures, stop for user fixture selection,
+- [x] Slice 4 - inventory newer captures, stop for user fixture selection,
   prepare the selected packets and manual gate, then stop for user review.
 
 ## Current Phase
 
-Slice 3 is complete at pushed checkpoint
-`de9240ba5eefd9f0ab4a164afe379539bbc9fec7`. Slice 4's read-only capture
-inventory is complete. The campaign is held before packet generation at the
-explicit user fixture-selection boundary. The suite contains 100 passing
-Python 3.14 tests.
+Slices 0 through 4 are complete. After the read-only inventory checkpoint at
+`b1010da20c66f58ae71270d4c27b81a65a0a1bf0`, the user selected six fixtures.
+Their immutable Packet V8 directories and exact prompts are recorded in
+`docs/packet_v8_six_fixture_manual_gate.md`. The campaign is stopped at the
+user-run external-session boundary. The suite contains 100 passing Python 3.14
+tests.
 
 ## Architecture Audit
 
@@ -350,7 +350,10 @@ the bounded derivative as full-resolution evidence.
   results are user-executed and not self-graded. Inventory result: 20 captures
   from 2026-07-24 through 2026-07-31 are recorded without ranking or selection
   in `docs/packet_v8_manual_fixture_inventory.md`. No Packet V8 directory was
-  generated for them.
+  generated before selection. Final result: the user selected exactly six;
+  those six were generated and independently reopened as seven-file Packet V8
+  bundles, with paths, hashes, prompts, and checklist recorded in
+  `docs/packet_v8_six_fixture_manual_gate.md`.
 
 ## Slice Validation
 
@@ -367,10 +370,10 @@ commits, pushes, and proves a clean tree before continuing.
 
 ## Resume Point
 
-Resume Slice 4 only after the user selects captures from
-`docs/packet_v8_manual_fixture_inventory.md` and states the intended stress
-questions. Then generate the selected manual-gate packets and stop for user-run
-external testing. Do not expand or auto-select the fixture set.
+The planned implementation queue is exhausted. Resume only after the user
+returns external-session evidence from the six fixtures in
+`docs/packet_v8_six_fixture_manual_gate.md`. Review that evidence before any
+packet behavior change, fixture expansion, pull request, or merge action.
 
 Real Slice 1 workflow proof:
 
@@ -426,5 +429,30 @@ Slice 4 inventory checkpoint:
   directory changed;
 - selection: deliberately not performed by the implementation agent.
 
-Continuation decision: `goal_hold=user_fixture_selection`. This is a genuine
-user-owned manual boundary, not Slice 4 completion and not plan exhaustion.
+The user approved exactly six fixtures after reviewing the inventory. No older
+fallback was needed. The red 5,000-iteration ExplainO Balance Void capture is
+retained deliberately as a diagnostic reasoning test, not an aesthetic
+baseline.
+
+Slice 4 prepared-gate result:
+
+- six selected captures imported without source mutation;
+- six immutable Packet V8 directories generated;
+- each independently reopened with exactly seven physical/required files;
+- no unavailable optional attachments;
+- all bind one recorded runtime, executable, UI-Salt contract, and catalog
+  identity;
+- exact prompts and rule-by-rule acceptance checklist tracked in
+  `docs/packet_v8_six_fixture_manual_gate.md`;
+- external results deliberately not simulated or self-graded.
+
+Slice 4 hostile review checked for source/packet mapping mistakes, stale or
+mixed runtime authority, missing drag-all files, prompts that accidentally
+force premature JSON, fixture-specific causal claims, and implementation-agent
+self-grading. No unresolved defect remained: all six manifests independently
+validated, the selection prompts explicitly withhold override output until the
+later trigger, the Balance Void prompt treats color collapse as an observation
+rather than established cause, and external evaluation remains user-owned.
+
+Continuation decision: `goal_stopped_scope_boundary` at the user-run manual
+gate. All preplanned sliced implementation work is exhausted.
