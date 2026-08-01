@@ -10,7 +10,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from PIL import Image
+
 from cuda_fractal_state_tool.agent_bundle import (
+    _create_web_frame_derivative,
+    _pipeline_topology_index,
     _validate_color_pipeline_compatibility_authority,
     build_agent_bundle,
     copy_agent_packet,
@@ -28,6 +32,10 @@ def _json_bytes(value: object) -> bytes:
 
 
 class AgentBundleTests(unittest.TestCase):
+    def test_pipeline_topology_index_rejects_non_object_lane(self) -> None:
+        with self.assertRaisesRegex(ValueError, "lane 0 must be an object"):
+            _pipeline_topology_index({"color_pipeline_draft": {"lanes": ["not-an-object"]}})
+
     def _fixture(self, root: Path):
         capture = root / "capture"
         capture.mkdir()
@@ -114,8 +122,8 @@ class AgentBundleTests(unittest.TestCase):
         (capture / "finding.json").write_bytes(finding_bytes)
         notes_bytes = b"A user-authored note.\r\n"
         (capture / "field-notes.md").write_bytes(notes_bytes)
-        frame_bytes = b"not-a-real-png-but-exact-capture-bytes"
-        (capture / "frame.png").write_bytes(frame_bytes)
+        Image.new("RGB", (100, 50), (20, 40, 60)).save(capture / "frame.png")
+        frame_bytes = (capture / "frame.png").read_bytes()
 
         parameter_surface = {
             "version": 1,
@@ -379,6 +387,18 @@ class AgentBundleTests(unittest.TestCase):
             )
             self.assertTrue(surface["color_authoring"]["engine_materialization_is_final_authority"])
 
+    def test_web_frame_derivative_is_png_bounded_and_never_upscaled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            Image.new("RGB", (3000, 100), (12, 34, 56)).save(root / "frame.bmp")
+            metadata = _create_web_frame_derivative(root, "frame.bmp", None, 10.0)
+            self.assertEqual(metadata["status"], "discussion_derivative_not_full_resolution_authority")
+            self.assertEqual((metadata["source_width"], metadata["source_height"]), (3000, 100))
+            self.assertEqual((metadata["derivative_width"], metadata["derivative_height"]), (2048, 68))
+            self.assertFalse(metadata["upscaled"])
+            self.assertEqual(metadata["resampling"], "pillow_lanczos_thumbnail")
+            self.assertTrue((root / "web-agent-frame.png").is_file())
+
     def test_pipeline_example_validation_enforces_contract_carrier_range_and_order(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = self._fixture(Path(temp_dir))
@@ -428,8 +448,9 @@ class AgentBundleTests(unittest.TestCase):
             self.assertEqual((bundle.packet_dir / "frame.png").read_bytes(), fixture["frame_bytes"])
 
             manifest = json.loads(bundle.manifest_path.read_text(encoding="utf-8"))
-            self.assertEqual(manifest["packet_version"], 6)
-            self.assertEqual(manifest["bundle_manifest_version"], 2)
+            self.assertEqual(bundle.packet_version, 7)
+            self.assertEqual(manifest["packet_version"], 7)
+            self.assertEqual(manifest["bundle_manifest_version"], 3)
             recorded = {item["path"]: item for item in manifest["files"]}
             actual = {path.name for path in bundle.packet_dir.iterdir() if path.name != "manifest.json"}
             self.assertEqual(set(recorded), actual)
@@ -484,6 +505,19 @@ class AgentBundleTests(unittest.TestCase):
             self.assertNotIn('"base_replay_intent"', packet)
             self.assertIn("fractal-viewport-facts.json", bundle.required_attachments)
             self.assertEqual(
+                bundle.required_attachments,
+                (
+                    "state.json",
+                    "fractal-state.json",
+                    "fractal-viewport-facts.json",
+                    "state-authoring-authorities.md",
+                    "color-pipeline-authority.md",
+                    "finding-context.md",
+                    "web-agent-frame.png",
+                ),
+            )
+            self.assertEqual(bundle.recommended_attachments, ())
+            self.assertEqual(
                 manifest["authority_identities"]["fractal_viewport_facts_sha256"],
                 hashlib.sha256(fixture["viewport_facts_bytes"]).hexdigest(),
             )
@@ -502,7 +536,50 @@ class AgentBundleTests(unittest.TestCase):
             self.assertIn("unchanged structural template", packet)
             self.assertNotIn("pending editor state", packet)
             self.assertNotIn("state-override-example-color-pipeline.json", bundle.required_attachments)
-            self.assertIn("state-override-example-color-pipeline.json", bundle.recommended_attachments)
+            self.assertEqual(
+                recorded["state-override-example-color-pipeline.json"]["web_handoff"],
+                "generated_helper",
+            )
+            self.assertEqual(
+                recorded["fractal-parameter-surface.json"]["web_handoff"],
+                "local_authority",
+            )
+            self.assertEqual(recorded["state-authoring-authorities.md"]["web_handoff"], "required")
+            self.assertEqual(recorded["frame.png"]["web_handoff"], "local_authority")
+            self.assertEqual(recorded["web-agent-frame.png"]["web_handoff"], "required")
+            web_frame = manifest["web_frame_derivative"]
+            self.assertEqual(web_frame["status"], "discussion_derivative_not_full_resolution_authority")
+            self.assertEqual(web_frame["source_path"], "frame.png")
+            self.assertEqual((web_frame["source_width"], web_frame["source_height"]), (100, 50))
+            self.assertEqual((web_frame["derivative_width"], web_frame["derivative_height"]), (100, 50))
+            self.assertFalse(web_frame["upscaled"])
+            self.assertEqual(web_frame["resampling"], "pillow_lanczos_thumbnail")
+            self.assertEqual(
+                web_frame["derivative_sha256"],
+                hashlib.sha256((bundle.packet_dir / "web-agent-frame.png").read_bytes()).hexdigest(),
+            )
+            authoring_transport = (bundle.packet_dir / "state-authoring-authorities.md").read_bytes()
+            self.assertIn(fixture["surface_bytes"], authoring_transport)
+            self.assertIn(fixture["schema_bytes"], authoring_transport)
+            self.assertIn(
+                (bundle.packet_dir / "state-override-authoring-surface.json").read_bytes(),
+                authoring_transport,
+            )
+            color_transport = (bundle.packet_dir / "color-pipeline-authority.md").read_bytes()
+            self.assertIn(fixture["contract_bytes"], color_transport)
+            self.assertIn(
+                (bundle.packet_dir / "state-override-example-color-pipeline.json").read_bytes(),
+                color_transport,
+            )
+            context_transport = (bundle.packet_dir / "finding-context.md").read_bytes()
+            self.assertIn(fixture["finding_bytes"], context_transport)
+            self.assertIn(fixture["notes_bytes"], context_transport)
+            self.assertIn(
+                hashlib.sha256(fixture["catalog_bytes"]).hexdigest().encode("ascii"),
+                context_transport,
+            )
+            self.assertIn("discussion derivative", packet)
+            self.assertIn("not as full-resolution pixel authority", packet)
 
             copied: list[str] = []
             handoff = copy_agent_packet(bundle.packet_dir, copied.append)
@@ -624,11 +701,19 @@ class AgentBundleTests(unittest.TestCase):
             self.assertEqual(bundle.recommended_attachments, ())
             self.assertEqual(
                 bundle.unavailable_optional_attachments,
-                ("fractal-state.json", "finding.json", "field-notes.md", "frame"),
+                ("fractal-state.json", "finding.json", "field-notes.md"),
             )
             packet = bundle.packet_path.read_text(encoding="utf-8")
             self.assertIn("- `field-notes.md`", packet)
+            self.assertIn("No captured frame was available", packet)
             self.assertIn("Color Pipeline state override authoring is unavailable", packet)
+            context_transport = (bundle.packet_dir / "finding-context.md").read_text(encoding="utf-8")
+            self.assertIn("`finding.json` unavailable", context_transport)
+            self.assertIn("`field-notes.md` unavailable", context_transport)
+            pipeline_transport = (bundle.packet_dir / "color-pipeline-authority.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("Pipeline structural example unavailable", pipeline_transport)
             self.assertFalse((bundle.packet_dir / "state-override-example-color-pipeline.json").exists())
             surface = json.loads(
                 (bundle.packet_dir / "state-override-authoring-surface.json").read_text(

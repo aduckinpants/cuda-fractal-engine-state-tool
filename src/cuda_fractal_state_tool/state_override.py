@@ -118,7 +118,7 @@ def _reject_nulls_and_nonfinite(value: Any, path: str = "$") -> None:
 def _required_packet_bytes(packet_dir: Path, filename: str) -> bytes:
     path = packet_dir / filename
     if not path.is_file():
-        raise FileNotFoundError(f"Packet V6 authority is missing: {path}")
+        raise FileNotFoundError(f"Agent-packet authority is missing: {path}")
     return path.read_bytes()
 
 
@@ -132,11 +132,11 @@ def _load_packet_authorities(
     manifest_bytes = manifest_path.read_bytes()
     manifest_sha256 = _sha256_bytes(manifest_bytes)
     if expected_manifest_sha256 is not None and manifest_sha256 != expected_manifest_sha256:
-        raise ValueError("Packet V6 manifest hash does not match the bound session")
-    manifest = _load_strict_object(manifest_bytes, "Packet V6 manifest.json")
+        raise ValueError("Agent-packet manifest hash does not match the bound session")
+    manifest = _load_strict_object(manifest_bytes, "Agent-packet manifest.json")
     records = manifest.get("files")
     if not isinstance(records, list):
-        raise ValueError("Packet V6 manifest has no files array")
+        raise ValueError("Agent-packet manifest has no files array")
     record_by_path = {
         record.get("path"): record
         for record in records
@@ -151,7 +151,7 @@ def _load_packet_authorities(
             or record.get("sha256") != _sha256_bytes(payload)
             or record.get("size_bytes") != len(payload)
         ):
-            raise ValueError(f"Packet V6 authority bytes disagree with manifest.json: {filename}")
+            raise ValueError(f"Agent-packet authority bytes disagree with manifest.json: {filename}")
         return payload
 
     state_bytes = captured_bytes("state.json")
@@ -162,18 +162,18 @@ def _load_packet_authorities(
     )
     bundled_surface_bytes = captured_bytes("state-override-authoring-surface.json")
 
-    state = _load_strict_object(state_bytes, "Packet V6 state.json")
+    state = _load_strict_object(state_bytes, "Agent-packet state.json")
     bundled_surface = _load_strict_object(
         bundled_surface_bytes,
-        "Packet V6 state-override-authoring-surface.json",
+        "Agent-packet state-override-authoring-surface.json",
     )
     if bundled_surface.get("surface_version") != AUTHORING_SURFACE_VERSION:
         raise ValueError(
-            "Packet V6 authoring surface is from an unsafe or unsupported version; rebuild the exact Agent Bundle"
+            "Agent-packet authoring surface is from an unsafe or unsupported version; rebuild the exact Agent Bundle"
         )
     color_pipeline_contract = _load_strict_object(
         color_pipeline_contract_bytes,
-        "Packet V6 color_pipeline_function_library.contract.v1.json",
+        "Agent-packet color_pipeline_function_library.contract.v1.json",
     )
     regenerated_surface = derive_state_override_authoring_surface(
         state_bytes,
@@ -182,9 +182,9 @@ def _load_packet_authorities(
     )
     regenerated_bytes = serialize_state_override_authoring_surface(regenerated_surface)
     if bundled_surface_bytes != regenerated_bytes or bundled_surface != regenerated_surface:
-        raise ValueError("Packet V6 authoring surface does not match its copied authority bytes")
+        raise ValueError("Agent-packet authoring surface does not match its copied authority bytes")
     if manifest_path.read_bytes() != manifest_bytes:
-        raise ValueError("Packet V6 manifest changed while loading override authorities")
+        raise ValueError("Agent-packet manifest changed while loading override authorities")
     load_agent_bundle_handoff(packet_dir)
     return _PacketOverrideAuthorities(
         state_bytes=state_bytes,
@@ -231,14 +231,14 @@ def _validate_existing_object_shape(override: dict[str, Any], base: dict[str, An
 def _authoring_entries(surface: dict[str, Any]) -> dict[str, dict[str, Any]]:
     entries = surface.get("entries")
     if not isinstance(entries, list):
-        raise ValueError("Packet V6 authoring surface has no entries array")
+        raise ValueError("Agent-packet authoring surface has no entries array")
     indexed: dict[str, dict[str, Any]] = {}
     for entry in entries:
         if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
-            raise ValueError("Packet V6 authoring surface contains an invalid entry")
+            raise ValueError("Agent-packet authoring surface contains an invalid entry")
         path = entry["path"]
         if path in indexed:
-            raise ValueError(f"Packet V6 authoring surface repeats path: {path}")
+            raise ValueError(f"Agent-packet authoring surface repeats path: {path}")
         indexed[path] = entry
     return indexed
 
@@ -293,7 +293,7 @@ def _validate_params_and_view(
 
     rules = surface.get("companion_rules")
     if not isinstance(rules, list):
-        raise ValueError("Packet V6 authoring surface has no companion_rules array")
+        raise ValueError("Agent-packet authoring surface has no companion_rules array")
     companion_paths: set[str] = set()
     camera_edits: list[str] = []
     for rule in rules:
@@ -302,7 +302,7 @@ def _validate_params_and_view(
             or not isinstance(rule.get("path"), str)
             or not isinstance(rule.get("requires_changed_path"), str)
         ):
-            raise ValueError("Packet V6 authoring surface contains an invalid companion rule")
+            raise ValueError("Agent-packet authoring surface contains an invalid companion rule")
         companion = rule["path"]
         ordinary = rule["requires_changed_path"]
         companion_paths.add(companion)
@@ -467,7 +467,7 @@ def materialize_state_override(
     except ValueError:
         pass
     else:
-        raise ValueError("Merged candidate output must not write inside the immutable Packet V6 directory")
+        raise ValueError("Merged candidate output must not write inside the immutable agent-packet directory")
     parsed = parse_state_override(override_text)
     base = authorities.state
     override = parsed.document

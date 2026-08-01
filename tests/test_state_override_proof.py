@@ -400,6 +400,7 @@ class StateOverrideProofTests(unittest.TestCase):
             self.assertIn("--apply-loaded-color-pipeline-draft", job.commands[0])
             self.assertNotIn("--apply-loaded-color-pipeline-draft", job.commands[1])
             receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(receipt["proof_receipt_version"], 3)
             self.assertTrue(receipt["override"]["apply_loaded_color_pipeline_draft"])
             self.assertTrue(receipt["materialization"]["applied_loaded_color_pipeline_draft"])
             self.assertEqual(
@@ -409,6 +410,18 @@ class StateOverrideProofTests(unittest.TestCase):
                 0.25,
             )
             self.assertTrue(receipt["replay"]["frame_comparison"]["decoded_equal"])
+            self.assertEqual(result.candidate_display_path.name, "candidate-display.png")
+            self.assertTrue(result.candidate_display_path.is_file())
+            display = receipt["materialization"]["display_derivative"]
+            self.assertTrue(display["decoded_equal"])
+            self.assertEqual(
+                display["source_frame"]["decoded_rgba_sha256"],
+                display["display_frame"]["decoded_rgba_sha256"],
+            )
+            self.assertNotEqual(
+                display["source_frame"]["encoded_sha256"],
+                display["display_frame"]["encoded_sha256"],
+            )
             self.assertTrue(
                 receipt["materialization"]["base_to_candidate_frame_comparison"]["decoded_equal"]
             )
@@ -496,7 +509,7 @@ class StateOverrideProofTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             launch = json.loads((result.proof_dir / "launch.json").read_text(encoding="utf-8"))
             self.assertEqual(launch["engine_candidate_sha256"], result.engine_candidate_sha256)
-            self.assertEqual(launch["launch_receipt_version"], 2)
+            self.assertEqual(launch["launch_receipt_version"], 3)
             self.assertEqual(launch["launch_status"], "launcher_process_created")
             self.assertEqual(launch["launcher_process_pid"], 4321)
             self.assertEqual(launch["pid"], 4321)
@@ -522,6 +535,16 @@ class StateOverrideProofTests(unittest.TestCase):
             accepted.engine_candidate_path.write_text("{}\n", encoding="utf-8")
             errors = validate_state_override_launch_readiness(accepted, packet, override, runtime)
             self.assertIn("Engine launch candidate changed after proof", errors)
+
+            display_tampered = execute_state_override_proof(
+                packet, override, runtime, FakeProofJob(), proofs_root=root / "proofs"
+            )
+            record_state_override_review(display_tampered, "accepted")
+            display_tampered.candidate_display_path.write_bytes(b"changed")
+            display_errors = validate_state_override_launch_readiness(
+                display_tampered, packet, override, runtime
+            )
+            self.assertIn("Candidate PNG display derivative changed after proof", display_errors)
 
             receipt_tampered = execute_state_override_proof(
                 packet, override, runtime, FakeProofJob(), proofs_root=root / "proofs"

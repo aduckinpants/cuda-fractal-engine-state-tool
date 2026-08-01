@@ -101,7 +101,7 @@ class UserWorkflowSession:
         self.preview = None
         self._invalidate_proof()
         self.state = SessionState.FINDING_READY
-        self.status_text = "Finding ready. Building its exact Agent Bundle V6…"
+        self.status_text = "Finding ready. Building its exact Agent Bundle V7…"
 
     def accept_preview(self, preview: PreviewResult) -> None:
         self.preview = preview
@@ -111,9 +111,9 @@ class UserWorkflowSession:
         self._invalidate_proof()
         self.state = self._unproven_state()
         self.status_text = (
-            "Exact Agent Bundle V6 ready; retained override text is dirty against this new binding."
+            "Exact Agent Bundle V7 ready; retained override text is dirty against this new binding."
             if self.override_text.strip()
-            else "Exact Agent Bundle V6 ready to copy and attach."
+            else "Exact Agent Bundle V7 ready to copy and attach."
         )
 
     def set_override_text(self, override_text: str) -> None:
@@ -125,15 +125,15 @@ class UserWorkflowSession:
         if override_text.strip() and self.bundle is not None:
             self.status_text = "State override changed. Validate and replay-prove this exact text."
         elif self.bundle is not None:
-            self.status_text = "Exact Agent Bundle V6 ready; paste a sparse state override when desired."
+            self.status_text = "Exact Agent Bundle V7 ready; paste a sparse state override when desired."
         elif self.finding is not None:
-            self.status_text = "Finding ready. Building its exact Agent Bundle V6…"
+            self.status_text = "Finding ready. Building its exact Agent Bundle V7…"
         else:
             self.status_text = "Choose a captured finding to begin."
 
     def begin_proof(self) -> None:
         if self.finding is None or self.bundle is None or not self.override_text.strip():
-            raise ValueError("A finding, exact Agent Bundle V6, and state override are required before proof")
+            raise ValueError("A finding, exact Agent Bundle, and state override are required before proof")
         self._invalidate_proof()
         self.state = SessionState.PROVING
         self.status_text = "Validating the sparse override and proving the complete merged state through the engine…"
@@ -298,23 +298,23 @@ def load_existing_packet_context(packet_dir: Path) -> ExistingPacketContext:
     workspace_root = findings_dir.parent
     if packets_dir.name != "packets" or findings_dir.name != "findings":
         raise ValueError(
-            "Existing Packet V6 must use <workspace>/findings/<finding-id>/packets/<packet-id>"
+            "Existing agent packet must use <workspace>/findings/<finding-id>/packets/<packet-id>"
         )
     if finding_dir.name != bundle.finding_id:
-        raise ValueError("Packet V6 finding_id does not match its durable finding directory")
+        raise ValueError("Agent packet finding_id does not match its durable finding directory")
     workspace_manifest_path = finding_dir / "workspace.json"
     workspace_manifest = _load_object(workspace_manifest_path, "Finding workspace manifest")
     if workspace_manifest.get("finding_id") != bundle.finding_id:
-        raise ValueError("Packet V6 finding_id disagrees with the durable workspace manifest")
+        raise ValueError("Agent packet finding_id disagrees with the durable workspace manifest")
     authoring_base = workspace_manifest.get("authoring_base")
     if not isinstance(authoring_base, dict) or not isinstance(authoring_base.get("sha256"), str):
         raise ValueError("Finding workspace manifest has no authoring-base hash")
-    manifest = _load_object(bundle.manifest_path, "Packet V6 manifest")
+    manifest = _load_object(bundle.manifest_path, "Agent packet manifest")
     authority_identities = manifest.get("authority_identities")
     if not isinstance(authority_identities, dict):
-        raise ValueError("Packet V6 manifest has no authority_identities")
+        raise ValueError("Agent packet manifest has no authority_identities")
     if authority_identities.get("state_sha256") != authoring_base["sha256"]:
-        raise ValueError("Packet V6 base state does not match its durable finding")
+        raise ValueError("Agent packet base state does not match its durable finding")
     import_result = ImportResult(
         finding_id=bundle.finding_id,
         finding_dir=finding_dir,
@@ -326,5 +326,5 @@ def load_existing_packet_context(packet_dir: Path) -> ExistingPacketContext:
     finding = _load_finding_context_from_import(import_result, workspace_root)
     state = _load_object(finding.authoring_base_state_path, "Authoring base state")
     if state.get("fractal_type") != bundle.selected_fractal_type:
-        raise ValueError("Packet V6 selected fractal disagrees with its durable authoring base")
+        raise ValueError("Agent packet selected fractal disagrees with its durable authoring base")
     return ExistingPacketContext(finding=finding, bundle=bundle)

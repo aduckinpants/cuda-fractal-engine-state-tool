@@ -59,6 +59,7 @@ class UserWorkflowTests(unittest.TestCase):
         packet.write_text("# packet\n", encoding="utf-8")
         manifest.write_text("{}\n", encoding="utf-8")
         return AgentBundle(
+            packet_version=7,
             packet_id=packet_id,
             packet_dir=packet_dir,
             packet_path=packet,

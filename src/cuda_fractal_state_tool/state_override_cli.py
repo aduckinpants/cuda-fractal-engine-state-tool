@@ -9,7 +9,9 @@ from .state_override import materialize_state_override
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate and deterministically merge one Packet V6 state override")
+    parser = argparse.ArgumentParser(
+        description="Validate and deterministically merge one exact agent-packet state override"
+    )
     parser.add_argument("--packet-dir", type=Path, required=True)
     parser.add_argument("--override", type=Path, required=True, help="Exact UTF-8 state override JSON")
     parser.add_argument("--out", type=Path, required=True, help="Merged candidate output path")

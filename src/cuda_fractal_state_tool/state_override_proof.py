@@ -16,9 +16,10 @@ from typing import Any, Callable, Optional, Sequence
 
 from PIL import Image, ImageChops, ImageStat
 
-from .agent_bundle import BUNDLE_MANIFEST_VERSION, PACKET_VERSION, load_agent_bundle_handoff
+from .agent_bundle import SUPPORTED_PACKET_MANIFEST_VERSIONS, load_agent_bundle_handoff
 from .async_jobs import AsyncJobRunner, JobCancelledError, JobContext, JobRequestIdentity
 from .json_utils import loads_strict_no_duplicates
+from .preview_worker import create_preview
 from .runtime_surface import (
     build_detached_viewer_launch_command,
     build_materialization_command,
@@ -32,9 +33,9 @@ from .state_compare import compare_json_documents
 from .state_override import StateOverrideMaterialization, materialize_state_override
 
 
-PROOF_RECEIPT_VERSION = 2
-REVIEW_DECISION_VERSION = 1
-LAUNCH_RECEIPT_VERSION = 2
+PROOF_RECEIPT_VERSION = 3
+REVIEW_DECISION_VERSION = 2
+LAUNCH_RECEIPT_VERSION = 3
 _PATH_PART = re.compile(r"([^.[\]]+)|\[(\d+)\]")
 
 
@@ -57,6 +58,8 @@ class StateOverrideProofResult:
     engine_candidate_sha256: Optional[str] = None
     candidate_frame_path: Optional[Path] = None
     candidate_frame_sha256: Optional[str] = None
+    candidate_display_path: Optional[Path] = None
+    candidate_display_sha256: Optional[str] = None
     replay_state_path: Optional[Path] = None
     replay_state_sha256: Optional[str] = None
     replay_frame_path: Optional[Path] = None
@@ -118,12 +121,14 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
     manifest_sha256 = sha256_file(manifest_path)
     if expected_sha256 is not None and manifest_sha256 != expected_sha256:
         raise StateOverrideProofError("Packet manifest hash does not match the active binding")
-    manifest = _load_object(manifest_path, "Packet V6 manifest")
-    if manifest.get("packet_version") != PACKET_VERSION:
-        raise StateOverrideProofError(f"Unsupported packet version: {manifest.get('packet_version')}")
-    if manifest.get("bundle_manifest_version") != BUNDLE_MANIFEST_VERSION:
+    manifest = _load_object(manifest_path, "Agent packet manifest")
+    packet_version = manifest.get("packet_version")
+    expected_manifest_version = SUPPORTED_PACKET_MANIFEST_VERSIONS.get(packet_version)
+    if expected_manifest_version is None:
+        raise StateOverrideProofError(f"Unsupported packet version: {packet_version}")
+    if manifest.get("bundle_manifest_version") != expected_manifest_version:
         raise StateOverrideProofError(
-            "Unsupported Packet V6 manifest version; rebuild the bundle with the current tool"
+            f"Unsupported Packet V{packet_version} manifest version"
         )
     records = manifest.get("files")
     recorded = {
@@ -143,7 +148,9 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
     }
     missing = sorted(required_authorities - recorded)
     if missing:
-        raise StateOverrideProofError(f"Packet V6 is missing required authority files: {', '.join(missing)}")
+        raise StateOverrideProofError(
+            f"Packet V{packet_version} is missing required authority files: {', '.join(missing)}"
+        )
     return manifest, manifest_sha256
 
 
@@ -156,7 +163,7 @@ def _validate_runtime_binding(
     expected_hash = manifest.get("runtime_identity_sha256")
     actual_hash = runtime_identity_summary_sha256(summary)
     if summary != expected_summary or actual_hash != expected_hash:
-        raise StateOverrideProofError("Published runtime identity differs from the immutable Packet V6 binding")
+        raise StateOverrideProofError("Published runtime identity differs from the immutable agent-packet binding")
     return identity, summary, actual_hash
 
 
@@ -249,6 +256,38 @@ def _image_comparison(left_path: Path, right_path: Path) -> dict[str, Any]:
         "decoded_equal": left_fp["decoded_rgba_sha256"] == right_fp["decoded_rgba_sha256"],
         "encoded_equal": left_fp["encoded_sha256"] == right_fp["encoded_sha256"],
         "mean_absolute_channel_difference": means,
+    }
+
+
+def _create_candidate_display_derivative(engine_frame: Path) -> tuple[Path, dict[str, Any]]:
+    source = _image_fingerprint(engine_frame)
+    display_path = engine_frame.with_name("candidate-display.png")
+    worker = create_preview(
+        engine_frame,
+        display_path,
+        source["width"],
+        source["height"],
+        50_000_000,
+        16_384,
+    )
+    comparison = _image_comparison(engine_frame, display_path)
+    if worker.get("upscaled") is not False:
+        raise StateOverrideProofError("Candidate PNG display derivative was unexpectedly upscaled")
+    if not comparison.get("decoded_equal"):
+        raise StateOverrideProofError(
+            "Candidate PNG display derivative does not decode to the authoritative engine frame"
+        )
+    return display_path, {
+        "status": "decoded_rgba_equivalent_display_derivative",
+        "source_path": "materialization/frame.bmp",
+        "source_frame": comparison["left"],
+        "path": "materialization/candidate-display.png",
+        "display_frame": comparison["right"],
+        "decoded_equal": True,
+        "resampling": worker["resampling"],
+        "pixel_mode": worker["pixel_mode"],
+        "orientation_handling": worker["orientation_handling"],
+        "upscaled": False,
     }
 
 
@@ -345,6 +384,7 @@ def _proof_result(
     merged_sha256: str,
     engine_state: Path | None = None,
     engine_frame: Path | None = None,
+    candidate_display: Path | None = None,
     replay_state: Path | None = None,
     replay_frame: Path | None = None,
     empty_override_byte_exact: bool = False,
@@ -367,6 +407,16 @@ def _proof_result(
         engine_candidate_sha256=sha256_file(engine_state) if engine_state and engine_state.is_file() else None,
         candidate_frame_path=engine_frame.resolve() if engine_frame and engine_frame.is_file() else None,
         candidate_frame_sha256=sha256_file(engine_frame) if engine_frame and engine_frame.is_file() else None,
+        candidate_display_path=(
+            candidate_display.resolve()
+            if candidate_display and candidate_display.is_file()
+            else None
+        ),
+        candidate_display_sha256=(
+            sha256_file(candidate_display)
+            if candidate_display and candidate_display.is_file()
+            else None
+        ),
         replay_state_path=replay_state.resolve() if replay_state and replay_state.is_file() else None,
         replay_state_sha256=sha256_file(replay_state) if replay_state and replay_state.is_file() else None,
         replay_frame_path=replay_frame.resolve() if replay_frame and replay_frame.is_file() else None,
@@ -390,7 +440,7 @@ def execute_state_override_proof(
     proof_id = str(uuid.uuid4())
     if proofs_root is None:
         if packet_dir.parent.name != "packets":
-            raise StateOverrideProofError("Packet V6 directory is not beneath a finding packets directory")
+            raise StateOverrideProofError("Agent-packet directory is not beneath a finding packets directory")
         proofs_root = packet_dir.parent.parent / "proofs"
     proof_dir = proofs_root.resolve() / proof_id
     proof_dir.mkdir(parents=True, exist_ok=False)
@@ -456,7 +506,7 @@ def execute_state_override_proof(
         runtime_identity, runtime_summary, runtime_sha256 = _validate_runtime_binding(manifest, runtime_cmd_path)
         authority_identities = manifest.get("authority_identities")
         if not isinstance(authority_identities, dict):
-            raise StateOverrideProofError("Packet V6 manifest has no authority identities")
+            raise StateOverrideProofError("Agent-packet manifest has no authority identities")
         binding.update(
             {
                 "packet_id": packet_id,
@@ -554,6 +604,9 @@ def execute_state_override_proof(
         if errors:
             return rejected(errors)
 
+        candidate_display, candidate_display_receipt = _create_candidate_display_derivative(
+            engine_frame
+        )
         receipt = {
             "proof_receipt_version": PROOF_RECEIPT_VERSION,
             "proof_id": proof_id,
@@ -587,6 +640,7 @@ def execute_state_override_proof(
                 "state_sha256": sha256_file(engine_state),
                 "frame_path": "materialization/frame.bmp",
                 "frame": _image_fingerprint(engine_frame),
+                "display_derivative": candidate_display_receipt,
                 "merged_to_emitted_state_comparison": {
                     "raw_equal": materialization_comparison.raw_equal,
                     "semantic_equal": materialization_comparison.semantic_equal,
@@ -630,6 +684,7 @@ def execute_state_override_proof(
             merged_sha256=materialization.merged_candidate_sha256,
             engine_state=engine_state,
             engine_frame=engine_frame,
+            candidate_display=candidate_display,
             replay_state=replay_state,
             replay_frame=replay_frame,
             empty_override_byte_exact=materialization.empty_override_byte_exact,
@@ -700,7 +755,12 @@ def record_state_override_review(
     decision: str,
     note: str = "",
 ) -> Path:
-    if result.status != "replay_proven" or result.engine_candidate_path is None or result.candidate_frame_path is None:
+    if (
+        result.status != "replay_proven"
+        or result.engine_candidate_path is None
+        or result.candidate_frame_path is None
+        or result.candidate_display_path is None
+    ):
         raise StateOverrideProofError("Only a replay-proven candidate can receive a review decision")
     if decision not in {"accepted", "revision_needed"}:
         raise StateOverrideProofError("Review decision must be accepted or revision_needed")
@@ -713,6 +773,8 @@ def record_state_override_review(
         raise StateOverrideProofError("Engine launch candidate changed before review")
     if sha256_file(result.candidate_frame_path) != result.candidate_frame_sha256:
         raise StateOverrideProofError("Candidate frame changed before review")
+    if sha256_file(result.candidate_display_path) != result.candidate_display_sha256:
+        raise StateOverrideProofError("Candidate PNG display derivative changed before review")
     path = result.proof_dir / "review-decision.json"
     _atomic_write_json(
         path,
@@ -727,6 +789,7 @@ def record_state_override_review(
             "override_text_sha256": result.override_text_sha256,
             "engine_candidate_sha256": result.engine_candidate_sha256,
             "candidate_frame_sha256": result.candidate_frame_sha256,
+            "candidate_display_sha256": result.candidate_display_sha256,
         },
     )
     return path.resolve()
@@ -756,6 +819,7 @@ def validate_state_override_launch_readiness(
                 "override_text_sha256": result.override_text_sha256,
                 "engine_candidate_sha256": result.engine_candidate_sha256,
                 "candidate_frame_sha256": result.candidate_frame_sha256,
+                "candidate_display_sha256": result.candidate_display_sha256,
             }
             for key, expected in expected_review.items():
                 if review.get(key) != expected:
@@ -773,6 +837,11 @@ def validate_state_override_launch_readiness(
         (result.merged_candidate_path, result.merged_candidate_sha256, "Merged candidate"),
         (result.engine_candidate_path, result.engine_candidate_sha256, "Engine launch candidate"),
         (result.candidate_frame_path, result.candidate_frame_sha256, "Candidate frame"),
+        (
+            result.candidate_display_path,
+            result.candidate_display_sha256,
+            "Candidate PNG display derivative",
+        ),
         (result.replay_state_path, result.replay_state_sha256, "Replay state"),
         (result.replay_frame_path, result.replay_frame_sha256, "Replay frame"),
     )
@@ -829,6 +898,7 @@ def launch_state_override_candidate(
             "command": command,
             "review_decision_sha256": sha256_file(result.proof_dir / "review-decision.json"),
             "engine_candidate_sha256": result.engine_candidate_sha256,
+            "candidate_display_sha256": result.candidate_display_sha256,
             "runtime_identity_sha256": _load_object(result.proof_dir / "binding.json", "Proof binding").get(
                 "runtime_identity_sha256"
             ),

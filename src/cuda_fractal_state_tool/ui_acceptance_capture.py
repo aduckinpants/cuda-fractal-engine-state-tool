@@ -83,7 +83,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             and "bundle" not in app._busy_kinds
         ),
         90,
-        "finding, base preview, and exact Agent Bundle V6",
+        "finding, base preview, and exact Agent Bundle V7",
     )
     if app.session.override_text != "":
         raise AssertionError("Incoming State Override editor did not start empty")

@@ -6,6 +6,7 @@ import math
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -27,8 +28,9 @@ from .runtime_surface import (
 )
 
 
-PACKET_VERSION = 6
-BUNDLE_MANIFEST_VERSION = 2
+PACKET_VERSION = 7
+BUNDLE_MANIFEST_VERSION = 3
+SUPPORTED_PACKET_MANIFEST_VERSIONS = {6: 2, 7: 3}
 AUTHORING_SURFACE_VERSION = 2
 
 _SCHEMA_FILENAME = "fractal_binding_surface_v1.ui_schema.json"
@@ -38,10 +40,18 @@ _CATALOG_FILENAME = "fractal-descriptive-catalog.json"
 _VIEWPORT_FACTS_FILENAME = "fractal-viewport-facts.json"
 _AUTHORING_SURFACE_FILENAME = "state-override-authoring-surface.json"
 _PIPELINE_EXAMPLE_FILENAME = "state-override-example-color-pipeline.json"
+_STATE_AUTHORING_TRANSPORT_FILENAME = "state-authoring-authorities.md"
+_COLOR_PIPELINE_TRANSPORT_FILENAME = "color-pipeline-authority.md"
+_FINDING_CONTEXT_TRANSPORT_FILENAME = "finding-context.md"
+_WEB_FRAME_FILENAME = "web-agent-frame.png"
+_WEB_FRAME_MAX_LONG_EDGE = 2048
+_IMAGE_MAX_DECODED_PIXELS = 50_000_000
+_IMAGE_MAX_DIMENSION = 16_384
 
 
 @dataclass(frozen=True)
 class AgentBundle:
+    packet_version: int
     packet_id: str
     packet_dir: Path
     packet_path: Path
@@ -57,6 +67,7 @@ class AgentBundle:
 
 @dataclass(frozen=True)
 class AgentBundleHandoff:
+    packet_version: int
     packet_dir: Path
     packet_text: str
     packet_sha256: str
@@ -99,63 +110,66 @@ def load_agent_bundle_handoff(packet_dir: Path) -> AgentBundleHandoff:
     manifest_path = packet_dir / "manifest.json"
     packet_path = packet_dir / "packet.md"
     if not manifest_path.is_file() or not packet_path.is_file():
-        raise FileNotFoundError(f"Packet V6 directory is incomplete: {packet_dir}")
-    manifest = _load_json_object(manifest_path.read_bytes(), "Packet V6 manifest")
-    if manifest.get("packet_version") != PACKET_VERSION:
-        raise ValueError(f"Unsupported packet version: {manifest.get('packet_version')}")
-    if manifest.get("bundle_manifest_version") != BUNDLE_MANIFEST_VERSION:
+        raise FileNotFoundError(f"Agent packet directory is incomplete: {packet_dir}")
+    manifest = _load_json_object(manifest_path.read_bytes(), "Agent packet manifest")
+    packet_version = manifest.get("packet_version")
+    expected_manifest_version = SUPPORTED_PACKET_MANIFEST_VERSIONS.get(packet_version)
+    if expected_manifest_version is None:
+        raise ValueError(f"Unsupported packet version: {packet_version}")
+    if manifest.get("bundle_manifest_version") != expected_manifest_version:
         raise ValueError(
-            "Unsupported Packet V6 manifest version; rebuild the bundle with the current tool"
+            f"Unsupported Packet V{packet_version} manifest version"
         )
     records = manifest.get("files")
     if not isinstance(records, list):
-        raise ValueError("Packet V6 manifest has no files array")
+        raise ValueError(f"Packet V{packet_version} manifest has no files array")
     recorded_paths: set[str] = set()
     for record in records:
         if not isinstance(record, dict) or not isinstance(record.get("path"), str):
-            raise ValueError("Packet V6 manifest contains an invalid file record")
+            raise ValueError(f"Packet V{packet_version} manifest contains an invalid file record")
         record_path = record["path"]
         if Path(record_path).name != record_path or record_path == "manifest.json":
-            raise ValueError(f"Packet V6 manifest contains an unsafe file path: {record_path}")
+            raise ValueError(f"Packet V{packet_version} manifest contains an unsafe file path: {record_path}")
         if record_path in recorded_paths:
-            raise ValueError(f"Packet V6 manifest repeats file record: {record_path}")
+            raise ValueError(f"Packet V{packet_version} manifest repeats file record: {record_path}")
         recorded_paths.add(record_path)
         path = packet_dir / record_path
         if not path.is_file():
-            raise FileNotFoundError(f"Packet V6 attachment is missing: {path}")
+            raise FileNotFoundError(f"Packet V{packet_version} attachment is missing: {path}")
         if sha256_file(path) != record.get("sha256") or path.stat().st_size != record.get("size_bytes"):
-            raise ValueError(f"Packet V6 attachment changed after publication: {record_path}")
+            raise ValueError(f"Packet V{packet_version} attachment changed after publication: {record_path}")
 
     actual_paths = {path.name for path in packet_dir.iterdir() if path.is_file() and path.name != "manifest.json"}
     if actual_paths != recorded_paths:
-        raise ValueError("Packet V6 directory contents disagree with its manifest")
+        raise ValueError(f"Packet V{packet_version} directory contents disagree with its manifest")
 
     def _names(key: str) -> tuple[str, ...]:
         values = manifest.get(key)
         if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
-            raise ValueError(f"Packet V6 manifest {key} must be a string array")
+            raise ValueError(f"Packet V{packet_version} manifest {key} must be a string array")
         return tuple(values)
 
     required = _names("required_attachments")
     recommended = _names("recommended_attachments")
     if set(required) & set(recommended):
-        raise ValueError("Packet V6 attachment lists overlap")
+        raise ValueError(f"Packet V{packet_version} attachment lists overlap")
     if not set(required + recommended).issubset(recorded_paths):
-        raise ValueError("Packet V6 attachment list names are absent from its files manifest")
+        raise ValueError(f"Packet V{packet_version} attachment list names are absent from its files manifest")
     by_path = {record["path"]: record for record in records}
     for filename in required:
         if by_path[filename].get("web_handoff") != "required":
-            raise ValueError(f"Packet V6 required attachment classification disagrees for {filename}")
+            raise ValueError(f"Packet V{packet_version} required attachment classification disagrees for {filename}")
     for filename in recommended:
         if by_path[filename].get("web_handoff") != "recommended":
-            raise ValueError(f"Packet V6 recommended attachment classification disagrees for {filename}")
+            raise ValueError(f"Packet V{packet_version} recommended attachment classification disagrees for {filename}")
 
     packet_bytes = packet_path.read_bytes()
     try:
         packet_text = packet_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise ValueError("Packet V6 packet.md is not valid UTF-8") from exc
+        raise ValueError(f"Packet V{packet_version} packet.md is not valid UTF-8") from exc
     return AgentBundleHandoff(
+        packet_version=packet_version,
         packet_dir=packet_dir,
         packet_text=packet_text,
         packet_sha256=_sha256_bytes(packet_bytes),
@@ -166,20 +180,21 @@ def load_agent_bundle_handoff(packet_dir: Path) -> AgentBundleHandoff:
 
 
 def load_existing_agent_bundle(packet_dir: Path) -> AgentBundle:
-    """Load one immutable Packet V6 without refreshing or rewriting it."""
+    """Load one supported immutable packet without refreshing or rewriting it."""
     handoff = load_agent_bundle_handoff(packet_dir)
     manifest_path = handoff.packet_dir / "manifest.json"
-    manifest = _load_json_object(manifest_path.read_bytes(), "Packet V6 manifest")
+    manifest = _load_json_object(manifest_path.read_bytes(), "Agent packet manifest")
     packet_id = manifest.get("packet_id")
     finding_id = manifest.get("finding_id")
     selected = manifest.get("selected_fractal_type")
     if not isinstance(packet_id, str) or packet_id != handoff.packet_dir.name:
-        raise ValueError("Packet V6 packet_id does not match its immutable directory name")
+        raise ValueError(f"Packet V{handoff.packet_version} packet_id does not match its immutable directory name")
     if not isinstance(finding_id, str) or not finding_id:
-        raise ValueError("Packet V6 manifest has no finding_id")
+        raise ValueError(f"Packet V{handoff.packet_version} manifest has no finding_id")
     if not isinstance(selected, str) or not selected:
-        raise ValueError("Packet V6 manifest has no selected_fractal_type")
+        raise ValueError(f"Packet V{handoff.packet_version} manifest has no selected_fractal_type")
     return AgentBundle(
+        packet_version=handoff.packet_version,
         packet_id=packet_id,
         packet_dir=handoff.packet_dir,
         packet_path=(handoff.packet_dir / "packet.md").resolve(),
@@ -718,6 +733,93 @@ def _capture_export(
         return output_path.read_bytes()
 
 
+def _create_web_frame_derivative(
+    stage_dir: Path,
+    frame_filename: str,
+    job: Optional[JobContext],
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    source_path = (stage_dir / frame_filename).resolve()
+    output_path = (stage_dir / _WEB_FRAME_FILENAME).resolve()
+    command = [
+        sys.executable,
+        "-m",
+        "cuda_fractal_state_tool.preview_worker",
+        "--source",
+        str(source_path),
+        "--out",
+        str(output_path),
+        "--max-width",
+        str(_WEB_FRAME_MAX_LONG_EDGE),
+        "--max-height",
+        str(_WEB_FRAME_MAX_LONG_EDGE),
+        "--max-pixels",
+        str(_IMAGE_MAX_DECODED_PIXELS),
+        "--max-dimension",
+        str(_IMAGE_MAX_DIMENSION),
+    ]
+    if job is not None:
+        result = job.run_process(command, cwd=stage_dir, timeout_seconds=timeout_seconds)
+        exit_code = result.exit_code
+        timed_out = result.timed_out
+        stdout = result.stdout
+        stderr = result.stderr
+    else:
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=str(stage_dir),
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError("Web-agent frame derivative generation timed out") from exc
+        exit_code = completed.returncode
+        timed_out = False
+        stdout = completed.stdout
+        stderr = completed.stderr
+    if timed_out or exit_code != 0 or not output_path.is_file():
+        detail = stderr.strip() or stdout.strip()
+        suffix = f": {detail}" if detail else ""
+        raise ValueError(f"Web-agent frame derivative generation failed{suffix}")
+    try:
+        worker_result = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Web-agent frame worker returned invalid JSON") from exc
+    if not isinstance(worker_result, dict) or worker_result.get("status") != "ok":
+        raise ValueError("Web-agent frame worker returned an invalid result")
+    if worker_result.get("upscaled") is not False:
+        raise ValueError("Web-agent frame worker violated the no-upscaling contract")
+    if max(int(worker_result["preview_width"]), int(worker_result["preview_height"])) > _WEB_FRAME_MAX_LONG_EDGE:
+        raise ValueError("Web-agent frame worker exceeded the maximum long edge")
+    return {
+        "status": "discussion_derivative_not_full_resolution_authority",
+        "source_path": frame_filename,
+        "source_sha256": sha256_file(source_path),
+        "source_size_bytes": source_path.stat().st_size,
+        "source_format": worker_result["source_format"],
+        "source_width": int(worker_result["source_width"]),
+        "source_height": int(worker_result["source_height"]),
+        "derivative_path": _WEB_FRAME_FILENAME,
+        "derivative_sha256": sha256_file(output_path),
+        "derivative_size_bytes": output_path.stat().st_size,
+        "derivative_width": int(worker_result["preview_width"]),
+        "derivative_height": int(worker_result["preview_height"]),
+        "upscaled": False,
+        "resampling": worker_result["resampling"],
+        "pixel_mode": worker_result["pixel_mode"],
+        "orientation_handling": worker_result["orientation_handling"],
+        "policy": {
+            "maximum_long_edge": _WEB_FRAME_MAX_LONG_EDGE,
+            "maximum_decoded_pixels": _IMAGE_MAX_DECODED_PIXELS,
+            "maximum_dimension": _IMAGE_MAX_DIMENSION,
+            "timeout_seconds": timeout_seconds,
+        },
+    }
+
+
 def _artifact_path(finding_dir: Path, manifest: dict[str, Any], key: str) -> Path | None:
     artifacts = manifest.get("source_artifacts")
     item = artifacts.get(key) if isinstance(artifacts, dict) else None
@@ -750,6 +852,204 @@ def _selected_description_lines(entry: dict[str, Any]) -> list[str]:
     ]
 
 
+def _markdown_fence(payload: str) -> str:
+    longest = 0
+    current = 0
+    for character in payload:
+        if character == "`":
+            current += 1
+            longest = max(longest, current)
+        else:
+            current = 0
+    return "`" * max(3, longest + 1)
+
+
+def _embedded_text_artifact(
+    filename: str,
+    role: str,
+    payload: bytes,
+    *,
+    language: str,
+) -> str:
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"Web transport source {filename} is not valid UTF-8") from exc
+    fence = _markdown_fence(text)
+    separator = "" if text.endswith(("\n", "\r")) else "\n"
+    return (
+        f"## `{filename}`\n\n"
+        f"- Role: {role}\n"
+        f"- Exact neighboring-file size: `{len(payload)}` bytes\n"
+        f"- Exact neighboring-file SHA-256: `{_sha256_bytes(payload)}`\n\n"
+        f"{fence}{language}\n{text}{separator}{fence}\n"
+    )
+
+
+def _pipeline_topology_index(state: dict[str, Any]) -> dict[str, Any]:
+    draft = state.get("color_pipeline_draft")
+    if not isinstance(draft, dict) or not isinstance(draft.get("lanes"), list):
+        return {
+            "status": "unavailable",
+            "reason": "captured state has no complete color_pipeline_draft",
+        }
+    lanes: list[dict[str, Any]] = []
+    for lane_index, lane in enumerate(draft["lanes"]):
+        if not isinstance(lane, dict):
+            raise ValueError(f"Captured color_pipeline_draft lane {lane_index} must be an object")
+        rows = lane.get("rows", [])
+        lanes.append(
+            {
+                "lane_id": lane.get("lane_id"),
+                "label": lane.get("label"),
+                "rows": [
+                    {
+                        "ui_row_id": row.get("ui_row_id"),
+                        "enabled": row.get("enabled"),
+                        "function_id": row.get("function_id"),
+                        "parameter_paths": [
+                            value.get("path")
+                            for value in row.get("parameter_values", [])
+                            if isinstance(value, dict)
+                        ],
+                    }
+                    for row in rows
+                    if isinstance(row, dict)
+                ],
+            }
+        )
+    return {
+        "status": "available",
+        "role": "mechanical_navigation_index_not_authority",
+        "next_row_id": draft.get("next_row_id"),
+        "lanes": lanes,
+    }
+
+
+def _build_transport_views(
+    stage_dir: Path,
+    state: dict[str, Any],
+    selected_entry: dict[str, Any],
+    unavailable: list[str],
+    *,
+    has_pipeline_example: bool,
+) -> dict[str, bytes]:
+    state_authoring_sections = [
+        "# State Authoring Authorities\n\n"
+        "This file is a deterministic web-transport view. Each exact section is "
+        "bound to an immutable neighboring local authority by byte size and SHA-256. "
+        "The individual JSON files remain the proof and validation authority.\n",
+        _embedded_text_artifact(
+            _PARAMETER_SURFACE_FILENAME,
+            "complete runtime-selected applicability authority",
+            (stage_dir / _PARAMETER_SURFACE_FILENAME).read_bytes(),
+            language="json",
+        ),
+        _embedded_text_artifact(
+            _SCHEMA_FILENAME,
+            "deployed UI control and state-binding authority",
+            (stage_dir / _SCHEMA_FILENAME).read_bytes(),
+            language="json",
+        ),
+        _embedded_text_artifact(
+            _AUTHORING_SURFACE_FILENAME,
+            "finding-specific mechanically derived state-override index",
+            (stage_dir / _AUTHORING_SURFACE_FILENAME).read_bytes(),
+            language="json",
+        ),
+    ]
+
+    topology_bytes = _json_bytes(_pipeline_topology_index(state))
+    pipeline_sections = [
+        "# Color Pipeline Authority\n\n"
+        "This file is a deterministic web-transport view. The complete UI-Salt "
+        "contract below owns function and parameter validity. The topology index "
+        "is navigation help derived from the exact captured state; it grants no "
+        "additional authority.\n",
+        _embedded_text_artifact(
+            _UI_SALT_FILENAME,
+            "complete deployed Color Pipeline function and compatibility authority",
+            (stage_dir / _UI_SALT_FILENAME).read_bytes(),
+            language="json",
+        ),
+        _embedded_text_artifact(
+            "current-color-pipeline-topology-index.json",
+            "mechanical navigation index derived from exact staged state.json",
+            topology_bytes,
+            language="json",
+        ),
+    ]
+    if has_pipeline_example:
+        pipeline_sections.append(
+            _embedded_text_artifact(
+                _PIPELINE_EXAMPLE_FILENAME,
+                "complete unchanged whole-array structural editing example",
+                (stage_dir / _PIPELINE_EXAMPLE_FILENAME).read_bytes(),
+                language="json",
+            )
+        )
+    else:
+        pipeline_sections.append(
+            "## Pipeline structural example unavailable\n\n"
+            "The captured state contains no complete `color_pipeline_draft`; "
+            "Color Pipeline override authoring is unavailable for this packet.\n"
+        )
+
+    catalog_bytes = (stage_dir / _CATALOG_FILENAME).read_bytes()
+    selected_entry_bytes = _json_bytes(
+        {
+            "source_catalog_sha256": _sha256_bytes(catalog_bytes),
+            "selected_entry": selected_entry,
+        }
+    )
+    context_sections = [
+        "# Finding Context\n\n"
+        "This file consolidates optional human context and the selected engine-owned "
+        "description. Exact replay and authoring authority remain in the separately "
+        "attached state files and authority documents.\n",
+        _embedded_text_artifact(
+            "selected-fractal-description.json",
+            "selected entry projected from the complete neighboring descriptive catalog",
+            selected_entry_bytes,
+            language="json",
+        ),
+    ]
+    if (stage_dir / "finding.json").is_file():
+        context_sections.append(
+            _embedded_text_artifact(
+                "finding.json",
+                "capture manifest context",
+                (stage_dir / "finding.json").read_bytes(),
+                language="json",
+            )
+        )
+    else:
+        context_sections.append("## `finding.json` unavailable\n\nNo capture manifest was present.\n")
+    if (stage_dir / "field-notes.md").is_file():
+        context_sections.append(
+            _embedded_text_artifact(
+                "field-notes.md",
+                "user-authored context",
+                (stage_dir / "field-notes.md").read_bytes(),
+                language="markdown",
+            )
+        )
+    else:
+        context_sections.append("## `field-notes.md` unavailable\n\nNo field notes were present.\n")
+    if unavailable:
+        context_sections.append(
+            "## Other unavailable optional artifacts\n\n"
+            + "\n".join(f"- `{name}`" for name in unavailable)
+            + "\n"
+        )
+
+    return {
+        _STATE_AUTHORING_TRANSPORT_FILENAME: "\n".join(state_authoring_sections).encode("utf-8"),
+        _COLOR_PIPELINE_TRANSPORT_FILENAME: "\n".join(pipeline_sections).encode("utf-8"),
+        _FINDING_CONTEXT_TRANSPORT_FILENAME: "\n".join(context_sections).encode("utf-8"),
+    }
+
+
 def _packet_markdown(
     packet_id: str,
     finding_id: str,
@@ -762,6 +1062,7 @@ def _packet_markdown(
     unavailable: list[str],
     file_hashes: dict[str, str],
     has_pipeline_example: bool,
+    web_frame_derivative: dict[str, Any] | None,
 ) -> str:
     fractal_type = state["fractal_type"]
     params = state.get("params") if isinstance(state.get("params"), dict) else {}
@@ -783,8 +1084,27 @@ def _packet_markdown(
     attachment_lines = [f"- `{name}` — SHA-256 `{file_hashes[name]}`" for name in required]
     context_lines = [f"- `{name}` — SHA-256 `{file_hashes[name]}`" for name in recommended]
     unavailable_lines = [f"- `{name}`" for name in unavailable]
+    if web_frame_derivative is None:
+        web_frame_lines = [
+            "No captured frame was available, so this packet has no web discussion image.",
+        ]
+    else:
+        web_frame_lines = [
+            f"`{_WEB_FRAME_FILENAME}` is a bounded discussion derivative of "
+            f"`{web_frame_derivative['source_path']}`.",
+            f"- Source: `{web_frame_derivative['source_width']} × {web_frame_derivative['source_height']}`; "
+            f"SHA-256 `{web_frame_derivative['source_sha256']}`",
+            f"- Derivative: `{web_frame_derivative['derivative_width']} × "
+            f"{web_frame_derivative['derivative_height']}`; "
+            f"SHA-256 `{web_frame_derivative['derivative_sha256']}`",
+            f"- Resampling: `{web_frame_derivative['resampling']}`; upscaled: `false`",
+            "Use it for visual discussion, not as full-resolution pixel authority. Exact color counts,",
+            "pixel frequencies, and other resolution-sensitive measurements describe this derivative only",
+            "unless the full source frame is separately supplied and explicitly identified.",
+        ]
     example_note = (
-        f"A complete unchanged structural template is attached as `{_PIPELINE_EXAMPLE_FILENAME}`. "
+        f"A complete unchanged structural template is embedded in `{_COLOR_PIPELINE_TRANSPORT_FILENAME}` "
+        f"and retained locally as `{_PIPELINE_EXAMPLE_FILENAME}`. "
         "It demonstrates the required whole-array replacement shape; it is not a recommended visual change. "
         "When you change a function, return the complete parameter list for the new function in exact deployed-contract order."
         if has_pipeline_example
@@ -794,9 +1114,9 @@ def _packet_markdown(
         [
             "This packet's color authoring is Color-Pipeline-only. Do not return flat `params` color controls from",
             "`state.json` or the UI schema: those fields are replay/compatibility mirrors and are not independently",
-            "state-override-authorable. Return `color_pipeline_draft` with the complete `lanes` array from the attached",
+            "state-override-authorable. Return `color_pipeline_draft` with the complete `lanes` array from the embedded",
             "structural template, preserving lane/row topology, IDs, labels, ordering, enablement, and row counts.",
-            "Functions and their complete parameter lists may change only as allowed by the attached UI-Salt contract.",
+            f"Functions and complete parameter lists may change only as allowed by `{_COLOR_PIPELINE_TRANSPORT_FILENAME}`.",
             "Function IDs are not freely composable. For function changes, consult",
             "`composition_recipe_contract.compatibility` in that contract and use a supported Source/Palette pair",
             "with its matching grading. A parameter-only edit to current functions preserves the captured recipe.",
@@ -814,7 +1134,7 @@ def _packet_markdown(
 
     return "\n".join(
         [
-            "# CUDA Fractal Finding — Agent Exploration Packet V6",
+            "# CUDA Fractal Finding — Agent Exploration Packet V7",
             "",
             "## Behavioral contract — read first",
             "",
@@ -838,7 +1158,8 @@ def _packet_markdown(
             "  experiment, classify it. Analysis, measurement, comparison, overlays, probes, annotations, diagnostics,",
             "  and automation are not state-authorable unless an exact attached authoring path implements them.",
             "- A state-authorable experiment must describe one candidate state and map to at least one authorized leaf change",
-            "  in `state-override-authoring-surface.json`. User acceptance of analysis-only or unavailable work does not",
+            f"  in the embedded `state-override-authoring-surface.json` section of `{_STATE_AUTHORING_TRANSPORT_FILENAME}`.",
+            "  User acceptance of analysis-only or unavailable work does not",
             "  create state authority. At the output trigger, if that mapping fails, ask one clarification question and",
             "  return no preflight or JSON; do not silently substitute a camera, dynamics, or color experiment.",
             "- Before choosing a state experiment, identify the active rendered signal or exported diagnostic that can",
@@ -956,12 +1277,16 @@ def _packet_markdown(
             "",
             *pipeline_summary,
             "",
+            "### Web discussion image",
+            "",
+            *web_frame_lines,
+            "",
             "### State-override-authorable paths",
             "",
             *([f"- `{path}`" for path in authorable_paths] or ["- No ordinary state paths resolved for this capture."]),
             "",
-            "The complete types, ranges, options, current values, source control IDs, and authority hashes are in",
-            "`state-override-authoring-surface.json`. The full parameter surface remains attached for applicability review.",
+            "The complete types, ranges, options, current values, source control IDs, and authority hashes are embedded in",
+            f"`{_STATE_AUTHORING_TRANSPORT_FILENAME}`. The complete local JSON authorities remain in this immutable packet.",
             "",
             "## Required authority attachments",
             "",
@@ -972,8 +1297,7 @@ def _packet_markdown(
             "1. Paste this exact `packet.md` text into the fresh session.",
             "2. Open this packet's bundle folder.",
             "3. Attach every file under Required authority attachments, preserving its filename.",
-            "4. Attach the available Recommended context attachments when the client permits it.",
-            "5. Confirm the session can identify every required authority before relying on its analysis.",
+            "4. Confirm the session can identify every required authority before relying on its analysis.",
             "",
             "## Recommended context attachments",
             "",
@@ -989,13 +1313,13 @@ def _packet_markdown(
             "",
             "- `state.json`: exact complete replay base.",
             "- `fractal-state.json`: capture-time review projection and derived receipts, when present.",
-            "- `fractal-parameter-surface.json`: live selected-family applicability authority.",
-            "- `fractal_binding_surface_v1.ui_schema.json`: UI control bindings and properties.",
-            "- `color_pipeline_function_library.contract.v1.json`: Color Pipeline function and parameter authority.",
-            "- `state-override-authoring-surface.json`: finding-specific index of mechanically resolvable state paths.",
-            "- `fractal-descriptive-catalog.json`: engine-owned mathematical background.",
             "- `fractal-viewport-facts.json`: engine-owned exact camera geometry and inverse-fit authority.",
-            "- Captured frame: direct visual evidence.",
+            f"- `{_STATE_AUTHORING_TRANSPORT_FILENAME}`: exact embedded parameter surface, UI schema, and finding-specific authoring index.",
+            f"- `{_COLOR_PIPELINE_TRANSPORT_FILENAME}`: exact embedded UI-Salt contract and current pipeline editing context.",
+            f"- `{_FINDING_CONTEXT_TRANSPORT_FILENAME}`: finding manifest, field notes, and selected engine-owned description.",
+            f"- `{_WEB_FRAME_FILENAME}`: bounded PNG discussion derivative with explicit source and resampling provenance.",
+            "- The exact captured source frame remains local immutable visual evidence and is not silently replaced.",
+            "- The individual JSON and context files remain local immutable proof authorities even when they are not web uploads.",
             "",
             f"Packet ID: `{packet_id}`",
             "",
@@ -1052,7 +1376,7 @@ def build_agent_bundle(
     packet_id = str(uuid.uuid4())
     packets_dir = finding_dir / "packets"
     packets_dir.mkdir(parents=True, exist_ok=True)
-    stage_dir = packets_dir / f".packet-v6-{packet_id}.tmp"
+    stage_dir = packets_dir / f".packet-v7-{packet_id}.tmp"
     final_dir = packets_dir / packet_id
     if stage_dir.exists() or final_dir.exists():
         raise FileExistsError(f"Packet identity collision: {packet_id}")
@@ -1166,25 +1490,36 @@ def build_agent_bundle(
             example_bytes = _json_bytes({"color_pipeline_draft": {"lanes": draft["lanes"]}}, sort_keys=False)
             _write_bytes(stage_dir / _PIPELINE_EXAMPLE_FILENAME, example_bytes)
 
+        web_frame_derivative = (
+            _create_web_frame_derivative(stage_dir, frame_filename, job, timeout_seconds)
+            if frame_filename is not None
+            else None
+        )
+        unavailable = [
+            name
+            for name in ("fractal-state.json", "finding.json", "field-notes.md")
+            if name not in source_paths
+        ]
+        transport_views = _build_transport_views(
+            stage_dir,
+            state,
+            selected_entry,
+            unavailable,
+            has_pipeline_example=has_pipeline_example,
+        )
+        for filename, payload in transport_views.items():
+            _write_bytes(stage_dir / filename, payload)
+
         required = [
             "state.json",
             *(["fractal-state.json"] if "fractal-state.json" in source_paths else []),
-            _PARAMETER_SURFACE_FILENAME,
-            _SCHEMA_FILENAME,
-            _UI_SALT_FILENAME,
-            _CATALOG_FILENAME,
             _VIEWPORT_FACTS_FILENAME,
-            _AUTHORING_SURFACE_FILENAME,
-            *([frame_filename] if frame_filename else []),
+            _STATE_AUTHORING_TRANSPORT_FILENAME,
+            _COLOR_PIPELINE_TRANSPORT_FILENAME,
+            _FINDING_CONTEXT_TRANSPORT_FILENAME,
+            *([_WEB_FRAME_FILENAME] if web_frame_derivative else []),
         ]
-        recommended = [
-            name
-            for name in ("finding.json", "field-notes.md", _PIPELINE_EXAMPLE_FILENAME)
-            if name in source_paths or (name == _PIPELINE_EXAMPLE_FILENAME and has_pipeline_example)
-        ]
-        unavailable = [name for name in ("fractal-state.json", "finding.json", "field-notes.md", "frame") if (
-            (name == "frame" and frame_filename is None) or (name != "frame" and name not in source_paths)
-        )]
+        recommended: list[str] = []
         hash_names = required + recommended
         file_hashes = {name: sha256_file(stage_dir / name) for name in hash_names}
         packet_text = _packet_markdown(
@@ -1199,6 +1534,7 @@ def build_agent_bundle(
             unavailable,
             file_hashes,
             has_pipeline_example,
+            web_frame_derivative,
         )
         packet_bytes = packet_text.encode("utf-8")
         _write_bytes(stage_dir / "packet.md", packet_bytes)
@@ -1217,9 +1553,14 @@ def build_agent_bundle(
             _VIEWPORT_FACTS_FILENAME: "runtime_viewport_geometry_authority",
             _AUTHORING_SURFACE_FILENAME: "finding_specific_state_override_index",
             _PIPELINE_EXAMPLE_FILENAME: "captured_pipeline_whole_array_example",
+            _STATE_AUTHORING_TRANSPORT_FILENAME: "consolidated_state_authoring_transport_view",
+            _COLOR_PIPELINE_TRANSPORT_FILENAME: "consolidated_color_pipeline_transport_view",
+            _FINDING_CONTEXT_TRANSPORT_FILENAME: "consolidated_finding_context_transport_view",
         }
         if frame_filename:
             roles[frame_filename] = "captured_visual_evidence"
+        if web_frame_derivative:
+            roles[_WEB_FRAME_FILENAME] = "web_discussion_derivative"
         for path in sorted(item for item in stage_dir.iterdir() if item.is_file()):
             file_records.append(
                 {
@@ -1228,7 +1569,15 @@ def build_agent_bundle(
                     "sha256": sha256_file(path),
                     "size_bytes": path.stat().st_size,
                     "web_handoff": (
-                        "required" if path.name in required else "recommended" if path.name in recommended else "index"
+                        "required"
+                        if path.name in required
+                        else "recommended"
+                        if path.name in recommended
+                        else "index"
+                        if path.name == "packet.md"
+                        else "generated_helper"
+                        if path.name == _PIPELINE_EXAMPLE_FILENAME
+                        else "local_authority"
                     ),
                 }
             )
@@ -1254,6 +1603,7 @@ def build_agent_bundle(
                 "fractal_viewport_facts_sha256": _sha256_bytes(copied_viewport_bytes),
                 "state_override_authoring_surface_sha256": _sha256_bytes(authoring_surface_bytes),
             },
+            "web_frame_derivative": web_frame_derivative,
             "required_attachments": required,
             "recommended_attachments": recommended,
             "unavailable_optional_attachments": unavailable,
@@ -1314,6 +1664,7 @@ def build_agent_bundle(
     packet_path = final_dir / "packet.md"
     manifest_path = final_dir / "manifest.json"
     return AgentBundle(
+        packet_version=PACKET_VERSION,
         packet_id=packet_id,
         packet_dir=final_dir.resolve(),
         packet_path=packet_path.resolve(),
