@@ -59,9 +59,10 @@ central compatibility policy:
   development use, with a configurable strict mode that warns and stops.
 - [done] Preserve Packet V6 and V7 readability without rewriting historical
   packet directories or silently regenerating their authority.
-- [open] Run the bounded slices through local acceptance, then stop for a
-  dedicated review of newer captures and user selection of the next manual
-  web-session fixtures.
+- [in progress] Run the bounded slices through local acceptance, inventory the
+  newer captures, then stop for a dedicated user selection of the next manual
+  web-session fixtures. The inventory is complete; fixture selection remains
+  user-owned.
 
 ## Locked Public Contract
 
@@ -190,9 +191,11 @@ regenerate them from the current runtime.
 
 ## Current Phase
 
-Slice 3 is complete pending its Git checkpoint. Slice 4 is the next queued
-owner after that clean checkpoint. The suite now contains 100 passing Python
-3.14 tests.
+Slice 3 is complete at pushed checkpoint
+`de9240ba5eefd9f0ab4a164afe379539bbc9fec7`. Slice 4's read-only capture
+inventory is complete. The campaign is held before packet generation at the
+explicit user fixture-selection boundary. The suite contains 100 passing
+Python 3.14 tests.
 
 ## Architecture Audit
 
@@ -344,7 +347,10 @@ the bounded derivative as full-resolution evidence.
   historical documents.
 - Slice 4 proof target: user-selected new captures only; exact prepared paths,
   prompts, checklist, and a clean acceptance-ready checkpoint. External model
-  results are user-executed and not self-graded.
+  results are user-executed and not self-graded. Inventory result: 20 captures
+  from 2026-07-24 through 2026-07-31 are recorded without ranking or selection
+  in `docs/packet_v8_manual_fixture_inventory.md`. No Packet V8 directory was
+  generated for them.
 
 ## Slice Validation
 
@@ -361,10 +367,10 @@ commits, pushes, and proves a clean tree before continuing.
 
 ## Resume Point
 
-After the Slice 3 checkpoint, resume Slice 4 with a read-only inventory of the
-newer manual captures. Do not choose the fixtures. Publish the bounded inventory
-for a dedicated user selection turn, then hold the campaign before generating
-the selected manual-gate packets.
+Resume Slice 4 only after the user selects captures from
+`docs/packet_v8_manual_fixture_inventory.md` and states the intended stress
+questions. Then generate the selected manual-gate packets and stop for user-run
+external testing. Do not expand or auto-select the fixture set.
 
 Real Slice 1 workflow proof:
 
@@ -409,3 +415,16 @@ Real Slice 3 UI proof:
 
 Continuation decision: `continue_to=slice4_capture_inventory_and_manual_gate_preparation`
 after the Slice 3 commit, push, and clean-tree proof.
+
+Slice 4 inventory checkpoint:
+
+- scope: 20 manual captures dated 2026-07-24 through 2026-07-31;
+- result: six selectors and the captured iteration, zoom, render, pipeline, and
+  frame-size distinctions are recorded in
+  `docs/packet_v8_manual_fixture_inventory.md`;
+- mutation boundary: no capture, engine, runtime, finding workspace, or packet
+  directory changed;
+- selection: deliberately not performed by the implementation agent.
+
+Continuation decision: `goal_hold=user_fixture_selection`. This is a genuine
+user-owned manual boundary, not Slice 4 completion and not plan exhaustion.
