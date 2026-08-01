@@ -14,6 +14,7 @@ from PIL import Image
 
 from cuda_fractal_state_tool.agent_bundle import (
     _create_web_frame_derivative,
+    _pipeline_topology_index,
     _validate_color_pipeline_compatibility_authority,
     build_agent_bundle,
     copy_agent_packet,
@@ -31,6 +32,10 @@ def _json_bytes(value: object) -> bytes:
 
 
 class AgentBundleTests(unittest.TestCase):
+    def test_pipeline_topology_index_rejects_non_object_lane(self) -> None:
+        with self.assertRaisesRegex(ValueError, "lane 0 must be an object"):
+            _pipeline_topology_index({"color_pipeline_draft": {"lanes": ["not-an-object"]}})
+
     def _fixture(self, root: Path):
         capture = root / "capture"
         capture.mkdir()
@@ -696,10 +701,11 @@ class AgentBundleTests(unittest.TestCase):
             self.assertEqual(bundle.recommended_attachments, ())
             self.assertEqual(
                 bundle.unavailable_optional_attachments,
-                ("fractal-state.json", "finding.json", "field-notes.md", "frame"),
+                ("fractal-state.json", "finding.json", "field-notes.md"),
             )
             packet = bundle.packet_path.read_text(encoding="utf-8")
             self.assertIn("- `field-notes.md`", packet)
+            self.assertIn("No captured frame was available", packet)
             self.assertIn("Color Pipeline state override authoring is unavailable", packet)
             context_transport = (bundle.packet_dir / "finding-context.md").read_text(encoding="utf-8")
             self.assertIn("`finding.json` unavailable", context_transport)

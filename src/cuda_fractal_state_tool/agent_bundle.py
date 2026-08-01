@@ -894,8 +894,10 @@ def _pipeline_topology_index(state: dict[str, Any]) -> dict[str, Any]:
             "reason": "captured state has no complete color_pipeline_draft",
         }
     lanes: list[dict[str, Any]] = []
-    for lane in draft["lanes"]:
-        rows = lane.get("rows", []) if isinstance(lane, dict) else []
+    for lane_index, lane in enumerate(draft["lanes"]):
+        if not isinstance(lane, dict):
+            raise ValueError(f"Captured color_pipeline_draft lane {lane_index} must be an object")
+        rows = lane.get("rows", [])
         lanes.append(
             {
                 "lane_id": lane.get("lane_id"),
@@ -1495,9 +1497,8 @@ def build_agent_bundle(
         )
         unavailable = [
             name
-            for name in ("fractal-state.json", "finding.json", "field-notes.md", "frame")
-            if (name == "frame" and frame_filename is None)
-            or (name != "frame" and name not in source_paths)
+            for name in ("fractal-state.json", "finding.json", "field-notes.md")
+            if name not in source_paths
         ]
         transport_views = _build_transport_views(
             stage_dir,
