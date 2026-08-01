@@ -45,17 +45,17 @@ central compatibility policy:
 
 ## Explicit User Asks
 
-- [open] Preserve a clean pre-change baseline and implement Packet V8 from
+- [done] Preserve a clean pre-change baseline and implement Packet V8 from
   clean `main` at `a440f257a51dd958b273f034d3edb13f0fe01648` on
   `codex/packet-v8-seven-file-compaction`.
-- [open] Reduce the normal handoff to approximately six or seven files plus no
+- [done] Reduce the normal handoff to approximately six or seven files plus no
   hidden attachment-picking workflow; the intended operation is drag all files
   in the packet directory, including `packet.md`.
-- [open] Preserve every exact engine/finding authority byte currently needed
+- [done] Preserve every exact engine/finding authority byte currently needed
   for exploration, sparse-override validation, proof, and auditability.
-- [open] Keep the full-resolution capture in the durable finding workspace and
+- [done] Keep the full-resolution capture in the durable finding workspace and
   use a bounded PNG derivative for web-agent transport.
-- [open] Treat runtime/build drift as a warning and attempted proof in normal
+- [done] Treat runtime/build drift as a warning and attempted proof in normal
   development use, with a configurable strict mode that warns and stops.
 - [open] Preserve Packet V6 and V7 readability without rewriting historical
   packet directories or silently regenerating their authority.
@@ -181,7 +181,7 @@ regenerate them from the current runtime.
   checkpoint.
 - [x] Slice 1 - authority-container codec, Packet V8 staged builder, manifest,
   and bounded PNG transport.
-- [ ] Slice 2 - V8 override/proof extraction, central runtime compatibility
+- [x] Slice 2 - V8 override/proof extraction, central runtime compatibility
   policy, receipts, and UI cutover.
 - [ ] Slice 3 - navigation/status hardening, backward compatibility, local
   workflow acceptance, and stale-architecture audit.
@@ -190,8 +190,8 @@ regenerate them from the current runtime.
 
 ## Current Phase
 
-Slice 1 is complete pending its Git checkpoint. Slice 2 is the next queued
-owner after that clean checkpoint. The suite now contains 94 passing Python
+Slice 2 is complete pending its Git checkpoint. Slice 3 is the next queued
+owner after that clean checkpoint. The suite now contains 99 passing Python
 3.14 tests.
 
 ## Architecture Audit
@@ -328,7 +328,12 @@ the bounded derivative as full-resolution evidence.
   provenance, and V7 construction-race rejection carried forward.
 - Slice 2 proof target: V8 authority extraction drives the same validator and
   proof; development drift attempts and records; strict drift stops; runtime
-  changes during proof and before launch still invalidate.
+  changes during proof and before launch still invalidate. Result: V8 builder
+  output drives the unchanged sparse validator; development/strict resolution,
+  stable field-level drift comparison, pre-materialization strict stop,
+  development proof binding, mid-proof rejection, and post-proof launch
+  invalidation are covered by focused tests. UI and CLI expose the mode and
+  receipt-backed warning.
 - Slice 3 proof target: V6/V7/V8 loading, UI attachment/status truth, real local
   override/replay workflow, and stale filename-path audit.
 - Slice 4 proof target: user-selected new captures only; exact prepared paths,
@@ -350,10 +355,9 @@ commits, pushes, and proves a clean tree before continuing.
 
 ## Resume Point
 
-After the Slice 1 checkpoint, resume Slice 2 by adding V8 authority-extraction
-RED tests in `state_override.py`, then add runtime-compatibility policy RED
-tests in `state_override_proof.py`. The validator and proof must consume only
-container-extracted V8 bytes while V6/V7 retain filename-based loading.
+After the Slice 2 checkpoint, resume Slice 3 with explicit V6/V7/V8 reopening
+tests, active documentation, UI screenshots, real local workflow review, and a
+stale filename/Packet V7 presentation audit.
 
 Real Slice 1 workflow proof:
 
@@ -368,3 +372,18 @@ Real Slice 1 workflow proof:
 
 Continuation decision: `continue_to=slice2_proof_and_ui_cutover` after the
 Slice 1 commit, push, and clean-tree proof.
+
+Real Slice 2 workflow proof:
+
+- immutable Packet V8 input: `93554065-f13b-45bf-acfc-f9d5558caadb`;
+- override: `params.explaino_damping` from `1.0` to `0.9`;
+- proof: `95be4ee6-edc0-4851-8d2b-6dcaaebe8b09`;
+- result: engine materialization and action-free replay proven; visual review
+  intentionally pending and launch disabled;
+- runtime compatibility: `development`, identity match, proof bound to
+  `140707fd16283ac2db3c58a24146b73a7f29bbd15b0e1b36771c301f8b275e95`;
+- candidate PNG was visually inspected and contains a healthy, non-blank Bell
+  render.
+
+Continuation decision: `continue_to=slice3_local_acceptance_and_hardening`
+after the Slice 2 commit, push, and clean-tree proof.

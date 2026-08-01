@@ -29,11 +29,15 @@ from .runtime_surface import (
     runtime_identity_summary_sha256,
     sha256_file,
 )
+from .runtime_compatibility import (
+    assess_runtime_compatibility,
+    resolve_runtime_compatibility_mode,
+)
 from .state_compare import compare_json_documents
 from .state_override import StateOverrideMaterialization, materialize_state_override
 
 
-PROOF_RECEIPT_VERSION = 3
+PROOF_RECEIPT_VERSION = 4
 REVIEW_DECISION_VERSION = 2
 LAUNCH_RECEIPT_VERSION = 3
 _PATH_PART = re.compile(r"([^.[\]]+)|\[(\d+)\]")
@@ -136,16 +140,25 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
         for record in records
         if isinstance(record, dict) and isinstance(record.get("path"), str)
     } if isinstance(records, list) else set()
-    required_authorities = {
-        "packet.md",
-        "state.json",
-        "fractal-parameter-surface.json",
-        "fractal_binding_surface_v1.ui_schema.json",
-        "color_pipeline_function_library.contract.v1.json",
-        "fractal-descriptive-catalog.json",
-        "fractal-viewport-facts.json",
-        "state-override-authoring-surface.json",
-    }
+    if packet_version == 8:
+        required_authorities = {
+            "packet.md",
+            "state.json",
+            "state-authoring-authorities.md",
+            "color-pipeline-authority.md",
+            "finding-context.md",
+        }
+    else:
+        required_authorities = {
+            "packet.md",
+            "state.json",
+            "fractal-parameter-surface.json",
+            "fractal_binding_surface_v1.ui_schema.json",
+            "color_pipeline_function_library.contract.v1.json",
+            "fractal-descriptive-catalog.json",
+            "fractal-viewport-facts.json",
+            "state-override-authoring-surface.json",
+        }
     missing = sorted(required_authorities - recorded)
     if missing:
         raise StateOverrideProofError(
@@ -154,17 +167,28 @@ def _packet_manifest(packet_dir: Path, expected_sha256: str | None) -> tuple[dic
     return manifest, manifest_sha256
 
 
-def _validate_runtime_binding(
-    manifest: dict[str, Any], runtime_cmd_path: Path
-) -> tuple[dict[str, Any], dict[str, Any], str]:
+def _assess_runtime_binding(
+    manifest: dict[str, Any], runtime_cmd_path: Path, mode: str
+) -> tuple[dict[str, Any], dict[str, Any], str, dict[str, Any]]:
     identity = build_runtime_identity(runtime_cmd_path.resolve(), runtime_cmd_path.resolve().parent)
     summary = runtime_identity_summary(identity)
     expected_summary = manifest.get("runtime_identity")
     expected_hash = manifest.get("runtime_identity_sha256")
+    if not isinstance(expected_summary, dict) or not isinstance(expected_hash, str):
+        raise StateOverrideProofError("Agent-packet manifest has no valid runtime identity binding")
+    if runtime_identity_summary_sha256(expected_summary) != expected_hash:
+        raise StateOverrideProofError("Agent-packet runtime identity hash is internally inconsistent")
     actual_hash = runtime_identity_summary_sha256(summary)
-    if summary != expected_summary or actual_hash != expected_hash:
-        raise StateOverrideProofError("Published runtime identity differs from the immutable agent-packet binding")
-    return identity, summary, actual_hash
+    assessment = assess_runtime_compatibility(expected_summary, summary, mode)
+    assessment.update(
+        {
+            "packet_runtime_identity": expected_summary,
+            "packet_runtime_identity_sha256": expected_hash,
+            "proof_runtime_identity": summary,
+            "proof_runtime_identity_sha256": actual_hash,
+        }
+    )
+    return identity, summary, actual_hash, assessment
 
 
 def _resolve_path(document: Any, path: str) -> tuple[bool, Any]:
@@ -434,9 +458,11 @@ def execute_state_override_proof(
     proofs_root: Path | None = None,
     expected_manifest_sha256: str | None = None,
     timeout_seconds: float = 90.0,
+    runtime_compatibility_mode: str | None = None,
 ) -> StateOverrideProofResult:
     packet_dir = packet_dir.resolve()
     runtime_cmd_path = runtime_cmd_path.resolve()
+    compatibility_mode = resolve_runtime_compatibility_mode(runtime_compatibility_mode)
     proof_id = str(uuid.uuid4())
     if proofs_root is None:
         if packet_dir.parent.name != "packets":
@@ -503,7 +529,9 @@ def execute_state_override_proof(
         packet_id = manifest.get("packet_id")
         if not isinstance(packet_id, str) or packet_id != packet_dir.name:
             raise StateOverrideProofError("Packet ID does not match its immutable directory name")
-        runtime_identity, runtime_summary, runtime_sha256 = _validate_runtime_binding(manifest, runtime_cmd_path)
+        runtime_identity, runtime_summary, runtime_sha256, runtime_compatibility = _assess_runtime_binding(
+            manifest, runtime_cmd_path, compatibility_mode
+        )
         authority_identities = manifest.get("authority_identities")
         if not isinstance(authority_identities, dict):
             raise StateOverrideProofError("Agent-packet manifest has no authority identities")
@@ -515,10 +543,17 @@ def execute_state_override_proof(
                 "finding_id": manifest.get("finding_id"),
                 "base_state_sha256": authority_identities.get("state_sha256"),
                 "runtime_identity_sha256": runtime_sha256,
+                "runtime_identity": runtime_summary,
+                "runtime_compatibility": runtime_compatibility,
                 "authority_identities": authority_identities,
             }
         )
         _atomic_write_json(proof_dir / "binding.json", binding)
+        if not runtime_compatibility["proof_may_proceed"]:
+            raise StateOverrideProofError(
+                "Published runtime identity differs from the packet and strict runtime compatibility mode "
+                "stops before materialization"
+            )
         materialization = materialize_state_override(
             packet_dir,
             override_text,
@@ -596,7 +631,9 @@ def execute_state_override_proof(
             errors.append("Action-free replay changed stable authoring state")
         if not frame_comparison.get("decoded_equal"):
             errors.append("Action-free replay produced different decoded pixels")
-        current_identity, current_summary, current_sha256 = _validate_runtime_binding(manifest, runtime_cmd_path)
+        current_identity = build_runtime_identity(runtime_cmd_path, runtime_cmd_path.parent)
+        current_summary = runtime_identity_summary(current_identity)
+        current_sha256 = runtime_identity_summary_sha256(current_summary)
         if current_summary != runtime_summary or current_sha256 != binding["runtime_identity_sha256"]:
             errors.append("Published runtime identity changed during proof")
         if sha256_file(packet_dir / "manifest.json") != manifest_sha256:
@@ -703,6 +740,7 @@ def run_state_override_proof_sync(
     proofs_root: Path | None = None,
     expected_manifest_sha256: str | None = None,
     timeout_seconds: float = 90.0,
+    runtime_compatibility_mode: str | None = None,
 ) -> StateOverrideProofResult:
     """Run the same owned-process worker path used by the desktop controller."""
     completed = threading.Event()
@@ -733,6 +771,7 @@ def run_state_override_proof_sync(
             proofs_root=proofs_root,
             expected_manifest_sha256=expected_manifest_sha256,
             timeout_seconds=timeout_seconds,
+            runtime_compatibility_mode=runtime_compatibility_mode,
         ),
         completion,
     )
@@ -852,7 +891,17 @@ def validate_state_override_launch_readiness(
         manifest, manifest_sha256 = _packet_manifest(result.packet_dir, result.packet_manifest_sha256)
         if manifest_sha256 != result.packet_manifest_sha256:
             errors.append("Packet manifest changed after proof")
-        _validate_runtime_binding(manifest, runtime_cmd_path.resolve())
+        proof_binding = _load_object(result.proof_dir / "binding.json", "Proof binding")
+        current_identity = build_runtime_identity(
+            runtime_cmd_path.resolve(), runtime_cmd_path.resolve().parent
+        )
+        current_summary = runtime_identity_summary(current_identity)
+        current_sha256 = runtime_identity_summary_sha256(current_summary)
+        if (
+            current_summary != proof_binding.get("runtime_identity")
+            or current_sha256 != proof_binding.get("runtime_identity_sha256")
+        ):
+            errors.append("Published runtime identity changed after proof")
     except Exception as exc:
         errors.append(str(exc))
     return errors

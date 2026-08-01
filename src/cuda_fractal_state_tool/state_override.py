@@ -17,6 +17,7 @@ from .agent_bundle import (
     serialize_state_override_authoring_surface,
     validate_captured_color_pipeline_draft,
 )
+from .authority_container import parse_authority_container
 from .json_utils import loads_strict_no_duplicates
 
 
@@ -155,12 +156,32 @@ def _load_packet_authorities(
         return payload
 
     state_bytes = captured_bytes("state.json")
-    parameter_surface_bytes = captured_bytes("fractal-parameter-surface.json")
-    ui_schema_bytes = captured_bytes("fractal_binding_surface_v1.ui_schema.json")
-    color_pipeline_contract_bytes = captured_bytes(
-        "color_pipeline_function_library.contract.v1.json"
-    )
-    bundled_surface_bytes = captured_bytes("state-override-authoring-surface.json")
+    if manifest.get("packet_version") == 8:
+        authoring = parse_authority_container(
+            captured_bytes("state-authoring-authorities.md"),
+            expected_filenames={
+                "state-override-authoring-surface.json",
+                "fractal_binding_surface_v1.ui_schema.json",
+                "fractal-parameter-surface.json",
+            },
+        ).artifacts
+        pipeline = parse_authority_container(
+            captured_bytes("color-pipeline-authority.md")
+        ).artifacts
+        parameter_surface_bytes = authoring["fractal-parameter-surface.json"].payload
+        ui_schema_bytes = authoring["fractal_binding_surface_v1.ui_schema.json"].payload
+        bundled_surface_bytes = authoring["state-override-authoring-surface.json"].payload
+        contract_artifact = pipeline.get("color_pipeline_function_library.contract.v1.json")
+        if contract_artifact is None:
+            raise ValueError("Packet V8 color authority container has no UI-Salt contract")
+        color_pipeline_contract_bytes = contract_artifact.payload
+    else:
+        parameter_surface_bytes = captured_bytes("fractal-parameter-surface.json")
+        ui_schema_bytes = captured_bytes("fractal_binding_surface_v1.ui_schema.json")
+        color_pipeline_contract_bytes = captured_bytes(
+            "color_pipeline_function_library.contract.v1.json"
+        )
+        bundled_surface_bytes = captured_bytes("state-override-authoring-surface.json")
 
     state = _load_strict_object(state_bytes, "Agent-packet state.json")
     bundled_surface = _load_strict_object(

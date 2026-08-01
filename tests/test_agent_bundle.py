@@ -26,6 +26,7 @@ from cuda_fractal_state_tool.agent_bundle import (
 from cuda_fractal_state_tool.agent_bundle_cli import main as agent_bundle_cli_main
 from cuda_fractal_state_tool.authority_container import parse_authority_container
 from cuda_fractal_state_tool.finding_workspace import SourceCaptureImporter
+from cuda_fractal_state_tool.state_override import materialize_state_override
 
 
 def _json_bytes(value: object) -> bytes:
@@ -644,6 +645,19 @@ class AgentBundleTests(unittest.TestCase):
             cli_result = json.loads(stdout.getvalue())
             self.assertEqual(cli_result["packet_sha256"], bundle.packet_sha256)
             self.assertEqual(cli_result["required_attachments"], list(bundle.required_attachments))
+
+            merged_path = root / "v8-merged-candidate.json"
+            merged = materialize_state_override(
+                bundle.packet_dir,
+                '{"params":{"explaino_damping":0.9}}',
+                merged_path,
+                expected_manifest_sha256=bundle.manifest_sha256,
+            )
+            self.assertEqual(
+                json.loads(merged_path.read_text(encoding="utf-8"))["params"]["explaino_damping"],
+                0.9,
+            )
+            self.assertEqual([change.path for change in merged.changed_paths], ["params.explaino_damping"])
 
     def test_cli_reports_structured_bundle_errors(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

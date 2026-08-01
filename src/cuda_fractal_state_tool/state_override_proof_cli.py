@@ -19,6 +19,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--proofs-root", type=Path)
     parser.add_argument("--manifest-sha256")
     parser.add_argument("--timeout-seconds", type=float, default=90.0)
+    parser.add_argument(
+        "--runtime-compatibility",
+        choices=("development", "strict"),
+        default=None,
+        help=(
+            "Runtime identity policy. Defaults to the "
+            "CUDA_FRACTAL_STATE_TOOL_RUNTIME_COMPATIBILITY environment value or development."
+        ),
+    )
     args = parser.parse_args(argv)
     try:
         override_text = args.override.read_bytes().decode("utf-8")
@@ -29,10 +38,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             proofs_root=args.proofs_root,
             expected_manifest_sha256=args.manifest_sha256,
             timeout_seconds=args.timeout_seconds,
+            runtime_compatibility_mode=args.runtime_compatibility,
         )
     except (OSError, UnicodeError, ValueError, TimeoutError) as exc:
         print(json.dumps({"status": "proof_error", "error": str(exc)}, indent=2, ensure_ascii=False))
         return 2
+    receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
     print(
         json.dumps(
             {
@@ -46,6 +57,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "empty_override_byte_exact": result.empty_override_byte_exact,
                 "visual_review": "pending" if result.status == "replay_proven" else "not_available",
                 "launch_ready": False,
+                "runtime_compatibility": receipt.get("binding", {}).get(
+                    "runtime_compatibility"
+                ),
             },
             indent=2,
             ensure_ascii=False,

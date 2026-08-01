@@ -19,6 +19,7 @@ from .agent_bundle import (
 from .async_jobs import AsyncJobRunner, JobOutcome, JobRequestIdentity, WorkerQueueFullError
 from .preview_service import PreviewService
 from .runtime_surface import DEFAULT_RUNTIME_CMD
+from .runtime_compatibility import resolve_runtime_compatibility_mode
 from .state_override_proof import (
     StateOverrideProofResult,
     execute_state_override_proof,
@@ -74,6 +75,7 @@ class UserWorkflowApp:
         workspace_root: Path = DEFAULT_FINDING_WORKSPACE,
         runner: Optional[AsyncJobRunner] = None,
         preview_service: Optional[PreviewService] = None,
+        runtime_compatibility_mode: str | None = None,
     ) -> None:
         import tkinter as tk
         from tkinter import ttk
@@ -82,6 +84,9 @@ class UserWorkflowApp:
         self.tk = tk
         self.ttk = ttk
         self.runtime_cmd_path = runtime_cmd_path.resolve()
+        self.runtime_compatibility_mode = resolve_runtime_compatibility_mode(
+            runtime_compatibility_mode
+        )
         self.session = UserWorkflowSession()
         self.preview_service = preview_service or PreviewService()
         self._completion_queue: queue.Queue[Callable[[], None]] = queue.Queue()
@@ -105,6 +110,14 @@ class UserWorkflowApp:
         self.preview_status_var = tk.StringVar(value="No finding frame loaded.")
         self.candidate_preview_status_var = tk.StringVar(value="No candidate frame yet.")
         self.changed_paths_var = tk.StringVar(value="No override changes have been proven.")
+        mode_detail = (
+            "warn + attempt current runtime"
+            if self.runtime_compatibility_mode == "development"
+            else "warn + stop before materialization"
+        )
+        self.runtime_compatibility_var = tk.StringVar(
+            value=f"Runtime compatibility: {self.runtime_compatibility_mode.upper()} ({mode_detail})"
+        )
 
         self._configure_root()
         self._build_shell()
@@ -132,6 +145,9 @@ class UserWorkflowApp:
         ttk.Label(header, textvariable=self.state_var, padding=(10, 4)).grid(row=0, column=1, sticky="e")
         self.reset_button = ttk.Button(header, text="Reset Session", command=self.reset_session)
         self.reset_button.grid(row=0, column=2, sticky="e", padx=(12, 0))
+        ttk.Label(header, textvariable=self.runtime_compatibility_var).grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(4, 0)
+        )
 
         self.panes = ttk.PanedWindow(self.root, orient="horizontal")
         self.panes.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 8))
@@ -204,7 +220,7 @@ class UserWorkflowApp:
         )
         self.open_full_frame_button.grid(row=0, column=1, sticky="e")
 
-        packet = ttk.LabelFrame(self.left, text="3. Exact Agent Bundle V7", padding=8)
+        packet = ttk.LabelFrame(self.left, text="3. Exact Agent Bundle V8", padding=8)
         packet.grid(row=3, column=0, sticky="nsew")
         packet.columnconfigure(0, weight=1)
         packet.rowconfigure(2, weight=1)
@@ -299,7 +315,7 @@ class UserWorkflowApp:
         self.proof_text.grid(row=0, column=0, sticky="nsew")
         self._set_text(
             self.proof_text,
-            "No proof has run. Paste a sparse state override after the exact Agent Bundle V7 is ready.",
+            "No proof has run. Paste a sparse state override after the exact Agent Bundle V8 is ready.",
         )
 
     def _browse_file(self) -> None:
@@ -473,7 +489,7 @@ class UserWorkflowApp:
     def build_packet(self) -> None:
         finding = self.session.finding
         if finding is None:
-            self._set_error("Open a finding before building its exact Agent Bundle V7.")
+            self._set_error("Open a finding before building its exact Agent Bundle V8.")
             return
         self.session.status_text = "Building one coherent immutable authority snapshot…"
         identity = JobRequestIdentity(
@@ -504,7 +520,7 @@ class UserWorkflowApp:
             self._render()
             return
         if outcome.error:
-            self._set_error(f"Agent Bundle V7 generation failed: {outcome.error}")
+            self._set_error(f"Agent Bundle V8 generation failed: {outcome.error}")
             self._render()
             return
         bundle = outcome.value
@@ -529,7 +545,8 @@ class UserWorkflowApp:
         recommended = ", ".join(handoff.recommended_attachments) or "none"
         unavailable = ", ".join(handoff.unavailable_optional_attachments) or "none"
         self.attachment_var.set(
-            f"Attach required: {required}\nRecommended: {recommended} · Unavailable optional: {unavailable}"
+            f"Drag all files in this packet folder: {required}\n"
+            f"Recommended extras: {recommended} · Unavailable optional: {unavailable}"
         )
         if loaded_existing:
             self.session.status_text = (
@@ -540,11 +557,11 @@ class UserWorkflowApp:
     def copy_packet(self) -> None:
         bundle = self.session.bundle
         if bundle is None:
-            self._set_error("Build an exact Agent Bundle V7 before copying packet.md.")
+            self._set_error("Build an exact Agent Bundle V8 before copying packet.md.")
             return
         copy_agent_packet(bundle.packet_dir, self._write_clipboard)
         self.session.status_text = (
-            f"Copied packet.md for {bundle.packet_id}. Attach the listed files from the bundle folder separately."
+            f"Copied packet.md for {bundle.packet_id}. Primary handoff remains drag-all from the bundle folder."
         )
         self._render()
 
@@ -617,6 +634,7 @@ class UserWorkflowApp:
                 self.runtime_cmd_path,
                 context,
                 expected_manifest_sha256=bundle.manifest_sha256,
+                runtime_compatibility_mode=self.runtime_compatibility_mode,
             ),
             self._proof_completed,
         )
@@ -655,6 +673,20 @@ class UserWorkflowApp:
         self.session.accept_proof_result(result)
         if result.status == "replay_proven":
             receipt = self._read_json(result.receipt_path)
+            compatibility = receipt.get("binding", {}).get("runtime_compatibility", {})
+            runtime_drift_note = ""
+            if compatibility.get("drift_detected") is True:
+                differences = compatibility.get("differences", [])
+                runtime_drift_note = (
+                    "RUNTIME DRIFT WARNING\n"
+                    f"Mode: {compatibility.get('mode')} · disposition: {compatibility.get('disposition')}\n"
+                    f"Packet/current identity differences: {len(differences)}. "
+                    "This proof is bound to the current runtime actually used.\n\n"
+                )
+                self.session.status_text = (
+                    "Runtime identity differs from the packet snapshot; development mode proved against "
+                    "and bound the current runtime. Review the receipt differences."
+                )
             exact_base_replay = _is_exact_base_replay(result)
             normalized = [
                 item
@@ -727,7 +759,8 @@ class UserWorkflowApp:
                 proof_heading = "OVERRIDE ACCEPTED\nREPLAY PROVEN\nVISUAL REVIEW PENDING\n\n"
             self._set_text(
                 self.proof_text,
-                proof_heading
+                runtime_drift_note
+                + proof_heading
                 + f"{result.message}\n\nEngine candidate SHA-256: {result.engine_candidate_sha256}"
                 + f"{normalization_note}{visual_delta_note}{emitted_note}\n\nReceipt: {result.receipt_path}",
             )
@@ -756,9 +789,18 @@ class UserWorkflowApp:
             )
         else:
             self._last_copyable_error = result.message
+            receipt = self._read_json(result.receipt_path)
+            compatibility = receipt.get("binding", {}).get("runtime_compatibility", {})
+            runtime_drift_note = (
+                "RUNTIME DRIFT WARNING\n"
+                f"Mode: {compatibility.get('mode')} · disposition: {compatibility.get('disposition')}\n\n"
+                if compatibility.get("drift_detected") is True
+                else ""
+            )
             self._set_text(
                 self.proof_text,
-                f"REJECTED\n\n{result.message}\n\nPreserved receipt: {result.receipt_path}",
+                runtime_drift_note
+                + f"REJECTED\n\n{result.message}\n\nPreserved receipt: {result.receipt_path}",
             )
         self._render()
 
@@ -1060,12 +1102,21 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--capture-source", type=Path, default=None)
     parser.add_argument("--workspace-root", type=Path, default=DEFAULT_FINDING_WORKSPACE)
+    parser.add_argument(
+        "--runtime-compatibility",
+        choices=("development", "strict"),
+        default=None,
+    )
     args, _unknown = parser.parse_known_args(argv)
     _enable_dpi_awareness()
     import tkinter as tk
 
     root = tk.Tk()
-    app = UserWorkflowApp(root, workspace_root=args.workspace_root)
+    app = UserWorkflowApp(
+        root,
+        workspace_root=args.workspace_root,
+        runtime_compatibility_mode=args.runtime_compatibility,
+    )
     if args.capture_source is not None:
         root.after(100, lambda: app.open_finding_path(args.capture_source, args.workspace_root))
     root.mainloop()

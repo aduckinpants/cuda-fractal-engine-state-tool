@@ -91,6 +91,18 @@ class FailingProofJob:
         )
 
 
+class RuntimeMutatingProofJob(FakeProofJob):
+    def __init__(self, executable: Path) -> None:
+        super().__init__()
+        self.executable = executable
+
+    def run_process(self, command, cwd, timeout_seconds=None, env=None):
+        result = super().run_process(command, cwd, timeout_seconds, env)
+        if len(self.commands) == 1:
+            self.executable.write_bytes(b"runtime changed during proof")
+        return result
+
+
 class FakeLaunchedProcess:
     pid = 4321
 
@@ -400,7 +412,7 @@ class StateOverrideProofTests(unittest.TestCase):
             self.assertIn("--apply-loaded-color-pipeline-draft", job.commands[0])
             self.assertNotIn("--apply-loaded-color-pipeline-draft", job.commands[1])
             receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
-            self.assertEqual(receipt["proof_receipt_version"], 3)
+            self.assertEqual(receipt["proof_receipt_version"], 4)
             self.assertTrue(receipt["override"]["apply_loaded_color_pipeline_draft"])
             self.assertTrue(receipt["materialization"]["applied_loaded_color_pipeline_draft"])
             self.assertEqual(
@@ -457,6 +469,92 @@ class StateOverrideProofTests(unittest.TestCase):
                 self.assertIn(expected, result.message)
                 receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
                 self.assertFalse(receipt["launch_ready"])
+
+    def test_runtime_drift_warns_and_attempts_in_development_but_strict_stops(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = self._runtime(root)
+            packet = self._packet(root, runtime)
+            (runtime.parent / "fractal_ui.exe").write_bytes(b"newer compatible runtime")
+            override = '{"params":{"explaino_damping":0.9}}'
+
+            development_job = FakeProofJob()
+            development = execute_state_override_proof(
+                packet,
+                override,
+                runtime,
+                development_job,
+                proofs_root=root / "development-proofs",
+                runtime_compatibility_mode="development",
+            )
+            self.assertEqual(development.status, "replay_proven")
+            self.assertEqual(len(development_job.commands), 2)
+            development_binding = json.loads(
+                (development.proof_dir / "binding.json").read_text(encoding="utf-8")
+            )
+            compatibility = development_binding["runtime_compatibility"]
+            self.assertEqual(compatibility["mode"], "development")
+            self.assertTrue(compatibility["drift_detected"])
+            self.assertEqual(compatibility["disposition"], "warning_attempt_current_runtime")
+            self.assertTrue(compatibility["differences"])
+            self.assertNotEqual(
+                compatibility["packet_runtime_identity_sha256"],
+                compatibility["proof_runtime_identity_sha256"],
+            )
+
+            strict_job = FakeProofJob()
+            strict = execute_state_override_proof(
+                packet,
+                override,
+                runtime,
+                strict_job,
+                proofs_root=root / "strict-proofs",
+                runtime_compatibility_mode="strict",
+            )
+            self.assertEqual(strict.status, "rejected")
+            self.assertEqual(strict_job.commands, [])
+            self.assertIn("strict runtime compatibility mode", strict.message)
+            strict_receipt = json.loads(strict.receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                strict_receipt["binding"]["runtime_compatibility"]["disposition"],
+                "warning_strict_stop_before_materialization",
+            )
+
+    def test_runtime_change_during_proof_and_after_proof_always_invalidates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = self._runtime(root)
+            packet = self._packet(root, runtime)
+            executable = runtime.parent / "fractal_ui.exe"
+            override = '{"params":{"explaino_damping":0.9}}'
+
+            changed_during = execute_state_override_proof(
+                packet,
+                override,
+                runtime,
+                RuntimeMutatingProofJob(executable),
+                proofs_root=root / "changed-during",
+                runtime_compatibility_mode="development",
+            )
+            self.assertEqual(changed_during.status, "rejected")
+            self.assertIn("changed during proof", changed_during.message)
+
+            stable_packet = self._packet(root / "stable", runtime)
+            proven = execute_state_override_proof(
+                stable_packet,
+                override,
+                runtime,
+                FakeProofJob(),
+                proofs_root=root / "stable-proofs",
+                runtime_compatibility_mode="development",
+            )
+            self.assertEqual(proven.status, "replay_proven")
+            record_state_override_review(proven, "accepted")
+            executable.write_bytes(b"runtime changed after proof")
+            errors = validate_state_override_launch_readiness(
+                proven, stable_packet, override, runtime
+            )
+            self.assertIn("Published runtime identity changed after proof", errors)
 
     def test_runtime_failure_retains_exit_and_missing_artifact_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
