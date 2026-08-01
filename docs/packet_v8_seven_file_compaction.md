@@ -57,7 +57,7 @@ central compatibility policy:
   use a bounded PNG derivative for web-agent transport.
 - [done] Treat runtime/build drift as a warning and attempted proof in normal
   development use, with a configurable strict mode that warns and stops.
-- [open] Preserve Packet V6 and V7 readability without rewriting historical
+- [done] Preserve Packet V6 and V7 readability without rewriting historical
   packet directories or silently regenerating their authority.
 - [open] Run the bounded slices through local acceptance, then stop for a
   dedicated review of newer captures and user selection of the next manual
@@ -183,15 +183,15 @@ regenerate them from the current runtime.
   and bounded PNG transport.
 - [x] Slice 2 - V8 override/proof extraction, central runtime compatibility
   policy, receipts, and UI cutover.
-- [ ] Slice 3 - navigation/status hardening, backward compatibility, local
+- [x] Slice 3 - navigation/status hardening, backward compatibility, local
   workflow acceptance, and stale-architecture audit.
 - [ ] Slice 4 - inventory newer captures, stop for user fixture selection,
   prepare the selected packets and manual gate, then stop for user review.
 
 ## Current Phase
 
-Slice 2 is complete pending its Git checkpoint. Slice 3 is the next queued
-owner after that clean checkpoint. The suite now contains 99 passing Python
+Slice 3 is complete pending its Git checkpoint. Slice 4 is the next queued
+owner after that clean checkpoint. The suite now contains 100 passing Python
 3.14 tests.
 
 ## Architecture Audit
@@ -335,7 +335,13 @@ the bounded derivative as full-resolution evidence.
   invalidation are covered by focused tests. UI and CLI expose the mode and
   receipt-backed warning.
 - Slice 3 proof target: V6/V7/V8 loading, UI attachment/status truth, real local
-  override/replay workflow, and stale filename-path audit.
+  override/replay workflow, and stale filename-path audit. Result: focused
+  regression reopens V6 and V7 byte-for-byte without runtime access or rewrite;
+  V8 generation/reopening remains covered; the UI names V8, says drag all,
+  displays development/strict policy, and stops at visual review; active docs
+  describe the seven/six-file contract and current compatibility policy. Direct
+  legacy filenames remain only in the explicit V6/V7 loader branches and
+  historical documents.
 - Slice 4 proof target: user-selected new captures only; exact prepared paths,
   prompts, checklist, and a clean acceptance-ready checkpoint. External model
   results are user-executed and not self-graded.
@@ -355,9 +361,10 @@ commits, pushes, and proves a clean tree before continuing.
 
 ## Resume Point
 
-After the Slice 2 checkpoint, resume Slice 3 with explicit V6/V7/V8 reopening
-tests, active documentation, UI screenshots, real local workflow review, and a
-stale filename/Packet V7 presentation audit.
+After the Slice 3 checkpoint, resume Slice 4 with a read-only inventory of the
+newer manual captures. Do not choose the fixtures. Publish the bounded inventory
+for a dedicated user selection turn, then hold the campaign before generating
+the selected manual-gate packets.
 
 Real Slice 1 workflow proof:
 
@@ -387,3 +394,18 @@ Real Slice 2 workflow proof:
 
 Continuation decision: `continue_to=slice3_local_acceptance_and_hardening`
 after the Slice 2 commit, push, and clean-tree proof.
+
+Real Slice 3 UI proof:
+
+- Packet V8: `58d6bd20-6f1f-4270-b09d-9ea123248a9f`;
+- manifest SHA-256:
+  `f67fcda184cb9af95abae03767446f22cd63d38b14f6440cc0c3ee17131beb27`;
+- proof: `697842e4-095a-4786-9a2c-1bb26b6b2c2d`;
+- UI states captured under ignored `.local/packet_v8_ui_acceptance/`:
+  empty, bundle-ready empty override, override dirty, and visual review pending;
+- screenshot review confirmed the seven-file drag-all list, visible development
+  compatibility mode, healthy base/candidate previews, disabled launch, and no
+  Packet V7/file-picker presentation.
+
+Continuation decision: `continue_to=slice4_capture_inventory_and_manual_gate_preparation`
+after the Slice 3 commit, push, and clean-tree proof.

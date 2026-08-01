@@ -19,6 +19,7 @@ from cuda_fractal_state_tool.agent_bundle import (
     build_agent_bundle,
     copy_agent_packet,
     derive_state_override_authoring_surface,
+    load_existing_agent_bundle,
     load_agent_bundle_handoff,
     open_agent_bundle_folder,
     validate_captured_color_pipeline_draft,
@@ -37,6 +38,52 @@ class AgentBundleTests(unittest.TestCase):
     def test_pipeline_topology_index_rejects_non_object_lane(self) -> None:
         with self.assertRaisesRegex(ValueError, "lane 0 must be an object"):
             _pipeline_topology_index({"color_pipeline_draft": {"lanes": ["not-an-object"]}})
+
+    def test_packet_v6_and_v7_reopen_without_rewrite_or_runtime_regeneration(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for packet_version, manifest_version in ((6, 2), (7, 3)):
+                with self.subTest(packet_version=packet_version):
+                    packet_id = f"packet-v{packet_version}"
+                    packet_dir = root / packet_id
+                    packet_dir.mkdir()
+                    files = {
+                        "packet.md": f"# Historical Packet V{packet_version}\n".encode("utf-8"),
+                        "state.json": b'{"fractal_type":"explaino_all"}\n',
+                    }
+                    for name, payload in files.items():
+                        (packet_dir / name).write_bytes(payload)
+                    manifest = {
+                        "bundle_manifest_version": manifest_version,
+                        "packet_version": packet_version,
+                        "packet_id": packet_id,
+                        "finding_id": f"finding-v{packet_version}",
+                        "selected_fractal_type": "explaino_all",
+                        "required_attachments": ["state.json"],
+                        "recommended_attachments": [],
+                        "unavailable_optional_attachments": [],
+                        "files": [
+                            {
+                                "path": name,
+                                "role": "historical_fixture",
+                                "sha256": hashlib.sha256(payload).hexdigest(),
+                                "size_bytes": len(payload),
+                                "web_handoff": "index" if name == "packet.md" else "required",
+                            }
+                            for name, payload in files.items()
+                        ],
+                    }
+                    manifest_bytes = _json_bytes(manifest)
+                    (packet_dir / "manifest.json").write_bytes(manifest_bytes)
+                    before = {path.name: path.read_bytes() for path in packet_dir.iterdir()}
+
+                    loaded = load_existing_agent_bundle(packet_dir)
+
+                    self.assertEqual(loaded.packet_version, packet_version)
+                    self.assertEqual(
+                        {path.name: path.read_bytes() for path in packet_dir.iterdir()},
+                        before,
+                    )
 
     def _fixture(self, root: Path):
         capture = root / "capture"
