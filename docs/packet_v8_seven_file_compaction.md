@@ -370,10 +370,20 @@ commits, pushes, and proves a clean tree before continuing.
 
 ## Resume Point
 
-The planned implementation queue is exhausted. Resume only after the user
-returns external-session evidence from the six fixtures in
-`docs/packet_v8_six_fixture_manual_gate.md`. Review that evidence before any
-packet behavior change, fixture expansion, pull request, or merge action.
+The planned implementation queue was exhausted at the user-run manual gate.
+The user subsequently returned seven fixture results, A through G. Their raw
+transcripts, contemporaneous notebook, and reviewed conclusions are preserved
+under `docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/` and in
+`docs/packet_v8_seven_fixture_manual_results.md`.
+
+Packet V8 passed the reviewed authority and transport gate. A-E and G completed
+the intended workflow. Fixture F reached a valid sparse override and then
+timed out before the proof process emitted state or frame artifacts; its
+captured render duration makes adaptive proof timeout the next grounded seam,
+not a Packet V8 failure.
+
+This Packet V8 campaign is complete. Further product mutation belongs to the
+separately approved Packet V8 automated-route POC and its own checked plan.
 
 Real Slice 1 workflow proof:
 
