@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from cuda_fractal_state_tool.agent_bundle import AgentBundle
 from cuda_fractal_state_tool.automated_protocol import ControllerDisposition, SessionBudgets
-from cuda_fractal_state_tool.automated_run_store import AutomatedRunStore
+from cuda_fractal_state_tool.automated_run_store import AutomatedRunStore, RunStoreWriteError
 from cuda_fractal_state_tool.automated_session import (
     AutomatedRouteServices,
     AutomatedSessionController,
@@ -63,6 +63,9 @@ class FakeTransport:
             output_tokens=20,
             resources=(),
             unavailable_optional_attachments=(),
+            requested_model="gpt-5.6",
+            cached_input_tokens=40,
+            latency_seconds=1.25,
         )
 
     def close_owned_files(self, **kwargs) -> None:
@@ -190,14 +193,8 @@ class AutomatedSessionTests(unittest.TestCase):
     @staticmethod
     def _round_script(gate: str, override: str = VALID_OVERRIDE_RESPONSE) -> list[str]:
         return [
-            "observation",
-            "ideas",
-            "one experiment",
-            "prediction",
             override,
-            "comparison",
-            "self audit",
-            f"Gate conclusion.\nGATE_DECISION: {gate}\n",
+            f"Comparison and hostile audit.\nGATE_DECISION: {gate}\n",
         ]
 
     def test_one_round_pass_keeps_model_gate_distinct_from_controller_disposition(self) -> None:
@@ -219,14 +216,23 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(result.proven_rounds, 1)
             self.assertEqual(result.current_packet.packet_id, "packet-derived")
             self.assertTrue(transport.closed)
-            self.assertEqual(len(transport.calls), 8)
+            self.assertEqual(len(transport.calls), 2)
             self.assertEqual(transport.calls[0]["packet_dir"], initial.packet_dir)
-            self.assertEqual(transport.calls[5]["packet_dir"], derived.packet_dir)
+            self.assertEqual(transport.calls[1]["packet_dir"], derived.packet_dir)
+            self.assertIsNone(transport.calls[0]["previous_response_id"])
+            self.assertEqual(transport.calls[1]["previous_response_id"], "resp-1")
             events = store.read_events()
             gate = [event for event in events if event["event_type"] == "model_gate_proposal"][-1]
             disposition = [event for event in events if event["event_type"] == "session_disposition"][-1]
             self.assertEqual(gate["payload"]["model_gate_proposal"], "SESSION_PASS")
             self.assertEqual(disposition["payload"]["disposition"], "SESSION_PASSED")
+            responses = [event for event in events if event["event_type"] == "model_response"]
+            self.assertEqual(responses[0]["payload"]["requested_model"], "gpt-5.6")
+            self.assertEqual(responses[0]["payload"]["resolved_model"], "gpt-5.6-test")
+            self.assertEqual(responses[0]["payload"]["cached_input_tokens"], 40)
+            self.assertEqual(responses[0]["payload"]["uncached_input_tokens"], 60)
+            self.assertEqual(result.usage.cumulative_cached_input_tokens, 80)
+            self.assertEqual(result.usage.cumulative_uncached_input_tokens, 120)
 
     def test_round_revise_rebinds_second_override_to_preceding_packet(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -247,7 +253,8 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(result.disposition, ControllerDisposition.SESSION_PASSED)
             self.assertEqual(result.proven_rounds, 2)
             self.assertEqual(services.proof_packets, [initial.packet_dir, initial.packet_dir])
-            self.assertEqual(transport.calls[8]["packet_dir"], initial.packet_dir)
+            self.assertEqual(transport.calls[2]["packet_dir"], initial.packet_dir)
+            self.assertIsNone(transport.calls[2]["previous_response_id"])
 
     def test_round_advance_rebinds_second_override_to_derived_packet(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -276,7 +283,7 @@ class AutomatedSessionTests(unittest.TestCase):
             services = ServiceHarness(root, initial, [derived])
             no_op = "```json\n{}\n```"
             script = self._round_script("SESSION_PASS", override=no_op)
-            script.insert(5, VALID_OVERRIDE_RESPONSE)
+            script.insert(1, VALID_OVERRIDE_RESPONSE)
             transport = FakeTransport(script)
             store = self._store(root, initial)
             result = AutomatedSessionController(
@@ -286,7 +293,7 @@ class AutomatedSessionTests(unittest.TestCase):
                 services=services.services(),
             ).run()
             self.assertEqual(result.disposition, ControllerDisposition.SESSION_PASSED)
-            self.assertEqual(len(transport.calls), 9)
+            self.assertEqual(len(transport.calls), 3)
             validated = [event for event in store.read_events() if event["event_type"] == "override_validated"]
             self.assertTrue(validated[-1]["payload"]["correction_used"])
 
@@ -295,7 +302,7 @@ class AutomatedSessionTests(unittest.TestCase):
             root = Path(temp_dir)
             initial = _bundle(root, "packet-base", "finding-base", "base")
             services = ServiceHarness(root, initial, [])
-            script = ["observation", "ideas", "choice", "prediction", "no json", "still no json"]
+            script = ["no json", "still no json"]
             transport = FakeTransport(script)
             result = AutomatedSessionController(
                 transport=transport,
@@ -324,7 +331,7 @@ class AutomatedSessionTests(unittest.TestCase):
             ).run()
             self.assertEqual(result.disposition, ControllerDisposition.BUDGET_EXHAUSTED)
             self.assertEqual(result.proven_rounds, 2)
-            self.assertEqual(len(transport.calls), 16)
+            self.assertEqual(len(transport.calls), 4)
 
     def test_malformed_gate_stops_without_silently_selecting_a_transition(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -360,7 +367,7 @@ class AutomatedSessionTests(unittest.TestCase):
                 build_bundle=bound.build_bundle,
                 validate=bound.validate,
             )
-            transport = FakeTransport(self._round_script("SESSION_PASS")[:5])
+            transport = FakeTransport([VALID_OVERRIDE_RESPONSE])
             result = AutomatedSessionController(
                 transport=transport,
                 run_store=self._store(root, initial),
@@ -376,7 +383,7 @@ class AutomatedSessionTests(unittest.TestCase):
             initial = _bundle(root, "packet-base", "finding-base", "base")
             derived = _bundle(root, "packet-derived", "finding-derived", "derived")
             services = ServiceHarness(root, initial, [derived])
-            transport = FakeTransport(self._round_script("SESSION_PASS")[:5])
+            transport = FakeTransport([VALID_OVERRIDE_RESPONSE])
             result = AutomatedSessionController(
                 transport=transport,
                 run_store=self._store(root, initial),
@@ -387,6 +394,41 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(result.disposition, ControllerDisposition.MANUAL_REVIEW_REQUIRED)
             self.assertEqual(result.proven_rounds, 1)
             self.assertEqual(services.promotions, 0)
+
+    def test_persistent_run_store_failure_is_not_reported_as_runtime_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            initial = _bundle(root, "packet-base", "finding-base", "base")
+            services = ServiceHarness(root, initial, [])
+            store = self._store(root, initial)
+            original = AutomatedRunStore.record_transition
+
+            def fail_after_author_response(store_self, event_type, payload, projection):
+                if event_type == "controller_transition":
+                    raise RunStoreWriteError(
+                        "ACTIVE_TURN_PROJECTION_WRITE_FAILED_AFTER_EVENT_APPEND",
+                        "forced projection failure",
+                        event_appended=True,
+                        event_sequence=4,
+                    )
+                return original(store_self, event_type, payload, projection)
+
+            with patch.object(
+                AutomatedRunStore,
+                "record_transition",
+                autospec=True,
+                side_effect=fail_after_author_response,
+            ):
+                result = AutomatedSessionController(
+                    transport=FakeTransport([VALID_OVERRIDE_RESPONSE]),
+                    run_store=store,
+                    initial_bundle=initial,
+                    services=services.services(),
+                ).run()
+
+            self.assertEqual(result.disposition, ControllerDisposition.RUN_STORE_FAILED)
+            self.assertIn("ACTIVE_TURN_PROJECTION_WRITE_FAILED_AFTER_EVENT_APPEND", result.message)
+            self.assertEqual(services.proof_packets, [])
 
     def test_controller_separates_definite_and_ambiguous_provider_failures(self) -> None:
         class FailingTransport(FakeTransport):

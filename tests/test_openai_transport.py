@@ -52,12 +52,16 @@ class FakeProvider:
             model="gpt-5.6-2026-07-01",
             status=self.response_status,
             output_text="A grounded response.",
-            usage={"input_tokens": 123, "output_tokens": 45},
+            usage={"input_tokens": 123, "cached_input_tokens": 23, "output_tokens": 45},
             raw={
                 "id": "resp-1",
                 "model": "gpt-5.6-2026-07-01",
                 "output_text": "A grounded response.",
-                "usage": {"input_tokens": 123, "output_tokens": 45},
+                "usage": {
+                    "input_tokens": 123,
+                    "input_tokens_details": {"cached_tokens": 23},
+                    "output_tokens": 45,
+                },
             },
         )
 
@@ -177,7 +181,12 @@ class OpenAITransportTests(unittest.TestCase):
             ])
             self.assertTrue(content[-1]["image_url"].startswith("data:image/png;base64,"))
             self.assertEqual(result.input_tokens, 123)
+            self.assertEqual(result.cached_input_tokens, 23)
+            self.assertEqual(result.uncached_input_tokens, 100)
             self.assertEqual(result.output_tokens, 45)
+            self.assertEqual(result.requested_model, "gpt-5.6")
+            self.assertEqual(result.model, "gpt-5.6-2026-07-01")
+            self.assertGreaterEqual(result.latency_seconds, 0.0)
             self.assertTrue(result.request_evidence_path.is_file())
             self.assertTrue(result.response_evidence_path.is_file())
             transport.close_owned_files(run_store=store)
@@ -200,6 +209,13 @@ class OpenAITransportTests(unittest.TestCase):
                 evidence_image,
                 "[PACKET_IMAGE_DATA_URL_OMITTED; SEE RESOURCE SHA256]",
             )
+            response_evidence = json.loads(
+                result.response_evidence_path.read_text(encoding="utf-8")
+            )
+            self.assertEqual(response_evidence["requested_model"], "gpt-5.6")
+            self.assertEqual(response_evidence["resolved_model"], "gpt-5.6-2026-07-01")
+            self.assertEqual(response_evidence["cached_input_tokens"], 23)
+            self.assertEqual(response_evidence["uncached_input_tokens"], 100)
 
     def test_continuation_without_packet_sends_only_prompt_and_repeats_instructions(self) -> None:
         provider = FakeProvider()

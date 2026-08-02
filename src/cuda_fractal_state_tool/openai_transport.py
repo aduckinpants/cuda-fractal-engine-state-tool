@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import mimetypes
+import time
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
@@ -121,8 +122,15 @@ class TransportTurnResult:
     output_tokens: int
     resources: tuple[TransportResource, ...]
     unavailable_optional_attachments: tuple[str, ...]
+    requested_model: str = ""
+    cached_input_tokens: int = 0
+    latency_seconds: float = 0.0
     request_evidence_path: Path | None = None
     response_evidence_path: Path | None = None
+
+    @property
+    def uncached_input_tokens(self) -> int:
+        return self.input_tokens - self.cached_input_tokens
 
 
 class OpenAISDKProvider:
@@ -145,8 +153,10 @@ class OpenAISDKProvider:
         value = self._client.responses.create(**request, timeout=timeout_seconds)
         raw = value.model_dump(mode="json")
         usage_raw = raw.get("usage") or {}
+        input_details = usage_raw.get("input_tokens_details") or {}
         usage = {
             "input_tokens": int(usage_raw.get("input_tokens") or 0),
+            "cached_input_tokens": int(input_details.get("cached_tokens") or 0),
             "output_tokens": int(usage_raw.get("output_tokens") or 0),
         }
         return ProviderResponse(
@@ -432,10 +442,12 @@ class PacketV8ResponsesTransport:
                     f"transport/{turn_id}/request.json", sanitize_evidence(request_evidence)
                 )
             dispatched = True
+            started_at = time.monotonic()
             try:
                 response = self.provider.create_response(request, timeout_seconds=timeout_seconds)
             except Exception as exc:
                 raise classify_provider_failure(exc, dispatched=True) from exc
+            latency_seconds = time.monotonic() - started_at
             if response.status != "completed":
                 raise ProviderTransportError(
                     ProviderFailureKind.CONTENT_POLICY
@@ -453,17 +465,33 @@ class PacketV8ResponsesTransport:
                     ProviderFailureKind.MALFORMED_RESPONSE,
                     "Provider response is missing an identity, model, or output text",
                 )
+            input_tokens = int(response.usage.get("input_tokens", 0))
+            cached_input_tokens = int(response.usage.get("cached_input_tokens", 0))
+            output_tokens = int(response.usage.get("output_tokens", 0))
+            if (
+                input_tokens < 0
+                or cached_input_tokens < 0
+                or cached_input_tokens > input_tokens
+                or output_tokens < 0
+            ):
+                raise ProviderTransportError(
+                    ProviderFailureKind.MALFORMED_RESPONSE,
+                    "Provider response contains invalid token usage",
+                )
             result = TransportTurnResult(
                 response_id=response.id,
                 previous_response_id=previous_response_id,
                 model=response.model,
                 output_text=response.output_text,
-                input_tokens=int(response.usage.get("input_tokens", 0)),
-                output_tokens=int(response.usage.get("output_tokens", 0)),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
                 resources=tuple(resources),
                 unavailable_optional_attachments=(
                     prepared.unavailable_optional_attachments if prepared else ()
                 ),
+                requested_model=model,
+                cached_input_tokens=cached_input_tokens,
+                latency_seconds=latency_seconds,
                 request_evidence_path=request_evidence_path,
             )
             if run_store is not None:
@@ -473,9 +501,13 @@ class PacketV8ResponsesTransport:
                         {
                             "response": response.raw,
                             "response_id": result.response_id,
-                            "model": result.model,
+                            "requested_model": result.requested_model,
+                            "resolved_model": result.model,
                             "input_tokens": result.input_tokens,
+                            "cached_input_tokens": result.cached_input_tokens,
+                            "uncached_input_tokens": result.uncached_input_tokens,
                             "output_tokens": result.output_tokens,
+                            "latency_seconds": result.latency_seconds,
                         }
                     ),
                 )

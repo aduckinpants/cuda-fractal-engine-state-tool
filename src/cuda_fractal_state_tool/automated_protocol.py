@@ -39,13 +39,14 @@ class ControllerDisposition(str, Enum):
     CANCELLED = "CANCELLED"
     PROOF_FAILED = "PROOF_FAILED"
     TRANSPORT_FAILED = "TRANSPORT_FAILED"
+    RUN_STORE_FAILED = "RUN_STORE_FAILED"
     RUNTIME_FAILED = "RUNTIME_FAILED"
 
 
 @dataclass(frozen=True)
 class SessionBudgets:
     maximum_proven_rounds: int = 2
-    maximum_model_responses: int = 16
+    maximum_model_responses: int = 6
     maximum_cumulative_input_tokens: int = 2_000_000
     maximum_cumulative_output_tokens: int = 160_000
     maximum_output_tokens_per_response: int = 24_000
@@ -78,6 +79,7 @@ class BudgetUsage:
     proven_rounds: int = 0
     model_responses: int = 0
     cumulative_input_tokens: int = 0
+    cumulative_cached_input_tokens: int = 0
     cumulative_output_tokens: int = 0
 
     def __post_init__(self) -> None:
@@ -87,10 +89,17 @@ class BudgetUsage:
                 self.proven_rounds,
                 self.model_responses,
                 self.cumulative_input_tokens,
+                self.cumulative_cached_input_tokens,
                 self.cumulative_output_tokens,
             )
         ):
             raise ValueError("Automated session budget usage cannot be negative")
+        if self.cumulative_cached_input_tokens > self.cumulative_input_tokens:
+            raise ValueError("Cached input tokens cannot exceed total input tokens")
+
+    @property
+    def cumulative_uncached_input_tokens(self) -> int:
+        return self.cumulative_input_tokens - self.cumulative_cached_input_tokens
 
 
 def budget_exhaustion_reason(

@@ -21,7 +21,7 @@ from .automated_protocol import (
     resolve_round_authority,
     validate_protocol_transition,
 )
-from .automated_run_store import AutomatedRunStore
+from .automated_run_store import AutomatedRunStore, RunStoreWriteError
 from .derived_finding import DerivedFindingPromotion, promote_replay_proven_candidate
 from .openai_transport import (
     AmbiguousRemoteCompletion,
@@ -40,29 +40,24 @@ Answer only the current stage request. Do not claim that automation promotion is
 Do not provide private chain-of-thought; provide only the concise conclusions and artifacts requested.
 """
 
-OBSERVE_PROMPT = "What do you notice here? What seems mathematically interesting or worth exploring?"
-EXPLORE_PROMPT = "What would you try? Classify each idea by whether one sparse state override can express it."
-SELECT_PROMPT = (
-    "Choose exactly one observable, state-authorable experiment for one candidate state. "
-    "Resolve any ambiguity now. Do not return override JSON yet."
-)
-PREDICTION_PROMPT = (
-    "Before authoring, lock a falsifiable prediction: expected visible effect, observation channel, "
-    "camera intent, viewport containment when derivable, uncertainty, and one brief hostile self-review conclusion."
-)
-OVERRIDE_PROMPT = (
-    "Return the exact sparse state override for the selected experiment. Follow the Packet V8 output contract: "
-    "decision preflight plus exactly one fenced json block and no other code block."
-)
-REVIEW_PROMPT = (
-    "The attached Packet V8 is the replay-proven derived finding. Compare it with the locked prediction. "
-    "Identify what changed, what did not, and whether the experiment was informative. Do not author another override yet."
-)
-SELF_AUDIT_PROMPT = (
-    "Perform a brief hostile self-audit of authority use, observability, camera handling, prediction alignment, "
-    "and whether the result supports another bounded round or a terminal disposition."
-)
-GATE_PROMPT = """Propose exactly one controller gate on the final line using this form:
+AUTHOR_ROUND_PROMPT = """Complete one bounded experiment-authoring round in this single response.
+
+1. Briefly state what you notice and what seems mathematically interesting.
+2. List a small set of possible experiments and classify each as state-authorable, analysis-only, or unavailable.
+3. Select exactly one observable experiment expressible as one sparse state override.
+4. Lock a falsifiable prediction: expected visible effect, observation channel, camera intent, viewport containment when derivable, uncertainty, and an honest failure/disconfirmation condition.
+5. Give one brief hostile self-review conclusion covering authority, observability, camera safety, and narrative/JSON alignment.
+6. Return the exact non-empty sparse state override for that experiment, following the Packet V8 output contract: exactly one fenced json block and no other code block.
+
+Do not propose a controller gate in this response.
+"""
+
+REVIEW_AND_GATE_PROMPT = """The attached Packet V8 is the replay-proven derived finding for the experiment you just authored.
+In one concise response:
+
+1. Compare the result with the locked prediction and identify what changed, what did not, and whether the experiment was informative.
+2. Perform a brief hostile self-audit of authority use, observability, camera handling, and prediction alignment.
+3. Propose exactly one controller gate on the final line using this form:
 GATE_DECISION: ROUND_ADVANCE | ROUND_REVISE | SESSION_PASS | SESSION_FAIL | MANUAL_REVIEW_REQUIRED
 Use ROUND_ADVANCE only to author the next round against the derived packet. Use ROUND_REVISE only to keep the preceding base packet authoritative.
 """
@@ -236,6 +231,9 @@ class AutomatedSessionController:
         self.last_gate: ModelGateProposal | None = None
         self._turn_number = 0
         self._correction_used = False
+        self._last_requested_model: str | None = None
+        self._last_resolved_model: str | None = None
+        self._cumulative_latency_seconds = 0.0
 
     @staticmethod
     def _binding(bundle: AgentBundle) -> PacketAuthorityBinding:
@@ -253,7 +251,12 @@ class AutomatedSessionController:
             "proven_rounds": self.usage.proven_rounds,
             "model_responses": self.usage.model_responses,
             "cumulative_input_tokens": self.usage.cumulative_input_tokens,
+            "cumulative_cached_input_tokens": self.usage.cumulative_cached_input_tokens,
+            "cumulative_uncached_input_tokens": self.usage.cumulative_uncached_input_tokens,
             "cumulative_output_tokens": self.usage.cumulative_output_tokens,
+            "cumulative_provider_latency_seconds": self._cumulative_latency_seconds,
+            "last_requested_model": self._last_requested_model,
+            "last_resolved_model": self._last_resolved_model,
             "previous_response_id": self.previous_response_id,
             "model_gate_proposal": self.last_gate.value if self.last_gate else None,
         }
@@ -275,6 +278,7 @@ class AutomatedSessionController:
             proven_rounds=0,
             model_responses=self.usage.model_responses,
             cumulative_input_tokens=self.usage.cumulative_input_tokens,
+            cumulative_cached_input_tokens=self.usage.cumulative_cached_input_tokens,
             cumulative_output_tokens=self.usage.cumulative_output_tokens,
         )
         exhaustion = budget_exhaustion_reason(
@@ -296,19 +300,34 @@ class AutomatedSessionController:
             max_output_tokens=self.budgets.maximum_output_tokens_per_response,
         )
         self.previous_response_id = result.response_id
+        self._last_requested_model = result.requested_model
+        self._last_resolved_model = result.model
+        self._cumulative_latency_seconds += result.latency_seconds
         self.usage = BudgetUsage(
             proven_rounds=self.usage.proven_rounds,
             model_responses=self.usage.model_responses + 1,
             cumulative_input_tokens=self.usage.cumulative_input_tokens + result.input_tokens,
+            cumulative_cached_input_tokens=(
+                self.usage.cumulative_cached_input_tokens + result.cached_input_tokens
+            ),
             cumulative_output_tokens=self.usage.cumulative_output_tokens + result.output_tokens,
         )
         self._record(
             "model_response",
             {
                 "response_id": result.response_id,
-                "model": result.model,
+                "requested_model": result.requested_model,
+                "resolved_model": result.model,
                 "input_tokens": result.input_tokens,
+                "cached_input_tokens": result.cached_input_tokens,
+                "uncached_input_tokens": result.uncached_input_tokens,
                 "output_tokens": result.output_tokens,
+                "latency_seconds": result.latency_seconds,
+                "cumulative_input_tokens": self.usage.cumulative_input_tokens,
+                "cumulative_cached_input_tokens": self.usage.cumulative_cached_input_tokens,
+                "cumulative_uncached_input_tokens": self.usage.cumulative_uncached_input_tokens,
+                "cumulative_output_tokens": self.usage.cumulative_output_tokens,
+                "cumulative_provider_latency_seconds": self._cumulative_latency_seconds,
                 "response_text_sha256": hashlib.sha256(result.output_text.encode("utf-8")).hexdigest(),
             },
         )
@@ -357,8 +376,29 @@ class AutomatedSessionController:
         if self.cancelled():
             raise TransportCancelled("Automated session was cancelled before the next operation")
 
-    def _request_valid_override(self, round_number: int) -> tuple[str, StateOverrideMaterialization] | None:
-        response = self._ask(OVERRIDE_PROMPT, attach_packet=False)
+    def _author_round_prompt(self, round_number: int) -> str:
+        handoff = (
+            f"Round {round_number} begins a fresh provider conversation. "
+            f"The attached packet {self.current_packet.packet_id} for finding "
+            f"{self.current_packet.finding_id} is the sole current authoring authority."
+        )
+        if self.last_gate is ModelGateProposal.ROUND_REVISE:
+            handoff += (
+                " The preceding base packet remains authoritative after ROUND_REVISE; "
+                "the prior candidate is historical evidence only. Select a corrected or different experiment."
+            )
+        elif self.last_gate is ModelGateProposal.ROUND_ADVANCE:
+            handoff += (
+                " This packet is the replay-proven derived result selected by ROUND_ADVANCE. "
+                "Author only against its attached state and schemas."
+            )
+        return f"{handoff}\n\n{AUTHOR_ROUND_PROMPT}"
+
+    def _request_valid_override(
+        self,
+        round_number: int,
+        response: TransportTurnResult,
+    ) -> tuple[str, StateOverrideMaterialization] | None:
         for attempt in range(2):
             error: str | None = None
             try:
@@ -405,20 +445,30 @@ class AutomatedSessionController:
         return None
 
     def run(self) -> AutomatedSessionResult:
-        self._record("session_started", {"initial_packet": self.current_packet.to_dict()})
         try:
+            self._record("session_started", {"initial_packet": self.current_packet.to_dict()})
             while True:
                 round_number = self.usage.proven_rounds + 1
                 self._correction_used = False
-                self._ask(OBSERVE_PROMPT, attach_packet=True)
+                self.previous_response_id = None
+                self._record(
+                    "round_conversation_started",
+                    {
+                        "round_number": round_number,
+                        "current_packet": self.current_packet.to_dict(),
+                        "prior_gate": self.last_gate.value if self.last_gate else None,
+                        "provider_chain_reset": True,
+                    },
+                )
+                author_response = self._ask(
+                    self._author_round_prompt(round_number),
+                    attach_packet=True,
+                )
                 self._move(ProtocolState.EXPLORE)
-                self._ask(EXPLORE_PROMPT, attach_packet=False)
                 self._move(ProtocolState.SELECT_EXPERIMENT)
-                self._ask(SELECT_PROMPT, attach_packet=False)
                 self._move(ProtocolState.LOCK_PREDICTION)
-                self._ask(PREDICTION_PROMPT, attach_packet=False)
                 self._move(ProtocolState.REQUEST_OVERRIDE)
-                validated = self._request_valid_override(round_number)
+                validated = self._request_valid_override(round_number, author_response)
                 if validated is None:
                     return self._finish(
                         ControllerDisposition.MANUAL_REVIEW_REQUIRED,
@@ -444,6 +494,7 @@ class AutomatedSessionController:
                     proven_rounds=self.usage.proven_rounds + 1,
                     model_responses=self.usage.model_responses,
                     cumulative_input_tokens=self.usage.cumulative_input_tokens,
+                    cumulative_cached_input_tokens=self.usage.cumulative_cached_input_tokens,
                     cumulative_output_tokens=self.usage.cumulative_output_tokens,
                 )
                 self._record("candidate_replay_proven", {"proof_id": proof.proof_id})
@@ -486,11 +537,9 @@ class AutomatedSessionController:
                 self.current_packet = derived_binding
                 self._record("derived_packet_refreshed", {"packet": derived_binding.to_dict()})
                 self._move(ProtocolState.REVIEW_RESULT)
-                self._ask(REVIEW_PROMPT, attach_packet=True)
+                gate_response = self._ask(REVIEW_AND_GATE_PROMPT, attach_packet=True)
                 self._move(ProtocolState.SELF_AUDIT)
-                self._ask(SELF_AUDIT_PROMPT, attach_packet=False)
                 self._move(ProtocolState.GATE_DECISION)
-                gate_response = self._ask(GATE_PROMPT, attach_packet=False)
                 try:
                     gate = extract_model_gate_proposal(gate_response.output_text)
                 except ValueError as exc:
@@ -525,6 +574,26 @@ class AutomatedSessionController:
                     self.current_bundle = derived_bundle
                 self.current_packet = next_binding
                 self._move(ProtocolState.OBSERVE)
+        except RunStoreWriteError as exc:
+            self.disposition = ControllerDisposition.RUN_STORE_FAILED
+            message = (
+                f"Run-store write failed ({exc.code}); event_appended={exc.event_appended}; "
+                f"event_sequence={exc.event_sequence}: {exc}"
+            )
+            try:
+                self.transport.close_owned_files(reason=ControllerDisposition.RUN_STORE_FAILED.value)
+            except Exception as cleanup_exc:
+                message = f"{message} Provider-file cleanup also failed: {cleanup_exc}"
+            return AutomatedSessionResult(
+                disposition=self.disposition,
+                message=message,
+                current_packet=self.current_packet,
+                proven_rounds=self.usage.proven_rounds,
+                usage=self.usage,
+                model_gate_proposal=self.last_gate,
+                last_proof=self.last_proof,
+                last_derived_bundle=self.last_derived_bundle,
+            )
         except TransportCancelled as exc:
             return self._finish(ControllerDisposition.CANCELLED, str(exc))
         except JobCancelledError as exc:

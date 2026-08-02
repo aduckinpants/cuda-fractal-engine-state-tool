@@ -100,7 +100,7 @@ class AutomatedProtocolTests(unittest.TestCase):
     def test_budget_policy_uses_locked_defaults_and_projected_usage(self) -> None:
         budgets = SessionBudgets()
         self.assertEqual(budgets.maximum_proven_rounds, 2)
-        self.assertEqual(budgets.maximum_model_responses, 16)
+        self.assertEqual(budgets.maximum_model_responses, 6)
         self.assertEqual(budgets.maximum_cumulative_input_tokens, 2_000_000)
         self.assertEqual(budgets.maximum_cumulative_output_tokens, 160_000)
         self.assertEqual(budgets.maximum_output_tokens_per_response, 24_000)

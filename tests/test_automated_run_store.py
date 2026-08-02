@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from cuda_fractal_state_tool.automated_run_store import AutomatedRunStore
+from cuda_fractal_state_tool.automated_run_store import AutomatedRunStore, RunStoreWriteError
 from cuda_fractal_state_tool.workspace_layout import initialize_workspace_root
 
 
@@ -86,6 +88,98 @@ class AutomatedRunStoreTests(unittest.TestCase):
             for unsafe in ("", "../escape.json", str(Path(temp_dir).resolve() / "absolute.json")):
                 with self.subTest(unsafe=unsafe), self.assertRaisesRegex(ValueError, "safe relative"):
                     store.write_evidence_json(unsafe, {})
+
+    def test_retryable_windows_projection_collision_recovers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = self._store(Path(temp_dir))
+            from cuda_fractal_state_tool import automated_run_store as module
+
+            real_replace = module.os.replace
+            attempts = {"count": 0}
+
+            def replace_with_collisions(source, target):
+                if Path(target) == store.active_turn_path and attempts["count"] < 2:
+                    attempts["count"] += 1
+                    error = PermissionError("sharing collision")
+                    error.winerror = 5
+                    raise error
+                return real_replace(source, target)
+
+            with patch.object(module.os, "replace", side_effect=replace_with_collisions), patch.object(
+                module.time, "sleep", return_value=None
+            ):
+                event = store.record_transition("one", {}, {"state": "OBSERVE"})
+
+            self.assertEqual(attempts["count"], 2)
+            self.assertEqual(event["sequence"], 1)
+            self.assertEqual(store.load_active_turn()["last_event_sequence"], 1)
+
+    def test_persistent_projection_collision_reports_event_append_precisely(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = self._store(Path(temp_dir))
+            from cuda_fractal_state_tool import automated_run_store as module
+
+            error = PermissionError("sharing collision")
+            error.winerror = 5
+            with patch.object(module.os, "replace", side_effect=error), patch.object(
+                module.time, "sleep", return_value=None
+            ), self.assertRaises(RunStoreWriteError) as captured:
+                store.record_transition("one", {}, {"state": "OBSERVE"})
+
+            self.assertEqual(
+                captured.exception.code,
+                "ACTIVE_TURN_PROJECTION_WRITE_FAILED_AFTER_EVENT_APPEND",
+            )
+            self.assertTrue(captured.exception.event_appended)
+            self.assertEqual(captured.exception.event_sequence, 1)
+            self.assertEqual(store.read_events()[0]["event_type"], "one")
+
+    def test_persistent_evidence_write_failure_has_run_store_taxonomy(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = self._store(Path(temp_dir))
+            from cuda_fractal_state_tool import automated_run_store as module
+
+            error = PermissionError("sharing collision")
+            error.winerror = 5
+            with patch.object(module.os, "replace", side_effect=error), patch.object(
+                module.time, "sleep", return_value=None
+            ), self.assertRaises(RunStoreWriteError) as captured:
+                store.write_evidence_json("transport/turn/request.json", {"ok": True})
+
+            self.assertEqual(captured.exception.code, "EVIDENCE_JSON_WRITE_FAILED")
+            self.assertFalse(captured.exception.event_appended)
+
+    def test_concurrent_ui_style_reads_and_writes_share_one_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = self._store(Path(temp_dir))
+            failures: list[Exception] = []
+            done = threading.Event()
+
+            def reader() -> None:
+                while not done.is_set():
+                    try:
+                        if store.active_turn_path.exists():
+                            store.load_active_turn()
+                        store.read_events()
+                    except Exception as exc:  # pragma: no cover - asserted below
+                        failures.append(exc)
+                        done.set()
+
+            thread = threading.Thread(target=reader)
+            thread.start()
+            try:
+                for number in range(1, 31):
+                    store.record_transition(
+                        "step",
+                        {"number": number},
+                        {"state": "OBSERVE", "number": number},
+                    )
+            finally:
+                done.set()
+                thread.join(timeout=2)
+
+            self.assertEqual(failures, [])
+            self.assertEqual(store.load_active_turn()["last_event_sequence"], 30)
 
 
 if __name__ == "__main__":

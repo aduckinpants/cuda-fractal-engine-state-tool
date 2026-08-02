@@ -96,8 +96,9 @@ The POC is intentionally bounded:
 
 - model `gpt-5.6` with high reasoning;
 - at most two replay-proven rounds;
-- at most 16 model responses;
-- cumulative input/output token budgets shown in the panel;
+- two primary responses per round (combined authoring, then combined review/gate);
+- at most six model responses including one correction turn per round;
+- cumulative total/cached/uncached input and output token usage shown in the panel;
 - one correction turn for malformed, unauthorized, or unintended `{}` output;
 - exact `ROUND_ADVANCE` and `ROUND_REVISE` current-packet rebinding;
 - explicit terminal controller disposition and durable result folder.
@@ -118,6 +119,9 @@ runtime work, never resends an ambiguous provider turn, and preserves the run
 store for inspection. `events.ndjson` is append-only history;
 `active-turn.json` is its atomic current-state projection. Domain receipts and
 packet/state/frame artifacts remain the underlying authority.
+The automation panel streams a compact field-allowlisted view of
+`events.ndjson`; `Open Run Folder` is available as soon as durable run evidence
+exists, even when a session stops before final qualification.
 
 ## Packet V8 and override authority
 

@@ -45,7 +45,8 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("never human acceptance", source)
         self.assertIn("Run Automated Session", source)
         self.assertIn("Cancel Automation", source)
-        self.assertIn("Open Results", source)
+        self.assertIn("Open Run Folder", source)
+        self.assertIn("Sanitized live event stream", source)
         self.assertNotIn("--packet-dir", source)
         self.assertNotIn("proposal_v1", source)
         self.assertNotIn("Repair Packet", source)
@@ -92,13 +93,40 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
             _automated_budget_text(
                 {
                     "proven_rounds": 1,
-                    "model_responses": 8,
+                    "model_responses": 2,
                     "cumulative_input_tokens": 123456,
+                    "cumulative_cached_input_tokens": 100000,
+                    "cumulative_uncached_input_tokens": 23456,
                     "cumulative_output_tokens": 7890,
                 }
             ),
-            "Rounds 1/2 · Responses 8/16 · Tokens in/out 123,456/7,890",
+            "Rounds 1/2 · Responses 2/6 · Tokens total/cached/uncached/out "
+            "123,456/100,000/23,456/7,890",
         )
+
+    def test_automated_event_view_is_compact_and_field_allowlisted(self) -> None:
+        from cuda_fractal_state_tool.user_workflow_app import _format_automated_event
+
+        line = _format_automated_event(
+            {
+                "sequence": 7,
+                "event_type": "model_response",
+                "payload": {
+                    "requested_model": "gpt-5.6",
+                    "resolved_model": "gpt-5.6-sol",
+                    "input_tokens": 1000,
+                    "cached_input_tokens": 800,
+                    "uncached_input_tokens": 200,
+                    "output_tokens": 50,
+                    "latency_seconds": 3.25,
+                    "api_key": "must-not-render",
+                    "response_text": "must-not-render",
+                },
+            }
+        )
+        self.assertIn("MODEL_RESPONSE", line)
+        self.assertIn("1,000/800/200/50", line)
+        self.assertNotIn("must-not-render", line)
 
     def test_proposal_era_modules_are_absent_from_active_package(self) -> None:
         package_dir = Path(inspect.getfile(app_entry)).parent

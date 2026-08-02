@@ -102,8 +102,8 @@ MANUAL_REVIEW_REQUIRED
 Persist `model_gate_proposal` separately from `controller_transition`. The
 controller owns transition legality, current packet authority, budgets, proof
 status, and lifecycle dispositions. `BUDGET_EXHAUSTED`, `CANCELLED`,
-`PROOF_FAILED`, `TRANSPORT_FAILED`, and `RUNTIME_FAILED` are controller facts,
-not model choices.
+`PROOF_FAILED`, `TRANSPORT_FAILED`, `RUN_STORE_FAILED`, and `RUNTIME_FAILED` are
+controller facts, not model choices.
 
 ### Round authority
 
@@ -127,12 +127,31 @@ model: gpt-5.6
 reasoning effort: high
 auto-promote proven candidate: true
 maximum proven rounds: 2
-maximum model responses: 16
+maximum model responses: 6
 maximum cumulative input tokens: 2,000,000
 maximum cumulative output tokens: 160,000
 maximum output tokens per response: 24,000
 model response timeout: 600 seconds
 ```
+
+Each round uses two primary provider responses:
+
+```text
+combined observation + exploration + selection + prediction + hostile review + override
+-> local validation and engine proof
+-> combined result comparison + self-audit + gate proposal
+```
+
+One correction response is allowed only when the combined authoring response
+does not yield an eligible override. The provider chain resets at each round
+boundary; the exact controller-selected Packet V8 is reattached with a compact
+authority handoff. Within a round, the review response continues from the
+authoring response.
+
+Usage evidence records requested and resolved model identities, total, cached,
+and uncached input tokens, output tokens, provider latency, and cumulative
+totals. It does not infer dollar cost; the provider billing dashboard remains
+the cost authority.
 
 ### Shared engine timeout
 
@@ -170,6 +189,9 @@ alpha conversion, or PNG writer.
 - A durably captured response may resume without another API call.
 - `events.ndjson` is append-only orchestration history.
 - `active-turn.json` is an atomically replaced projection derived from events.
+- In-process readers and writers share one projection lock. Windows sharing
+  violations receive bounded retry; persistent projection failure is
+  `RUN_STORE_FAILED`, never a CUDA runtime failure.
 - Packet, state, override, proof, frame, runtime, and finding artifacts remain
   domain authority.
 
@@ -354,7 +376,7 @@ commits, pushes, and proves a clean tree before continuing.
 - Focused automation/UI checks: 34 passed. Full Python 3.14 suite: 146 passed.
 - Continuation: `continue_to=qualification-and-review-hold`.
 
-### Slice 5 - acceptance-ready hold
+### Slice 5 - live qualification hardening in progress
 
 - Deterministic qualification covers two-round advance/revise authority,
   no-op correction, malformed output, definite and ambiguous provider failure,
@@ -370,10 +392,20 @@ commits, pushes, and proves a clean tree before continuing.
 - The post-implementation responsibility trace proves one owner for packet,
   validator/merge, timeout, proof/process, proof image, importer, and packet
   refresh semantics. Human acceptance and launch remain independently owned.
-- The final full Python 3.14 suite passes 148 tests. No credential was available
-  and no live or paid OpenAI request was made.
-- Hold: one capped `gpt-5.6` high-reasoning session and user review are the next
-  approved boundary. No second run, merge, or broader automation is authorized.
+- The first capped live run reached a valid one-leaf Color Pipeline override
+  after five provider responses, then stopped before proof because a 25 ms UI
+  reader raced the atomic `active-turn.json` replacement on Windows. The event
+  append succeeded; the CUDA engine was never launched. Provider-file cleanup
+  succeeded. The former `RUNTIME_FAILED` label was therefore inaccurate.
+- The live run also recorded 855,767 input and 11,302 output tokens before
+  proof, motivating the two-primary-response round contract above. V8 remains
+  fixed to `gpt-5.6` high; model downgrade/ablation belongs to Packet V9.
+- Current hardening adds Windows-safe projection coordination and retry,
+  `RUN_STORE_FAILED`, compact live event telemetry, detailed cached/uncached
+  usage evidence, and `Open Run Folder` labeling.
+- Hold after hardening proof: one replacement capped `gpt-5.6` high-reasoning
+  session and user review. No second replacement run, merge, or broader
+  automation is authorized.
 
 Final acceptance-ready wording:
 

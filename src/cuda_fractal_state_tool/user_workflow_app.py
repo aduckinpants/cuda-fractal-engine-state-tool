@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import os
 import queue
+import time
 import uuid
 from pathlib import Path
 from typing import Callable, Optional
@@ -80,10 +81,48 @@ def _candidate_preview_pixel_note(
 def _automated_budget_text(projection: dict) -> str:
     return (
         f"Rounds {projection.get('proven_rounds', 0)}/2 · "
-        f"Responses {projection.get('model_responses', 0)}/16 · "
-        f"Tokens in/out {projection.get('cumulative_input_tokens', 0):,}/"
+        f"Responses {projection.get('model_responses', 0)}/6 · "
+        f"Tokens total/cached/uncached/out {projection.get('cumulative_input_tokens', 0):,}/"
+        f"{projection.get('cumulative_cached_input_tokens', 0):,}/"
+        f"{projection.get('cumulative_uncached_input_tokens', 0):,}/"
         f"{projection.get('cumulative_output_tokens', 0):,}"
     )
+
+
+def _format_automated_event(event: dict) -> str:
+    sequence = event.get("sequence", "?")
+    event_type = str(event.get("event_type", "unknown")).upper()
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    if event_type == "CONTROLLER_TRANSITION":
+        detail = f"{payload.get('from', '?')} → {payload.get('to', '?')}"
+    elif event_type == "MODEL_RESPONSE":
+        detail = (
+            f"model={payload.get('requested_model', '?')}→{payload.get('resolved_model', '?')} "
+            f"tokens={payload.get('input_tokens', 0):,}/"
+            f"{payload.get('cached_input_tokens', 0):,}/"
+            f"{payload.get('uncached_input_tokens', 0):,}/"
+            f"{payload.get('output_tokens', 0):,} "
+            f"latency={payload.get('latency_seconds', 0):.1f}s"
+        )
+    elif event_type == "OVERRIDE_VALIDATED":
+        detail = (
+            f"changed_paths={payload.get('changed_path_count', '?')} "
+            f"effect={payload.get('effect', '?')} correction={payload.get('correction_used', False)}"
+        )
+    elif event_type == "SESSION_DISPOSITION":
+        detail = str(payload.get("disposition", "?"))
+    elif event_type == "MODEL_GATE_PROPOSAL":
+        detail = str(payload.get("model_gate_proposal", "?"))
+    elif event_type == "CANDIDATE_REPLAY_PROVEN":
+        detail = f"proof={payload.get('proof_id', '?')}"
+    elif event_type == "ROUND_CONVERSATION_STARTED":
+        detail = (
+            f"round={payload.get('round_number', '?')} "
+            f"chain_reset={payload.get('provider_chain_reset', False)}"
+        )
+    else:
+        detail = ""
+    return f"{sequence:>3}  {event_type}{('  ' + detail) if detail else ''}"
 
 
 class UserWorkflowApp:
@@ -121,6 +160,8 @@ class UserWorkflowApp:
         self._automated_job_id: str | None = None
         self._automated_run_store: AutomatedRunStore | None = None
         self._automated_result_dir: Path | None = None
+        self._automated_last_event_sequence = 0
+        self._next_automated_refresh_at = 0.0
         self._credential_available = False
 
         self.source_path_var = tk.StringVar(value="")
@@ -137,7 +178,9 @@ class UserWorkflowApp:
         self.automated_credential_var = tk.StringVar(value="Credential: not checked")
         self.automated_state_var = tk.StringVar(value="Protocol: idle")
         self.automated_authority_var = tk.StringVar(value="Authority: no active automated run")
-        self.automated_budget_var = tk.StringVar(value="Rounds 0/2 · Responses 0/16 · Tokens in/out 0/0")
+        self.automated_budget_var = tk.StringVar(
+            value="Rounds 0/2 · Responses 0/6 · Tokens total/cached/uncached/out 0/0/0/0"
+        )
         self.automated_disposition_var = tk.StringVar(value="Disposition: not started")
         self.automated_summary_var = tk.StringVar(
             value="Credential not configured · no automated run"
@@ -306,11 +349,13 @@ class UserWorkflowApp:
         self._build_override_editor()
 
     def _build_automation_window(self) -> None:
+        from tkinter.scrolledtext import ScrolledText
+
         ttk = self.ttk
         window = self.tk.Toplevel(self.root)
         window.title("Packet V8 Automated Session POC")
-        window.geometry("760x430")
-        window.minsize(680, 390)
+        window.geometry("840x620")
+        window.minsize(720, 520)
         window.transient(self.root)
         window.protocol("WM_DELETE_WINDOW", window.withdraw)
         window.columnconfigure(0, weight=1)
@@ -338,6 +383,7 @@ class UserWorkflowApp:
         automation = ttk.LabelFrame(window, text="Automated Packet V8 route (POC)", padding=10)
         automation.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
         automation.columnconfigure(0, weight=1)
+        automation.rowconfigure(8, weight=1)
         controls = ttk.Frame(automation)
         controls.grid(row=0, column=0, sticky="ew")
         self.set_api_key_button = ttk.Button(
@@ -353,7 +399,7 @@ class UserWorkflowApp:
         )
         self.cancel_automated_button.grid(row=0, column=2, padx=5)
         self.open_automated_results_button = ttk.Button(
-            controls, text="Open Results", command=self.open_automated_results
+            controls, text="Open Run Folder", command=self.open_automated_results
         )
         self.open_automated_results_button.grid(row=0, column=3, padx=(5, 0))
         self.auto_promote_check = ttk.Checkbutton(
@@ -377,6 +423,18 @@ class UserWorkflowApp:
         ttk.Label(automation, textvariable=self.automated_disposition_var, wraplength=650).grid(
             row=6, column=0, sticky="w"
         )
+        ttk.Label(
+            automation,
+            text="Sanitized live event stream (events.ndjson is authoritative)",
+        ).grid(row=7, column=0, sticky="w", pady=(8, 2))
+        self.automated_event_text = ScrolledText(
+            automation,
+            height=12,
+            wrap="none",
+            font=("Consolas", 9),
+            state="disabled",
+        )
+        self.automated_event_text.grid(row=8, column=0, sticky="nsew")
 
     def open_automation_panel(self) -> None:
         self.automation_window.deiconify()
@@ -798,6 +856,8 @@ class UserWorkflowApp:
             return
         self._automated_run_store = store
         self._automated_result_dir = store.run_dir
+        self._automated_last_event_sequence = 0
+        self._set_text(self.automated_event_text, "Run store created; waiting for events.")
         self.automated_state_var.set("Protocol: starting")
         self.automated_authority_var.set(f"Authority: packet {bundle.packet_id}")
         self.automated_disposition_var.set("Disposition: RUNNING")
@@ -882,8 +942,12 @@ class UserWorkflowApp:
                 f"Authority: packet {result.current_packet.packet_id} · finding {result.current_packet.finding_id}"
             )
             self.automated_budget_var.set(
-                f"Rounds {result.proven_rounds}/2 · Responses {result.usage.model_responses}/16 · "
-                f"Tokens in/out {result.usage.cumulative_input_tokens:,}/{result.usage.cumulative_output_tokens:,}"
+                f"Rounds {result.proven_rounds}/2 · Responses {result.usage.model_responses}/6 · "
+                "Tokens total/cached/uncached/out "
+                f"{result.usage.cumulative_input_tokens:,}/"
+                f"{result.usage.cumulative_cached_input_tokens:,}/"
+                f"{result.usage.cumulative_uncached_input_tokens:,}/"
+                f"{result.usage.cumulative_output_tokens:,}"
             )
             self.session.status_text = result.message
         else:
@@ -894,10 +958,13 @@ class UserWorkflowApp:
 
     def _refresh_automated_projection(self) -> None:
         store = self._automated_run_store
-        if store is None or not store.active_turn_path.is_file():
+        if store is None:
             return
         try:
-            projection = store.load_active_turn().get("projection")
+            active, events = store.load_live_snapshot()
+            if active is None:
+                return
+            projection = active.get("projection")
             if not isinstance(projection, dict):
                 return
             self.automated_state_var.set(f"Protocol: {projection.get('state', 'unknown')}")
@@ -910,6 +977,14 @@ class UserWorkflowApp:
             self.automated_disposition_var.set(
                 f"Disposition: {projection.get('controller_disposition', 'unknown')}"
             )
+            latest_sequence = events[-1]["sequence"] if events else 0
+            if latest_sequence != self._automated_last_event_sequence:
+                self._set_text(
+                    self.automated_event_text,
+                    "\n".join(_format_automated_event(event) for event in events),
+                )
+                self.automated_event_text.see("end")
+                self._automated_last_event_sequence = latest_sequence
         except Exception as exc:
             self.automated_disposition_var.set(f"Disposition projection unavailable: {exc}")
 
@@ -1377,7 +1452,10 @@ class UserWorkflowApp:
             except queue.Empty:
                 break
             callback()
-        self._refresh_automated_projection()
+        now = time.monotonic()
+        if now >= self._next_automated_refresh_at:
+            self._next_automated_refresh_at = now + 0.25
+            self._refresh_automated_projection()
         self.root.after(25, self._drain_completions)
 
     def _set_error(self, message: str) -> None:

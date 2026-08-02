@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,33 @@ from .workspace_layout import initialize_workspace_root
 AUTOMATED_RUN_MANIFEST_VERSION = 1
 AUTOMATED_EVENT_VERSION = 1
 ACTIVE_TURN_VERSION = 1
+ATOMIC_REPLACE_ATTEMPTS = 12
+ATOMIC_REPLACE_DELAY_SECONDS = 0.025
+
+
+class AtomicWriteError(RuntimeError):
+    def __init__(self, path: Path, attempts: int, cause: OSError) -> None:
+        super().__init__(
+            f"Atomic replacement failed after {attempts} attempts: {path}: {cause}"
+        )
+        self.path = path
+        self.attempts = attempts
+        self.cause = cause
+
+
+class RunStoreWriteError(RuntimeError):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        event_appended: bool,
+        event_sequence: int | None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.event_appended = event_appended
+        self.event_sequence = event_sequence
 
 
 def _utc_now() -> str:
@@ -39,6 +68,12 @@ def _compact_json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
+def _is_retryable_replace_error(exc: OSError) -> bool:
+    if os.name != "nt":
+        return False
+    return isinstance(exc, PermissionError) or getattr(exc, "winerror", None) in {5, 32}
+
+
 def _atomic_write(path: Path, payload: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
@@ -47,7 +82,14 @@ def _atomic_write(path: Path, payload: bytes) -> None:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        for attempt in range(1, ATOMIC_REPLACE_ATTEMPTS + 1):
+            try:
+                os.replace(temporary, path)
+                break
+            except OSError as exc:
+                if not _is_retryable_replace_error(exc) or attempt == ATOMIC_REPLACE_ATTEMPTS:
+                    raise AtomicWriteError(path, attempt, exc) from exc
+                time.sleep(ATOMIC_REPLACE_DELAY_SECONDS * attempt)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -65,6 +107,12 @@ def _load_object(path: Path, label: str) -> dict[str, Any]:
 @dataclass(frozen=True)
 class AutomatedRunStore:
     run_dir: Path
+    _projection_lock: threading.RLock = field(
+        default_factory=threading.RLock,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     @classmethod
     def create(
@@ -120,12 +168,28 @@ class AutomatedRunStore:
     def write_evidence_json(self, relative_path: str, value: Any) -> Path:
         """Atomically retain sanitized orchestration evidence below this run."""
         path = self._evidence_path(relative_path)
-        _atomic_write(path, _json_bytes(value))
+        try:
+            _atomic_write(path, _json_bytes(value))
+        except AtomicWriteError as exc:
+            raise RunStoreWriteError(
+                "EVIDENCE_JSON_WRITE_FAILED",
+                str(exc),
+                event_appended=False,
+                event_sequence=None,
+            ) from exc
         return path
 
     def write_evidence_bytes(self, relative_path: str, payload: bytes) -> Path:
         path = self._evidence_path(relative_path)
-        _atomic_write(path, payload)
+        try:
+            _atomic_write(path, payload)
+        except AtomicWriteError as exc:
+            raise RunStoreWriteError(
+                "EVIDENCE_BYTES_WRITE_FAILED",
+                str(exc),
+                event_appended=False,
+                event_sequence=None,
+            ) from exc
         return path
 
     def _evidence_path(self, relative_path: str) -> Path:
@@ -143,26 +207,29 @@ class AutomatedRunStore:
         return resolved
 
     def read_events(self) -> list[dict[str, Any]]:
-        if not self.events_path.exists():
-            return []
-        events: list[dict[str, Any]] = []
-        for line_number, line in enumerate(
-            self.events_path.read_text(encoding="utf-8").splitlines(), start=1
-        ):
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"Automated event line {line_number} is malformed") from exc
-            if not isinstance(event, dict):
-                raise ValueError(f"Automated event line {line_number} is not an object")
-            if event.get("event_version") != AUTOMATED_EVENT_VERSION:
-                raise ValueError(f"Automated event line {line_number} has an unsupported version")
-            if event.get("sequence") != line_number:
-                raise ValueError("Automated event history has a sequence gap or duplicate")
-            if not isinstance(event.get("projection"), dict):
-                raise ValueError("Automated event has no current-state projection")
-            events.append(event)
-        return events
+        with self._projection_lock:
+            if not self.events_path.exists():
+                return []
+            events: list[dict[str, Any]] = []
+            for line_number, line in enumerate(
+                self.events_path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Automated event line {line_number} is malformed") from exc
+                if not isinstance(event, dict):
+                    raise ValueError(f"Automated event line {line_number} is not an object")
+                if event.get("event_version") != AUTOMATED_EVENT_VERSION:
+                    raise ValueError(
+                        f"Automated event line {line_number} has an unsupported version"
+                    )
+                if event.get("sequence") != line_number:
+                    raise ValueError("Automated event history has a sequence gap or duplicate")
+                if not isinstance(event.get("projection"), dict):
+                    raise ValueError("Automated event has no current-state projection")
+                events.append(event)
+            return events
 
     def record_transition(
         self,
@@ -172,22 +239,31 @@ class AutomatedRunStore:
     ) -> dict[str, Any]:
         if not event_type.strip():
             raise ValueError("Automated event type is required")
-        events = self.read_events()
-        event = {
-            "event_version": AUTOMATED_EVENT_VERSION,
-            "sequence": len(events) + 1,
-            "recorded_at_utc": _utc_now(),
-            "event_type": event_type,
-            "payload": payload,
-            "projection": projection,
-        }
-        self.events_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.events_path.open("ab") as handle:
-            handle.write(_compact_json_bytes(event))
-            handle.flush()
-            os.fsync(handle.fileno())
-        self._write_active_turn(event["sequence"], projection)
-        return event
+        with self._projection_lock:
+            events = self.read_events()
+            event = {
+                "event_version": AUTOMATED_EVENT_VERSION,
+                "sequence": len(events) + 1,
+                "recorded_at_utc": _utc_now(),
+                "event_type": event_type,
+                "payload": payload,
+                "projection": projection,
+            }
+            self.events_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.events_path.open("ab") as handle:
+                handle.write(_compact_json_bytes(event))
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                self._write_active_turn(event["sequence"], projection)
+            except RunStoreWriteError as exc:
+                raise RunStoreWriteError(
+                    "ACTIVE_TURN_PROJECTION_WRITE_FAILED_AFTER_EVENT_APPEND",
+                    str(exc),
+                    event_appended=True,
+                    event_sequence=event["sequence"],
+                ) from exc
+            return event
 
     def _write_active_turn(self, sequence: int, projection: dict[str, Any]) -> None:
         active = {
@@ -195,33 +271,49 @@ class AutomatedRunStore:
             "last_event_sequence": sequence,
             "projection": projection,
         }
-        _atomic_write(self.active_turn_path, _json_bytes(active))
+        try:
+            _atomic_write(self.active_turn_path, _json_bytes(active))
+        except AtomicWriteError as exc:
+            raise RunStoreWriteError(
+                "ACTIVE_TURN_PROJECTION_WRITE_FAILED",
+                str(exc),
+                event_appended=False,
+                event_sequence=sequence,
+            ) from exc
 
     def load_active_turn(self) -> dict[str, Any]:
-        active = _load_object(self.active_turn_path, "Automated active-turn projection")
-        if active.get("active_turn_version") != ACTIVE_TURN_VERSION:
-            raise ValueError("Unsupported automated active-turn version")
-        return active
+        with self._projection_lock:
+            active = _load_object(self.active_turn_path, "Automated active-turn projection")
+            if active.get("active_turn_version") != ACTIVE_TURN_VERSION:
+                raise ValueError("Unsupported automated active-turn version")
+            return active
+
+    def load_live_snapshot(self) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+        """Read the derived projection and append-only events under one in-process lock."""
+        with self._projection_lock:
+            active = self.load_active_turn() if self.active_turn_path.is_file() else None
+            return active, self.read_events()
 
     def recover_active_turn(self) -> dict[str, Any]:
-        events = self.read_events()
-        if not events:
-            raise ValueError("Automated run has no event history to recover")
-        latest = events[-1]
-        expected_sequence = latest["sequence"]
-        expected_projection = latest["projection"]
-        if not self.active_turn_path.exists():
-            self._write_active_turn(expected_sequence, expected_projection)
+        with self._projection_lock:
+            events = self.read_events()
+            if not events:
+                raise ValueError("Automated run has no event history to recover")
+            latest = events[-1]
+            expected_sequence = latest["sequence"]
+            expected_projection = latest["projection"]
+            if not self.active_turn_path.exists():
+                self._write_active_turn(expected_sequence, expected_projection)
+                return expected_projection
+            active = self.load_active_turn()
+            active_sequence = active.get("last_event_sequence")
+            if not isinstance(active_sequence, int):
+                raise ValueError("Automated active-turn projection has no valid event sequence")
+            if active_sequence > expected_sequence:
+                raise ValueError("Automated active-turn projection is ahead of event history")
+            if active_sequence < expected_sequence:
+                self._write_active_turn(expected_sequence, expected_projection)
+                return expected_projection
+            if active.get("projection") != expected_projection:
+                raise ValueError("Automated active-turn projection disagrees with event history")
             return expected_projection
-        active = self.load_active_turn()
-        active_sequence = active.get("last_event_sequence")
-        if not isinstance(active_sequence, int):
-            raise ValueError("Automated active-turn projection has no valid event sequence")
-        if active_sequence > expected_sequence:
-            raise ValueError("Automated active-turn projection is ahead of event history")
-        if active_sequence < expected_sequence:
-            self._write_active_turn(expected_sequence, expected_projection)
-            return expected_projection
-        if active.get("projection") != expected_projection:
-            raise ValueError("Automated active-turn projection disagrees with event history")
-        return expected_projection
