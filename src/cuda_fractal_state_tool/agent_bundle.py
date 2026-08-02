@@ -15,6 +15,12 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from .async_jobs import JobContext
+from .authority_container import (
+    AUTHORITY_CONTAINER_VERSION,
+    AuthorityArtifact,
+    encode_authority_container,
+    parse_authority_container,
+)
 from .fractal_descriptive_catalog import validate_catalog_bytes
 from .fractal_viewport_facts import validate_viewport_facts_bytes
 from .json_utils import loads_no_duplicates
@@ -28,9 +34,9 @@ from .runtime_surface import (
 )
 
 
-PACKET_VERSION = 7
-BUNDLE_MANIFEST_VERSION = 3
-SUPPORTED_PACKET_MANIFEST_VERSIONS = {6: 2, 7: 3}
+PACKET_VERSION = 8
+BUNDLE_MANIFEST_VERSION = 4
+SUPPORTED_PACKET_MANIFEST_VERSIONS = {6: 2, 7: 3, 8: 4}
 AUTHORING_SURFACE_VERSION = 2
 
 _SCHEMA_FILENAME = "fractal_binding_surface_v1.ui_schema.json"
@@ -105,6 +111,66 @@ def _load_json_object(payload: bytes, label: str) -> dict[str, Any]:
     return value
 
 
+def _validate_v8_embedded_artifacts(packet_dir: Path, manifest: dict[str, Any]) -> None:
+    if manifest.get("authority_container_version") != AUTHORITY_CONTAINER_VERSION:
+        raise ValueError("Packet V8 has an unsupported authority container version")
+    declared = manifest.get("embedded_artifacts")
+    if not isinstance(declared, list):
+        raise ValueError("Packet V8 manifest has no embedded_artifacts array")
+    declared_by_name: dict[str, dict[str, Any]] = {}
+    for record in declared:
+        if not isinstance(record, dict) or not isinstance(record.get("artifact_filename"), str):
+            raise ValueError("Packet V8 manifest contains an invalid embedded artifact record")
+        name = record["artifact_filename"]
+        if name in declared_by_name:
+            raise ValueError(f"Packet V8 manifest repeats embedded artifact record: {name}")
+        declared_by_name[name] = record
+
+    parsed_by_name: dict[str, tuple[str, Any]] = {}
+    for container_name in (
+        _STATE_AUTHORING_TRANSPORT_FILENAME,
+        _COLOR_PIPELINE_TRANSPORT_FILENAME,
+        _FINDING_CONTEXT_TRANSPORT_FILENAME,
+    ):
+        parsed = parse_authority_container((packet_dir / container_name).read_bytes())
+        for name, artifact in parsed.artifacts.items():
+            if name in parsed_by_name:
+                raise ValueError(f"Packet V8 repeats embedded authority across containers: {name}")
+            parsed_by_name[name] = (container_name, artifact)
+    if set(parsed_by_name) != set(declared_by_name):
+        raise ValueError("Packet V8 embedded authority records disagree with its containers")
+
+    for name, (container_name, artifact) in parsed_by_name.items():
+        expected = {
+            "container_path": container_name,
+            "artifact_filename": name,
+            "authority_role": artifact.role,
+            "media_type": artifact.media_type,
+            "encoding": artifact.encoding,
+            "size_bytes": artifact.byte_length,
+            "sha256": artifact.sha256,
+            "record_id": artifact.record_id,
+        }
+        if declared_by_name[name] != expected:
+            raise ValueError(f"Packet V8 embedded artifact manifest record changed: {name}")
+
+    authority_identities = manifest.get("authority_identities")
+    if not isinstance(authority_identities, dict):
+        raise ValueError("Packet V8 manifest has no authority identities")
+    identity_links = {
+        _PARAMETER_SURFACE_FILENAME: "parameter_surface_sha256",
+        _SCHEMA_FILENAME: "ui_schema_sha256",
+        _UI_SALT_FILENAME: "ui_salt_contract_sha256",
+        _CATALOG_FILENAME: "fractal_descriptive_catalog_sha256",
+        _VIEWPORT_FACTS_FILENAME: "fractal_viewport_facts_sha256",
+        _AUTHORING_SURFACE_FILENAME: "state_override_authoring_surface_sha256",
+    }
+    for filename, identity_key in identity_links.items():
+        parsed = parsed_by_name.get(filename)
+        if parsed is None or parsed[1].sha256 != authority_identities.get(identity_key):
+            raise ValueError(f"Packet V8 embedded authority identity disagrees for {filename}")
+
+
 def load_agent_bundle_handoff(packet_dir: Path) -> AgentBundleHandoff:
     packet_dir = packet_dir.resolve()
     manifest_path = packet_dir / "manifest.json"
@@ -153,15 +219,40 @@ def load_agent_bundle_handoff(packet_dir: Path) -> AgentBundleHandoff:
     recommended = _names("recommended_attachments")
     if set(required) & set(recommended):
         raise ValueError(f"Packet V{packet_version} attachment lists overlap")
-    if not set(required + recommended).issubset(recorded_paths):
+    allowed_attachment_paths = set(recorded_paths)
+    if packet_version == 8:
+        allowed_attachment_paths.add("manifest.json")
+    if not set(required + recommended).issubset(allowed_attachment_paths):
         raise ValueError(f"Packet V{packet_version} attachment list names are absent from its files manifest")
     by_path = {record["path"]: record for record in records}
     for filename in required:
+        if filename == "manifest.json" and packet_version == 8:
+            continue
         if by_path[filename].get("web_handoff") != "required":
             raise ValueError(f"Packet V{packet_version} required attachment classification disagrees for {filename}")
     for filename in recommended:
         if by_path[filename].get("web_handoff") != "recommended":
             raise ValueError(f"Packet V{packet_version} recommended attachment classification disagrees for {filename}")
+
+    if packet_version == 8:
+        drag_all = _names("drag_all_attachments")
+        expected_drag_all = (
+            "packet.md",
+            "manifest.json",
+            "state.json",
+            _STATE_AUTHORING_TRANSPORT_FILENAME,
+            _COLOR_PIPELINE_TRANSPORT_FILENAME,
+            _FINDING_CONTEXT_TRANSPORT_FILENAME,
+            *((_WEB_FRAME_FILENAME,) if _WEB_FRAME_FILENAME in actual_paths else ()),
+        )
+        if (
+            drag_all != required
+            or drag_all != expected_drag_all
+            or len(drag_all) != len(set(drag_all))
+            or set(drag_all) != actual_paths | {"manifest.json"}
+        ):
+            raise ValueError("Packet V8 drag-all attachment list must name every physical packet file exactly once")
+        _validate_v8_embedded_artifacts(packet_dir, manifest)
 
     packet_bytes = packet_path.read_bytes()
     try:
@@ -852,40 +943,6 @@ def _selected_description_lines(entry: dict[str, Any]) -> list[str]:
     ]
 
 
-def _markdown_fence(payload: str) -> str:
-    longest = 0
-    current = 0
-    for character in payload:
-        if character == "`":
-            current += 1
-            longest = max(longest, current)
-        else:
-            current = 0
-    return "`" * max(3, longest + 1)
-
-
-def _embedded_text_artifact(
-    filename: str,
-    role: str,
-    payload: bytes,
-    *,
-    language: str,
-) -> str:
-    try:
-        text = payload.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError(f"Web transport source {filename} is not valid UTF-8") from exc
-    fence = _markdown_fence(text)
-    separator = "" if text.endswith(("\n", "\r")) else "\n"
-    return (
-        f"## `{filename}`\n\n"
-        f"- Role: {role}\n"
-        f"- Exact neighboring-file size: `{len(payload)}` bytes\n"
-        f"- Exact neighboring-file SHA-256: `{_sha256_bytes(payload)}`\n\n"
-        f"{fence}{language}\n{text}{separator}{fence}\n"
-    )
-
-
 def _pipeline_topology_index(state: dict[str, Any]) -> dict[str, Any]:
     draft = state.get("color_pipeline_draft")
     if not isinstance(draft, dict) or not isinstance(draft.get("lanes"), list):
@@ -934,120 +991,188 @@ def _build_transport_views(
     *,
     has_pipeline_example: bool,
 ) -> dict[str, bytes]:
-    state_authoring_sections = [
-        "# State Authoring Authorities\n\n"
-        "This file is a deterministic web-transport view. Each exact section is "
-        "bound to an immutable neighboring local authority by byte size and SHA-256. "
-        "The individual JSON files remain the proof and validation authority.\n",
-        _embedded_text_artifact(
-            _PARAMETER_SURFACE_FILENAME,
-            "complete runtime-selected applicability authority",
-            (stage_dir / _PARAMETER_SURFACE_FILENAME).read_bytes(),
-            language="json",
+    state_authoring = encode_authority_container(
+        "State Authoring Authorities",
+        (
+            "Packet V8 exact-byte authority container. The finding-specific authoring index is shown first for "
+            "navigation. Machine authority exists only in the marked embedded-artifact records; headings and "
+            "prose grant no authoring rights."
         ),
-        _embedded_text_artifact(
-            _SCHEMA_FILENAME,
-            "deployed UI control and state-binding authority",
-            (stage_dir / _SCHEMA_FILENAME).read_bytes(),
-            language="json",
+        (
+            AuthorityArtifact(
+                _AUTHORING_SURFACE_FILENAME,
+                "finding-specific mechanically derived state-override index",
+                "application/json",
+                (stage_dir / _AUTHORING_SURFACE_FILENAME).read_bytes(),
+            ),
+            AuthorityArtifact(
+                _SCHEMA_FILENAME,
+                "exact deployed UI control and serialized state-binding authority",
+                "application/json",
+                (stage_dir / _SCHEMA_FILENAME).read_bytes(),
+            ),
+            AuthorityArtifact(
+                _PARAMETER_SURFACE_FILENAME,
+                "exact runtime-selected parameter applicability authority",
+                "application/json",
+                (stage_dir / _PARAMETER_SURFACE_FILENAME).read_bytes(),
+            ),
         ),
-        _embedded_text_artifact(
-            _AUTHORING_SURFACE_FILENAME,
-            "finding-specific mechanically derived state-override index",
-            (stage_dir / _AUTHORING_SURFACE_FILENAME).read_bytes(),
-            language="json",
-        ),
-    ]
+    )
 
-    topology_bytes = _json_bytes(_pipeline_topology_index(state))
-    pipeline_sections = [
-        "# Color Pipeline Authority\n\n"
-        "This file is a deterministic web-transport view. The complete UI-Salt "
-        "contract below owns function and parameter validity. The topology index "
-        "is navigation help derived from the exact captured state; it grants no "
-        "additional authority.\n",
-        _embedded_text_artifact(
-            _UI_SALT_FILENAME,
-            "complete deployed Color Pipeline function and compatibility authority",
-            (stage_dir / _UI_SALT_FILENAME).read_bytes(),
-            language="json",
-        ),
-        _embedded_text_artifact(
+    pipeline_artifacts = [
+        AuthorityArtifact(
             "current-color-pipeline-topology-index.json",
             "mechanical navigation index derived from exact staged state.json",
-            topology_bytes,
-            language="json",
-        ),
+            "application/json",
+            _json_bytes(_pipeline_topology_index(state)),
+        )
     ]
+    pipeline_notice = ""
     if has_pipeline_example:
-        pipeline_sections.append(
-            _embedded_text_artifact(
+        pipeline_artifacts.append(
+            AuthorityArtifact(
                 _PIPELINE_EXAMPLE_FILENAME,
                 "complete unchanged whole-array structural editing example",
+                "application/json",
                 (stage_dir / _PIPELINE_EXAMPLE_FILENAME).read_bytes(),
-                language="json",
             )
         )
     else:
-        pipeline_sections.append(
-            "## Pipeline structural example unavailable\n\n"
-            "The captured state contains no complete `color_pipeline_draft`; "
-            "Color Pipeline override authoring is unavailable for this packet.\n"
+        pipeline_notice = (
+            " Pipeline structural example unavailable: the captured state contains no complete "
+            "color_pipeline_draft, so Color Pipeline override authoring is unavailable."
         )
+    pipeline_artifacts.append(
+        AuthorityArtifact(
+            _UI_SALT_FILENAME,
+            "exact deployed Color Pipeline function and compatibility authority",
+            "application/json",
+            (stage_dir / _UI_SALT_FILENAME).read_bytes(),
+        )
+    )
+    color_pipeline = encode_authority_container(
+        "Color Pipeline Authority",
+        (
+            "Packet V8 exact-byte authority container. Captured topology and the finding-specific structural "
+            "example precede the deployed UI-Salt contract. The topology is navigation, while the exact contract "
+            "owns function and parameter validity."
+            + pipeline_notice
+        ),
+        pipeline_artifacts,
+    )
 
     catalog_bytes = (stage_dir / _CATALOG_FILENAME).read_bytes()
-    selected_entry_bytes = _json_bytes(
-        {
-            "source_catalog_sha256": _sha256_bytes(catalog_bytes),
-            "selected_entry": selected_entry,
-        }
-    )
-    context_sections = [
-        "# Finding Context\n\n"
-        "This file consolidates optional human context and the selected engine-owned "
-        "description. Exact replay and authoring authority remain in the separately "
-        "attached state files and authority documents.\n",
-        _embedded_text_artifact(
+    context_artifacts = [
+        AuthorityArtifact(
             "selected-fractal-description.json",
-            "selected entry projected from the complete neighboring descriptive catalog",
-            selected_entry_bytes,
-            language="json",
-        ),
+            "selected engine-owned description projected from the exact catalog appendix",
+            "application/json",
+            _json_bytes(
+                {
+                    "source_catalog_sha256": _sha256_bytes(catalog_bytes),
+                    "selected_entry": selected_entry,
+                }
+            ),
+        )
     ]
+    if (stage_dir / "fractal-state.json").is_file():
+        context_artifacts.append(
+            AuthorityArtifact(
+                "fractal-state.json",
+                "exact capture-time review projection and derived receipts",
+                "application/json",
+                (stage_dir / "fractal-state.json").read_bytes(),
+            )
+        )
+    context_artifacts.append(
+        AuthorityArtifact(
+            _VIEWPORT_FACTS_FILENAME,
+            "exact engine-owned viewport geometry and inverse-fit authority",
+            "application/json",
+            (stage_dir / _VIEWPORT_FACTS_FILENAME).read_bytes(),
+        )
+    )
     if (stage_dir / "finding.json").is_file():
-        context_sections.append(
-            _embedded_text_artifact(
+        context_artifacts.append(
+            AuthorityArtifact(
                 "finding.json",
-                "capture manifest context",
+                "exact capture manifest context",
+                "application/json",
                 (stage_dir / "finding.json").read_bytes(),
-                language="json",
             )
         )
-    else:
-        context_sections.append("## `finding.json` unavailable\n\nNo capture manifest was present.\n")
     if (stage_dir / "field-notes.md").is_file():
-        context_sections.append(
-            _embedded_text_artifact(
+        context_artifacts.append(
+            AuthorityArtifact(
                 "field-notes.md",
-                "user-authored context",
+                "exact user-authored context",
+                "text/markdown",
                 (stage_dir / "field-notes.md").read_bytes(),
-                language="markdown",
             )
         )
-    else:
-        context_sections.append("## `field-notes.md` unavailable\n\nNo field notes were present.\n")
-    if unavailable:
-        context_sections.append(
-            "## Other unavailable optional artifacts\n\n"
-            + "\n".join(f"- `{name}`" for name in unavailable)
-            + "\n"
+    context_artifacts.append(
+        AuthorityArtifact(
+            _CATALOG_FILENAME,
+            "complete exact engine-owned descriptive catalog appendix",
+            "application/json",
+            catalog_bytes,
         )
+    )
+    unavailable_notice = (
+        " Unavailable optional artifacts: "
+        + "; ".join(f"`{name}` unavailable" for name in unavailable)
+        + "."
+        if unavailable
+        else " No optional context artifact is unavailable."
+    )
+    finding_context = encode_authority_container(
+        "Finding Context",
+        (
+            "Packet V8 exact-byte authority container. The selected engine-owned description is first; the "
+            "complete descriptive catalog remains attached as the final appendix."
+            + unavailable_notice
+        ),
+        context_artifacts,
+    )
 
     return {
-        _STATE_AUTHORING_TRANSPORT_FILENAME: "\n".join(state_authoring_sections).encode("utf-8"),
-        _COLOR_PIPELINE_TRANSPORT_FILENAME: "\n".join(pipeline_sections).encode("utf-8"),
-        _FINDING_CONTEXT_TRANSPORT_FILENAME: "\n".join(context_sections).encode("utf-8"),
+        _STATE_AUTHORING_TRANSPORT_FILENAME: state_authoring,
+        _COLOR_PIPELINE_TRANSPORT_FILENAME: color_pipeline,
+        _FINDING_CONTEXT_TRANSPORT_FILENAME: finding_context,
     }
+
+
+def _embedded_artifact_manifest_records(
+    transport_views: dict[str, bytes],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for container_name in (
+        _STATE_AUTHORING_TRANSPORT_FILENAME,
+        _COLOR_PIPELINE_TRANSPORT_FILENAME,
+        _FINDING_CONTEXT_TRANSPORT_FILENAME,
+    ):
+        parsed = parse_authority_container(transport_views[container_name])
+        for artifact in parsed.artifacts.values():
+            if artifact.filename in seen:
+                raise ValueError(
+                    f"Packet V8 repeats embedded artifact filename across containers: {artifact.filename}"
+                )
+            seen.add(artifact.filename)
+            records.append(
+                {
+                    "container_path": container_name,
+                    "artifact_filename": artifact.filename,
+                    "authority_role": artifact.role,
+                    "media_type": artifact.media_type,
+                    "encoding": artifact.encoding,
+                    "size_bytes": artifact.byte_length,
+                    "sha256": artifact.sha256,
+                    "record_id": artifact.record_id,
+                }
+            )
+    return records
 
 
 def _packet_markdown(
@@ -1091,7 +1216,7 @@ def _packet_markdown(
     else:
         web_frame_lines = [
             f"`{_WEB_FRAME_FILENAME}` is a bounded discussion derivative of "
-            f"`{web_frame_derivative['source_path']}`.",
+            f"the durable finding artifact `{web_frame_derivative['source_finding_relative_path']}`.",
             f"- Source: `{web_frame_derivative['source_width']} × {web_frame_derivative['source_height']}`; "
             f"SHA-256 `{web_frame_derivative['source_sha256']}`",
             f"- Derivative: `{web_frame_derivative['derivative_width']} × "
@@ -1104,7 +1229,7 @@ def _packet_markdown(
         ]
     example_note = (
         f"A complete unchanged structural template is embedded in `{_COLOR_PIPELINE_TRANSPORT_FILENAME}` "
-        f"and retained locally as `{_PIPELINE_EXAMPLE_FILENAME}`. "
+        f"as the `{_PIPELINE_EXAMPLE_FILENAME}` embedded artifact. "
         "It demonstrates the required whole-array replacement shape; it is not a recommended visual change. "
         "When you change a function, return the complete parameter list for the new function in exact deployed-contract order."
         if has_pipeline_example
@@ -1134,7 +1259,7 @@ def _packet_markdown(
 
     return "\n".join(
         [
-            "# CUDA Fractal Finding — Agent Exploration Packet V7",
+            "# CUDA Fractal Finding — Agent Exploration Packet V8",
             "",
             "## Behavioral contract — read first",
             "",
@@ -1286,7 +1411,7 @@ def _packet_markdown(
             *([f"- `{path}`" for path in authorable_paths] or ["- No ordinary state paths resolved for this capture."]),
             "",
             "The complete types, ranges, options, current values, source control IDs, and authority hashes are embedded in",
-            f"`{_STATE_AUTHORING_TRANSPORT_FILENAME}`. The complete local JSON authorities remain in this immutable packet.",
+            f"`{_STATE_AUTHORING_TRANSPORT_FILENAME}`. The complete exact JSON authorities remain embedded in this immutable packet.",
             "",
             "## Required authority attachments",
             "",
@@ -1296,8 +1421,8 @@ def _packet_markdown(
             "",
             "1. Paste this exact `packet.md` text into the fresh session.",
             "2. Open this packet's bundle folder.",
-            "3. Attach every file under Required authority attachments, preserving its filename.",
-            "4. Confirm the session can identify every required authority before relying on its analysis.",
+            "3. Drag every file in this packet directory into the web session, including `packet.md` and `manifest.json`.",
+            "4. Confirm the session can identify all seven files (or six when no frame exists) before relying on its analysis.",
             "",
             "## Recommended context attachments",
             "",
@@ -1307,19 +1432,18 @@ def _packet_markdown(
             "",
             *(unavailable_lines or ["- None."]),
             "",
-            "Copying this Markdown does not transport those files. Attach them from the packet directory before relying on them.",
+            "Copying this Markdown does not transport the other files. The primary handoff is drag-all from the packet directory.",
             "",
             "## Authority ownership",
             "",
             "- `state.json`: exact complete replay base.",
-            "- `fractal-state.json`: capture-time review projection and derived receipts, when present.",
-            "- `fractal-viewport-facts.json`: engine-owned exact camera geometry and inverse-fit authority.",
+            f"- `{_FINDING_CONTEXT_TRANSPORT_FILENAME}` embeds `fractal-state.json` when present and the exact engine-owned viewport facts.",
             f"- `{_STATE_AUTHORING_TRANSPORT_FILENAME}`: exact embedded parameter surface, UI schema, and finding-specific authoring index.",
             f"- `{_COLOR_PIPELINE_TRANSPORT_FILENAME}`: exact embedded UI-Salt contract and current pipeline editing context.",
             f"- `{_FINDING_CONTEXT_TRANSPORT_FILENAME}`: finding manifest, field notes, and selected engine-owned description.",
             f"- `{_WEB_FRAME_FILENAME}`: bounded PNG discussion derivative with explicit source and resampling provenance.",
             "- The exact captured source frame remains local immutable visual evidence and is not silently replaced.",
-            "- The individual JSON and context files remain local immutable proof authorities even when they are not web uploads.",
+            "- Exact JSON and context authorities are byte-preserved in the three marked Packet V8 containers.",
             "",
             f"Packet ID: `{packet_id}`",
             "",
@@ -1376,7 +1500,7 @@ def build_agent_bundle(
     packet_id = str(uuid.uuid4())
     packets_dir = finding_dir / "packets"
     packets_dir.mkdir(parents=True, exist_ok=True)
-    stage_dir = packets_dir / f".packet-v7-{packet_id}.tmp"
+    stage_dir = packets_dir / f".packet-v8-{packet_id}.tmp"
     final_dir = packets_dir / packet_id
     if stage_dir.exists() or final_dir.exists():
         raise FileExistsError(f"Packet identity collision: {packet_id}")
@@ -1495,6 +1619,11 @@ def build_agent_bundle(
             if frame_filename is not None
             else None
         )
+        if web_frame_derivative is not None and frame_path is not None:
+            web_frame_derivative["source_finding_relative_path"] = frame_path.relative_to(
+                finding_dir
+            ).as_posix()
+            web_frame_derivative.pop("source_path", None)
         unavailable = [
             name
             for name in ("fractal-state.json", "finding.json", "field-notes.md")
@@ -1509,18 +1638,17 @@ def build_agent_bundle(
         )
         for filename, payload in transport_views.items():
             _write_bytes(stage_dir / filename, payload)
+        embedded_artifact_records = _embedded_artifact_manifest_records(transport_views)
 
-        required = [
+        packet_authority_attachments = [
             "state.json",
-            *(["fractal-state.json"] if "fractal-state.json" in source_paths else []),
-            _VIEWPORT_FACTS_FILENAME,
             _STATE_AUTHORING_TRANSPORT_FILENAME,
             _COLOR_PIPELINE_TRANSPORT_FILENAME,
             _FINDING_CONTEXT_TRANSPORT_FILENAME,
             *([_WEB_FRAME_FILENAME] if web_frame_derivative else []),
         ]
         recommended: list[str] = []
-        hash_names = required + recommended
+        hash_names = packet_authority_attachments + recommended
         file_hashes = {name: sha256_file(stage_dir / name) for name in hash_names}
         packet_text = _packet_markdown(
             packet_id,
@@ -1529,7 +1657,7 @@ def build_agent_bundle(
             selected_entry,
             viewport_facts,
             authoring_surface,
-            required,
+            packet_authority_attachments,
             recommended,
             unavailable,
             file_hashes,
@@ -1539,26 +1667,20 @@ def build_agent_bundle(
         packet_bytes = packet_text.encode("utf-8")
         _write_bytes(stage_dir / "packet.md", packet_bytes)
 
+        required = ["packet.md", "manifest.json", *packet_authority_attachments]
+        final_payload_names = set(required) - {"manifest.json"}
+        for path in tuple(stage_dir.iterdir()):
+            if path.is_file() and path.name not in final_payload_names:
+                path.unlink()
+
         file_records: list[dict[str, Any]] = []
         roles = {
             "packet.md": "behavior_and_authority_index",
             "state.json": "complete_replay_base",
-            "fractal-state.json": "capture_review_projection",
-            "finding.json": "capture_manifest_context",
-            "field-notes.md": "user_context",
-            _SCHEMA_FILENAME: "deployed_ui_control_authority",
-            _UI_SALT_FILENAME: "deployed_color_pipeline_authority",
-            _PARAMETER_SURFACE_FILENAME: "runtime_parameter_applicability_authority",
-            _CATALOG_FILENAME: "runtime_fractal_description_authority",
-            _VIEWPORT_FACTS_FILENAME: "runtime_viewport_geometry_authority",
-            _AUTHORING_SURFACE_FILENAME: "finding_specific_state_override_index",
-            _PIPELINE_EXAMPLE_FILENAME: "captured_pipeline_whole_array_example",
-            _STATE_AUTHORING_TRANSPORT_FILENAME: "consolidated_state_authoring_transport_view",
-            _COLOR_PIPELINE_TRANSPORT_FILENAME: "consolidated_color_pipeline_transport_view",
-            _FINDING_CONTEXT_TRANSPORT_FILENAME: "consolidated_finding_context_transport_view",
+            _STATE_AUTHORING_TRANSPORT_FILENAME: "exact_state_authoring_authority_container",
+            _COLOR_PIPELINE_TRANSPORT_FILENAME: "exact_color_pipeline_authority_container",
+            _FINDING_CONTEXT_TRANSPORT_FILENAME: "exact_finding_context_authority_container",
         }
-        if frame_filename:
-            roles[frame_filename] = "captured_visual_evidence"
         if web_frame_derivative:
             roles[_WEB_FRAME_FILENAME] = "web_discussion_derivative"
         for path in sorted(item for item in stage_dir.iterdir() if item.is_file()):
@@ -1573,10 +1695,6 @@ def build_agent_bundle(
                         if path.name in required
                         else "recommended"
                         if path.name in recommended
-                        else "index"
-                        if path.name == "packet.md"
-                        else "generated_helper"
-                        if path.name == _PIPELINE_EXAMPLE_FILENAME
                         else "local_authority"
                     ),
                 }
@@ -1586,6 +1704,7 @@ def build_agent_bundle(
         manifest = {
             "bundle_manifest_version": BUNDLE_MANIFEST_VERSION,
             "packet_version": PACKET_VERSION,
+            "authority_container_version": AUTHORITY_CONTAINER_VERSION,
             "packet_id": packet_id,
             "finding_id": finding_id,
             "selected_fractal_type": selected,
@@ -1604,9 +1723,11 @@ def build_agent_bundle(
                 "state_override_authoring_surface_sha256": _sha256_bytes(authoring_surface_bytes),
             },
             "web_frame_derivative": web_frame_derivative,
+            "drag_all_attachments": required,
             "required_attachments": required,
             "recommended_attachments": recommended,
             "unavailable_optional_attachments": unavailable,
+            "embedded_artifacts": embedded_artifact_records,
             "files": file_records,
         }
         _write_bytes(stage_dir / "manifest.json", _json_bytes(manifest))

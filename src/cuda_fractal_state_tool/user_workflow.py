@@ -101,7 +101,7 @@ class UserWorkflowSession:
         self.preview = None
         self._invalidate_proof()
         self.state = SessionState.FINDING_READY
-        self.status_text = "Finding ready. Building its exact Agent Bundle V7…"
+        self.status_text = "Finding ready. Building its exact Agent Bundle V8…"
 
     def accept_preview(self, preview: PreviewResult) -> None:
         self.preview = preview
@@ -111,9 +111,9 @@ class UserWorkflowSession:
         self._invalidate_proof()
         self.state = self._unproven_state()
         self.status_text = (
-            "Exact Agent Bundle V7 ready; retained override text is dirty against this new binding."
+            "Exact Agent Bundle V8 ready; retained override text is dirty against this new binding."
             if self.override_text.strip()
-            else "Exact Agent Bundle V7 ready to copy and attach."
+            else "Exact Agent Bundle V8 ready for drag-all handoff."
         )
 
     def set_override_text(self, override_text: str) -> None:
@@ -125,9 +125,9 @@ class UserWorkflowSession:
         if override_text.strip() and self.bundle is not None:
             self.status_text = "State override changed. Validate and replay-prove this exact text."
         elif self.bundle is not None:
-            self.status_text = "Exact Agent Bundle V7 ready; paste a sparse state override when desired."
+            self.status_text = "Exact Agent Bundle V8 ready; paste a sparse state override when desired."
         elif self.finding is not None:
-            self.status_text = "Finding ready. Building its exact Agent Bundle V7…"
+            self.status_text = "Finding ready. Building its exact Agent Bundle V8…"
         else:
             self.status_text = "Choose a captured finding to begin."
 
