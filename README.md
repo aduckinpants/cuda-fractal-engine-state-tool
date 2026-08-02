@@ -122,6 +122,8 @@ packet/state/frame artifacts remain the underlying authority.
 The automation panel streams a compact field-allowlisted view of
 `events.ndjson`; `Open Run Folder` is available as soon as durable run evidence
 exists, even when a session stops before final qualification.
+The bounded paid-run outcome and exact receipts are summarized in
+[`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md).
 
 ## Packet V8 and override authority
 

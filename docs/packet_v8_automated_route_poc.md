@@ -376,7 +376,7 @@ commits, pushes, and proves a clean tree before continuing.
 - Focused automation/UI checks: 34 passed. Full Python 3.14 suite: 146 passed.
 - Continuation: `continue_to=qualification-and-review-hold`.
 
-### Slice 5 - live qualification hardening in progress
+### Slice 5 - acceptance-ready review hold
 
 - Deterministic qualification covers two-round advance/revise authority,
   no-op correction, malformed output, definite and ambiguous provider failure,
@@ -403,9 +403,18 @@ commits, pushes, and proves a clean tree before continuing.
 - Current hardening adds Windows-safe projection coordination and retry,
   `RUN_STORE_FAILED`, compact live event telemetry, detailed cached/uncached
   usage evidence, and `Open Run Folder` labeling.
-- Hold after hardening proof: one replacement capped `gpt-5.6` high-reasoning
-  session and user review. No second replacement run, merge, or broader
-  automation is authorized.
+- Focused automation and UI tests pass 45 checks; the full Python 3.14 suite
+  passes 154 tests.
+- The single replacement live run completed one replay-proven Color Pipeline
+  round, canonical non-human promotion, derived Packet V8 refresh, and
+  `ROUND_ADVANCE`. Its second round stopped honestly at `PROOF_FAILED` when the
+  engine emitted `max_iter=1167` after the model requested `1800` under an
+  auto-iteration state. Three responses used 654,530 total input tokens, of
+  which 164,109 were cached, and 4,993 output tokens. Provider cleanup passed.
+- Detailed receipts and hashes are recorded in
+  `docs/packet_v8_automated_route_live_qualification.md`.
+- Hold: user review is the next approved boundary. No second replacement run,
+  merge, Packet V9 ablation, or broader automation is authorized.
 
 Final acceptance-ready wording:
 
