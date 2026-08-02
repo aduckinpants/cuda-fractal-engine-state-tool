@@ -6,7 +6,7 @@
 - Starting branch: `codex/v8-automated-route-poc`.
 - Exact starting commit: `3f42290abb734ae17e8ae95f2c2c9f111d631fb4`.
 - Baseline: clean merged `main`, 100 Python 3.14 tests passing.
-- Current owner: `automated-controller-and-promotion`.
+- Current owner: `thin-ui-entry`.
 
 ## Goal
 
@@ -300,6 +300,38 @@ commits, pushes, and proves a clean tree before continuing.
   and [GPT-5.6 guidance](https://developers.openai.com/api/docs/guides/model-guidance?model=gpt-5.6).
 - No credential was read and no live or paid request was made in this slice.
 - Continuation: `continue_to=automated-controller-and-promotion`.
+
+### Slice 3 - complete
+
+- One orchestration controller owns stage legality, response/token/proven-round
+  budgets, one override correction, model gate proposals, controller
+  dispositions, and exact `ROUND_ADVANCE` / `ROUND_REVISE` rebinding.
+- The model gate and controller transition are retained as separate events.
+  `SESSION_PASS` is not recorded as human candidate acceptance.
+- Override extraction requires exactly one fenced `json` block. It delegates
+  syntax and sparse-state semantics to `parse_state_override` and
+  `materialize_state_override`; `{}` remains a valid base replay but receives
+  one `UNINTENDED_NO_EFFECT` correction as an automated experiment result.
+- The production service factory binds the controller to the active
+  `JobContext`, `execute_state_override_proof`, `build_agent_bundle`, and the
+  single derived-finding promoter. It does not add another runtime process or
+  packet implementation.
+- The derived-finding promoter rechecks packet, binding, receipt, candidate
+  state, and proof-owned PNG hashes; copies those exact bytes; records explicit
+  non-human lineage; then delegates publication to `SourceCaptureImporter`.
+- A retained real replay-proven proof was promoted in an ignored disposable
+  workspace, rebuilt through the published runtime, and accepted by the
+  manifest transport as seven ordered Packet V8 resources. The promoted frame
+  SHA-256 exactly matched `materialization/candidate-display.png`. No engine
+  render and no API request occurred.
+- A first disposable run rooted too deeply under `.local/campaigns/...` failed
+  clearly when the runtime could not open its staged export path. The retry used
+  a short ignored `.local/p/...` root. Production promotion imports into the
+  configured durable workspace rather than nesting a second workspace beneath
+  the run directory.
+- Shared-worker cancellation is classified as `CANCELLED` and cannot proceed
+  into promotion or packet refresh.
+- Continuation: `continue_to=thin-ui-entry`.
 
 Final acceptance-ready wording:
 
