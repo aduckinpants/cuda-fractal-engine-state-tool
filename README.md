@@ -125,6 +125,14 @@ exists, even when a session stops before final qualification.
 The bounded paid-run outcome and exact receipts are summarized in
 [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md).
 
+Future V9 work is intentionally paused at a documentation boundary. Cost
+remediation precedes any larger automated battery; the first later local
+experiment is a one-axis scalar bracket that expands into ordinary independently
+proven sparse overrides. The restart plan and exact pickup point are recorded in
+[`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
+and [`PICK_UP_HERE.md`](PICK_UP_HERE.md). No V9 implementation is present on
+this checkpoint.
+
 ## Packet V8 and override authority
 
 Packet V8 is the seven-file authority handoff when a frame exists:
