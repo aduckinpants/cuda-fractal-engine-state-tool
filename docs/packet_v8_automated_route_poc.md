@@ -6,7 +6,7 @@
 - Starting branch: `codex/v8-automated-route-poc`.
 - Exact starting commit: `3f42290abb734ae17e8ae95f2c2c9f111d631fb4`.
 - Baseline: clean merged `main`, 100 Python 3.14 tests passing.
-- Current owner: `openai-transport-and-run-store`.
+- Current owner: `automated-controller-and-promotion`.
 
 ## Goal
 
@@ -273,6 +273,33 @@ commits, pushes, and proves a clean tree before continuing.
 - The real slow Fixture F engine proof remains intentionally assigned to Slice
   5; Slice 1 proves its exact immutable packet resolves the correct policy.
 - Continuation: `continue_to=openai-transport-and-run-store`.
+
+### Slice 2 - complete
+
+- The retry-free OpenAI SDK adapter targets `gpt-5.6` with high reasoning,
+  `store=true`, explicit stable instructions on every turn, and
+  `previous_response_id` continuation.
+- Packet V8 transport follows the validated manifest order, submits the exact
+  already-hashed snapshot bytes, uses the bounded web PNG as vision input, and
+  uses owned `user_data` file uploads for the remaining resources.
+- Provider files remain session-owned while stored-response continuation is
+  possible because the public API contract does not guarantee that deleting an
+  input file preserves later continuation. Definite pre-dispatch failures clean
+  their turn; ambiguous post-dispatch outcomes retain ownership for recovery;
+  session close deletes every remaining owned file and fails visibly on cleanup
+  debt.
+- `OPENAI_API_KEY` takes precedence over the Windows Credential Manager target
+  `openai/api_key`; neither value is retained in evidence.
+- Request/response evidence is sanitized and atomic. The retained request
+  replaces the base64 image body with its packet-resource SHA-256 reference.
+- Local cancellation before dispatch is clean. Cancellation after dispatch
+  never resends; a captured response is retained for manual disposition.
+- Official contract references:
+  [conversation state](https://developers.openai.com/api/docs/guides/conversation-state),
+  [image inputs](https://developers.openai.com/api/docs/guides/images-vision),
+  and [GPT-5.6 guidance](https://developers.openai.com/api/docs/guides/model-guidance?model=gpt-5.6).
+- No credential was read and no live or paid request was made in this slice.
+- Continuation: `continue_to=automated-controller-and-promotion`.
 
 Final acceptance-ready wording:
 

@@ -76,6 +76,17 @@ class AutomatedRunStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(FileExistsError, "already exists"):
                 self._store(root)
 
+    def test_evidence_writes_are_atomic_and_cannot_escape_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = self._store(Path(temp_dir))
+            json_path = store.write_evidence_json("transport/turn-1/request.json", {"ok": True})
+            bytes_path = store.write_evidence_bytes("transport/turn-1/raw.txt", b"raw\n")
+            self.assertEqual(json.loads(json_path.read_text(encoding="utf-8")), {"ok": True})
+            self.assertEqual(bytes_path.read_bytes(), b"raw\n")
+            for unsafe in ("", "../escape.json", str(Path(temp_dir).resolve() / "absolute.json")):
+                with self.subTest(unsafe=unsafe), self.assertRaisesRegex(ValueError, "safe relative"):
+                    store.write_evidence_json(unsafe, {})
+
 
 if __name__ == "__main__":
     unittest.main()

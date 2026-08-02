@@ -117,6 +117,31 @@ class AutomatedRunStore:
     def active_turn_path(self) -> Path:
         return self.run_dir / "active-turn.json"
 
+    def write_evidence_json(self, relative_path: str, value: Any) -> Path:
+        """Atomically retain sanitized orchestration evidence below this run."""
+        path = self._evidence_path(relative_path)
+        _atomic_write(path, _json_bytes(value))
+        return path
+
+    def write_evidence_bytes(self, relative_path: str, payload: bytes) -> Path:
+        path = self._evidence_path(relative_path)
+        _atomic_write(path, payload)
+        return path
+
+    def _evidence_path(self, relative_path: str) -> Path:
+        candidate = Path(relative_path)
+        if (
+            not relative_path
+            or candidate.is_absolute()
+            or ".." in candidate.parts
+            or candidate.name in {"", ".", ".."}
+        ):
+            raise ValueError("Automated evidence path must be a safe relative path")
+        resolved = (self.run_dir / candidate).resolve()
+        if self.run_dir not in resolved.parents:
+            raise ValueError("Automated evidence path escapes its run directory")
+        return resolved
+
     def read_events(self) -> list[dict[str, Any]]:
         if not self.events_path.exists():
             return []
