@@ -366,6 +366,24 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(result.disposition, ControllerDisposition.CANCELLED)
             self.assertEqual(services.promotions, 0)
 
+    def test_auto_promote_can_stop_at_replay_proof_without_fabricating_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            initial = _bundle(root, "packet-base", "finding-base", "base")
+            derived = _bundle(root, "packet-derived", "finding-derived", "derived")
+            services = ServiceHarness(root, initial, [derived])
+            transport = FakeTransport(self._round_script("SESSION_PASS")[:5])
+            result = AutomatedSessionController(
+                transport=transport,
+                run_store=self._store(root, initial),
+                initial_bundle=initial,
+                services=services.services(),
+                auto_promote=False,
+            ).run()
+            self.assertEqual(result.disposition, ControllerDisposition.MANUAL_REVIEW_REQUIRED)
+            self.assertEqual(result.proven_rounds, 1)
+            self.assertEqual(services.promotions, 0)
+
     def test_parsers_require_one_json_block_and_one_gate_line(self) -> None:
         parsed = extract_sparse_override(VALID_OVERRIDE_RESPONSE)
         self.assertIn('"explaino_damping": 0.9', parsed)

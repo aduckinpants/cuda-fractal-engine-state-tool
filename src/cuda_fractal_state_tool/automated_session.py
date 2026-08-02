@@ -215,6 +215,7 @@ class AutomatedSessionController:
         services: AutomatedRouteServices,
         budgets: SessionBudgets = SessionBudgets(),
         cancelled: Callable[[], bool] = lambda: False,
+        auto_promote: bool = True,
     ) -> None:
         if initial_bundle.packet_version != 8:
             raise ValueError("Automated sessions require Packet V8")
@@ -223,6 +224,7 @@ class AutomatedSessionController:
         self.services = services
         self.budgets = budgets
         self.cancelled = cancelled
+        self.auto_promote = auto_promote
         self.current_bundle = initial_bundle
         self.current_packet = self._binding(initial_bundle)
         self.state = ProtocolState.OBSERVE
@@ -445,6 +447,11 @@ class AutomatedSessionController:
                     cumulative_output_tokens=self.usage.cumulative_output_tokens,
                 )
                 self._record("candidate_replay_proven", {"proof_id": proof.proof_id})
+                if not self.auto_promote:
+                    return self._finish(
+                        ControllerDisposition.MANUAL_REVIEW_REQUIRED,
+                        "Replay proof succeeded; automatic derived-finding promotion is disabled.",
+                    )
                 self._move(ProtocolState.PROMOTE_DERIVED_FINDING)
                 self._raise_if_cancelled()
                 promotion = self.services.promote(

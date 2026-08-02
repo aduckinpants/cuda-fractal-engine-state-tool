@@ -39,6 +39,13 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("Runtime compatibility", source)
         self.assertIn("RUNTIME DRIFT WARNING", source)
         self.assertIn("Primary handoff remains drag-all", source)
+        self.assertIn("Automated Packet V8 route (POC)", source)
+        self.assertIn("Automated Session…", source)
+        self.assertIn("It never records human acceptance.", source)
+        self.assertIn("never human acceptance", source)
+        self.assertIn("Run Automated Session", source)
+        self.assertIn("Cancel Automation", source)
+        self.assertIn("Open Results", source)
         self.assertNotIn("--packet-dir", source)
         self.assertNotIn("proposal_v1", source)
         self.assertNotIn("Repair Packet", source)
@@ -76,6 +83,21 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertEqual(
             _candidate_preview_pixel_note(ordinary, {"decoded_equal": True}),
             " | PIXELS IDENTICAL TO BASE",
+        )
+
+    def test_automated_budget_projection_is_compact_and_non_authoritative(self) -> None:
+        from cuda_fractal_state_tool.user_workflow_app import _automated_budget_text
+
+        self.assertEqual(
+            _automated_budget_text(
+                {
+                    "proven_rounds": 1,
+                    "model_responses": 8,
+                    "cumulative_input_tokens": 123456,
+                    "cumulative_output_tokens": 7890,
+                }
+            ),
+            "Rounds 1/2 · Responses 8/16 · Tokens in/out 123,456/7,890",
         )
 
     def test_proposal_era_modules_are_absent_from_active_package(self) -> None:

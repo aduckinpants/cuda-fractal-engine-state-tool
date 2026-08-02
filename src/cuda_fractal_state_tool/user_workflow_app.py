@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import os
 import queue
+import uuid
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -17,6 +18,15 @@ from .agent_bundle import (
     open_agent_bundle_folder,
 )
 from .async_jobs import AsyncJobRunner, JobOutcome, JobRequestIdentity, WorkerQueueFullError
+from .automated_protocol import AGENT_SESSION_PROTOCOL_SCHEMA, SessionBudgets
+from .automated_run_store import AutomatedRunStore
+from .automated_session import (
+    AutomatedSessionController,
+    AutomatedSessionResult,
+    create_job_bound_automated_route_services,
+)
+from .openai_credentials import resolve_openai_api_key, set_openai_api_key as store_openai_api_key
+from .openai_transport import OpenAISDKProvider, PacketV8ResponsesTransport
 from .preview_service import PreviewService
 from .runtime_surface import DEFAULT_RUNTIME_CMD
 from .runtime_compatibility import resolve_runtime_compatibility_mode
@@ -67,6 +77,15 @@ def _candidate_preview_pixel_note(
     )
 
 
+def _automated_budget_text(projection: dict) -> str:
+    return (
+        f"Rounds {projection.get('proven_rounds', 0)}/2 · "
+        f"Responses {projection.get('model_responses', 0)}/16 · "
+        f"Tokens in/out {projection.get('cumulative_input_tokens', 0):,}/"
+        f"{projection.get('cumulative_output_tokens', 0):,}"
+    )
+
+
 class UserWorkflowApp:
     def __init__(
         self,
@@ -99,6 +118,10 @@ class UserWorkflowApp:
         self._setting_override = False
         self._last_copyable_error = ""
         self._closed = False
+        self._automated_job_id: str | None = None
+        self._automated_run_store: AutomatedRunStore | None = None
+        self._automated_result_dir: Path | None = None
+        self._credential_available = False
 
         self.source_path_var = tk.StringVar(value="")
         self.workspace_root_var = tk.StringVar(value=str(workspace_root.resolve()))
@@ -110,6 +133,15 @@ class UserWorkflowApp:
         self.preview_status_var = tk.StringVar(value="No finding frame loaded.")
         self.candidate_preview_status_var = tk.StringVar(value="No candidate frame yet.")
         self.changed_paths_var = tk.StringVar(value="No override changes have been proven.")
+        self.auto_promote_var = tk.BooleanVar(value=True)
+        self.automated_credential_var = tk.StringVar(value="Credential: not checked")
+        self.automated_state_var = tk.StringVar(value="Protocol: idle")
+        self.automated_authority_var = tk.StringVar(value="Authority: no active automated run")
+        self.automated_budget_var = tk.StringVar(value="Rounds 0/2 · Responses 0/16 · Tokens in/out 0/0")
+        self.automated_disposition_var = tk.StringVar(value="Disposition: not started")
+        self.automated_summary_var = tk.StringVar(
+            value="Credential not configured · no automated run"
+        )
         mode_detail = (
             "warn + attempt current runtime"
             if self.runtime_compatibility_mode == "development"
@@ -121,6 +153,8 @@ class UserWorkflowApp:
 
         self._configure_root()
         self._build_shell()
+        self._build_automation_window()
+        self._refresh_credential_status()
         self._render()
         self.root.after(25, self._drain_completions)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -255,7 +289,104 @@ class UserWorkflowApp:
         binding.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         binding.columnconfigure(0, weight=1)
         ttk.Label(binding, textvariable=self.binding_var, wraplength=670).grid(row=0, column=0, sticky="w")
+        automation_entry = ttk.Frame(binding)
+        automation_entry.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        automation_entry.columnconfigure(1, weight=1)
+        self.open_automation_panel_button = ttk.Button(
+            automation_entry,
+            text="Automated Session…",
+            command=self.open_automation_panel,
+        )
+        self.open_automation_panel_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
+        ttk.Label(
+            automation_entry,
+            textvariable=self.automated_summary_var,
+            wraplength=520,
+        ).grid(row=0, column=1, sticky="w")
+        self._build_override_editor()
 
+    def _build_automation_window(self) -> None:
+        ttk = self.ttk
+        window = self.tk.Toplevel(self.root)
+        window.title("Packet V8 Automated Session POC")
+        window.geometry("760x430")
+        window.minsize(680, 390)
+        window.transient(self.root)
+        window.protocol("WM_DELETE_WINDOW", window.withdraw)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(1, weight=1)
+        window.withdraw()
+        self.automation_window = window
+
+        header = ttk.Frame(window, padding=(12, 12, 12, 8))
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        ttk.Label(
+            header,
+            text="Bounded Packet V8 Automated Session",
+            font=("Segoe UI", 13, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            header,
+            text=(
+                "This route reuses the exact Packet V8, sparse-override validator, proof service, "
+                "timeout policy, and finding promotion path. It never records human acceptance."
+            ),
+            wraplength=720,
+        ).grid(row=1, column=0, sticky="w", pady=(5, 0))
+
+        automation = ttk.LabelFrame(window, text="Automated Packet V8 route (POC)", padding=10)
+        automation.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        automation.columnconfigure(0, weight=1)
+        controls = ttk.Frame(automation)
+        controls.grid(row=0, column=0, sticky="ew")
+        self.set_api_key_button = ttk.Button(
+            controls, text="Set OpenAI API Key…", command=self.set_automated_api_key
+        )
+        self.set_api_key_button.grid(row=0, column=0, padx=(0, 5))
+        self.run_automated_button = ttk.Button(
+            controls, text="Run Automated Session", command=self.run_automated_session
+        )
+        self.run_automated_button.grid(row=0, column=1, padx=5)
+        self.cancel_automated_button = ttk.Button(
+            controls, text="Cancel Automation", command=self.cancel_automated_session
+        )
+        self.cancel_automated_button.grid(row=0, column=2, padx=5)
+        self.open_automated_results_button = ttk.Button(
+            controls, text="Open Results", command=self.open_automated_results
+        )
+        self.open_automated_results_button.grid(row=0, column=3, padx=(5, 0))
+        self.auto_promote_check = ttk.Checkbutton(
+            automation,
+            text="Auto-promote replay-proven candidates (never human acceptance)",
+            variable=self.auto_promote_var,
+        )
+        self.auto_promote_check.grid(row=1, column=0, sticky="w", pady=(5, 0))
+        ttk.Label(automation, textvariable=self.automated_credential_var, wraplength=650).grid(
+            row=2, column=0, sticky="w", pady=(4, 0)
+        )
+        ttk.Label(automation, textvariable=self.automated_state_var, wraplength=650).grid(
+            row=3, column=0, sticky="w"
+        )
+        ttk.Label(automation, textvariable=self.automated_authority_var, wraplength=650).grid(
+            row=4, column=0, sticky="w"
+        )
+        ttk.Label(automation, textvariable=self.automated_budget_var, wraplength=650).grid(
+            row=5, column=0, sticky="w"
+        )
+        ttk.Label(automation, textvariable=self.automated_disposition_var, wraplength=650).grid(
+            row=6, column=0, sticky="w"
+        )
+
+    def open_automation_panel(self) -> None:
+        self.automation_window.deiconify()
+        self.automation_window.lift()
+        self.automation_window.focus_set()
+
+    def _build_override_editor(self) -> None:
+        from tkinter.scrolledtext import ScrolledText
+
+        ttk = self.ttk
         override = ttk.LabelFrame(self.right, text="4. Incoming State Override JSON", padding=8)
         override.grid(row=1, column=0, sticky="nsew", pady=(0, 8))
         override.columnconfigure(0, weight=1)
@@ -577,6 +708,221 @@ class UserWorkflowApp:
             )
         except Exception as exc:
             self._set_error(str(exc))
+        self._render()
+
+    def _refresh_credential_status(self) -> None:
+        try:
+            credential = resolve_openai_api_key()
+        except Exception as exc:
+            self._credential_available = False
+            self.automated_credential_var.set(f"Credential unavailable: {exc}")
+            return
+        self._credential_available = credential is not None
+        self.automated_credential_var.set(
+            f"Credential: available from {credential.source}"
+            if credential is not None
+            else "Credential: not configured (no API request can start)"
+        )
+
+    def set_automated_api_key(self) -> None:
+        from tkinter import simpledialog
+
+        value = simpledialog.askstring(
+            "Set OpenAI API Key",
+            "Store the API key in Windows Credential Manager target openai/api_key.",
+            show="*",
+            parent=self.root,
+        )
+        if value is None:
+            return
+        try:
+            store_openai_api_key(value)
+            self._refresh_credential_status()
+            self.session.status_text = (
+                "Stored the OpenAI API key in Windows Credential Manager. The key was not written to app data."
+            )
+        except Exception as exc:
+            self._set_error(f"Could not store OpenAI API key: {exc}")
+        self._render()
+
+    def run_automated_session(self) -> None:
+        bundle = self.session.bundle
+        finding = self.session.finding
+        if bundle is None or finding is None:
+            self._set_error("Open a finding and build its exact Packet V8 before automation.")
+            self._render()
+            return
+        if bundle.packet_version != 8:
+            self._set_error("Automated sessions require an exact Packet V8 binding.")
+            self._render()
+            return
+        if self._busy_kinds:
+            self._set_error("Wait for current finding, packet, preview, or proof work to finish first.")
+            self._render()
+            return
+        try:
+            credential = resolve_openai_api_key()
+        except Exception as exc:
+            self._set_error(f"OpenAI credential lookup failed: {exc}")
+            self._render()
+            return
+        if credential is None:
+            self._set_error("No OpenAI API key is configured. Use Set OpenAI API Key first.")
+            self._refresh_credential_status()
+            self._render()
+            return
+        workspace_root = Path(self.workspace_root_var.get().strip()).resolve()
+        budgets = SessionBudgets()
+        run_id = f"v8-auto-{uuid.uuid4()}"
+        try:
+            store = AutomatedRunStore.create(
+                workspace_root,
+                run_id=run_id,
+                protocol_snapshot={
+                    "schema": AGENT_SESSION_PROTOCOL_SCHEMA,
+                    "model": "gpt-5.6",
+                    "reasoning_effort": "high",
+                    "budgets": budgets.to_dict(),
+                    "auto_promote": bool(self.auto_promote_var.get()),
+                    "credential_source": credential.source,
+                },
+                initial_packet={
+                    "packet_id": bundle.packet_id,
+                    "manifest_sha256": bundle.manifest_sha256,
+                    "finding_id": bundle.finding_id,
+                },
+            )
+        except Exception as exc:
+            self._set_error(f"Could not create automated run store: {exc}")
+            self._render()
+            return
+        self._automated_run_store = store
+        self._automated_result_dir = store.run_dir
+        self.automated_state_var.set("Protocol: starting")
+        self.automated_authority_var.set(f"Authority: packet {bundle.packet_id}")
+        self.automated_disposition_var.set("Disposition: RUNNING")
+        auto_promote = bool(self.auto_promote_var.get())
+        api_key = credential.value
+        identity = JobRequestIdentity(
+            generation=self.session.generation,
+            finding_id=finding.finding_id,
+            authoring_base_sha256=finding.authoring_base_sha256,
+            packet_id=bundle.packet_id,
+            packet_manifest_sha256=bundle.manifest_sha256,
+        )
+
+        def operation(context):
+            transport = PacketV8ResponsesTransport(OpenAISDKProvider(api_key))
+            services = create_job_bound_automated_route_services(
+                runtime_cmd_path=self.runtime_cmd_path,
+                workspace_root=workspace_root,
+                job=context,
+                runtime_compatibility_mode=self.runtime_compatibility_mode,
+            )
+            return AutomatedSessionController(
+                transport=transport,
+                run_store=store,
+                initial_bundle=bundle,
+                services=services,
+                budgets=budgets,
+                cancelled=lambda: context.cancelled,
+                auto_promote=auto_promote,
+            ).run()
+
+        self._automated_job_id = self._submit(
+            "automated_session",
+            identity,
+            operation,
+            self._automated_session_completed,
+        )
+        if self._automated_job_id is None:
+            self.automated_disposition_var.set("Disposition: RUNTIME_FAILED")
+            self.session.status_text = (
+                f"Automated run store was preserved, but the worker did not start: {store.run_dir}"
+            )
+            self._render()
+            return
+        self.session.status_text = (
+            f"Started bounded automated Packet V8 session {run_id}. No candidate will be marked user-accepted."
+        )
+        self._render()
+
+    def cancel_automated_session(self) -> None:
+        job_id = self._automated_job_id
+        if job_id is None or not self.runner.cancel(job_id):
+            self.session.status_text = "No active automated session owns cancellable work."
+        else:
+            self.session.status_text = (
+                "Cancellation requested for the automated session only; ambiguous remote completion will stop at manual review."
+            )
+        self._render()
+
+    def _automated_session_completed(self, outcome: JobOutcome) -> None:
+        self._busy_kinds.discard(outcome.kind)
+        self._automated_job_id = None
+        bundle = self.session.bundle
+        if (
+            outcome.identity.generation != self.session.generation
+            or bundle is None
+            or outcome.identity.packet_id != bundle.packet_id
+            or outcome.identity.packet_manifest_sha256 != bundle.manifest_sha256
+        ):
+            self._render()
+            return
+        if outcome.cancelled:
+            self.automated_disposition_var.set("Disposition: CANCELLED")
+            self.session.status_text = "Automated session cancelled; durable run evidence was preserved."
+        elif outcome.error:
+            self.automated_disposition_var.set("Disposition: RUNTIME_FAILED")
+            self._set_error(f"Automated session worker failed: {outcome.error}")
+        elif isinstance(outcome.value, AutomatedSessionResult):
+            result = outcome.value
+            self.automated_disposition_var.set(f"Disposition: {result.disposition.value}")
+            self.automated_authority_var.set(
+                f"Authority: packet {result.current_packet.packet_id} · finding {result.current_packet.finding_id}"
+            )
+            self.automated_budget_var.set(
+                f"Rounds {result.proven_rounds}/2 · Responses {result.usage.model_responses}/16 · "
+                f"Tokens in/out {result.usage.cumulative_input_tokens:,}/{result.usage.cumulative_output_tokens:,}"
+            )
+            self.session.status_text = result.message
+        else:
+            self.automated_disposition_var.set("Disposition: RUNTIME_FAILED")
+            self._set_error("Automated session returned an invalid result.")
+        self._refresh_automated_projection()
+        self._render()
+
+    def _refresh_automated_projection(self) -> None:
+        store = self._automated_run_store
+        if store is None or not store.active_turn_path.is_file():
+            return
+        try:
+            projection = store.load_active_turn().get("projection")
+            if not isinstance(projection, dict):
+                return
+            self.automated_state_var.set(f"Protocol: {projection.get('state', 'unknown')}")
+            packet = projection.get("current_packet")
+            if isinstance(packet, dict):
+                self.automated_authority_var.set(
+                    f"Authority: packet {packet.get('packet_id', '?')} · finding {packet.get('finding_id', '?')}"
+                )
+            self.automated_budget_var.set(_automated_budget_text(projection))
+            self.automated_disposition_var.set(
+                f"Disposition: {projection.get('controller_disposition', 'unknown')}"
+            )
+        except Exception as exc:
+            self.automated_disposition_var.set(f"Disposition projection unavailable: {exc}")
+
+    def open_automated_results(self) -> None:
+        if self._automated_result_dir is None:
+            self._set_error("No automated result folder exists yet.")
+            self._render()
+            return
+        try:
+            os.startfile(str(self._automated_result_dir))
+            self.session.status_text = f"Opened automated run evidence: {self._automated_result_dir}"
+        except Exception as exc:
+            self._set_error(f"Could not open automated result folder: {exc}")
         self._render()
 
     def _override_modified(self, _event=None) -> None:
@@ -1011,13 +1357,16 @@ class UserWorkflowApp:
         self._candidate_preview_photo = None
         self._candidate_full_frame_opened = False
 
-    def _submit(self, kind: str, identity, operation, completion: Callable[[JobOutcome], None]) -> None:
+    def _submit(
+        self, kind: str, identity, operation, completion: Callable[[JobOutcome], None]
+    ) -> str | None:
         self._busy_kinds.add(kind)
         try:
-            self.runner.submit(kind, identity, operation, completion)
+            return self.runner.submit(kind, identity, operation, completion)
         except (WorkerQueueFullError, RuntimeError) as exc:
             self._busy_kinds.discard(kind)
             self._set_error(str(exc))
+            return None
 
     def _drain_completions(self) -> None:
         if self._closed:
@@ -1028,6 +1377,7 @@ class UserWorkflowApp:
             except queue.Empty:
                 break
             callback()
+        self._refresh_automated_projection()
         self.root.after(25, self._drain_completions)
 
     def _set_error(self, message: str) -> None:
@@ -1054,13 +1404,20 @@ class UserWorkflowApp:
         finding_ready = self.session.finding is not None
         bundle_ready = self.session.bundle is not None
         proof_busy = "proof" in self._busy_kinds
+        automated_busy = "automated_session" in self._busy_kinds
         result = self.session.proof_result
         replay_proven = isinstance(result, StateOverrideProofResult) and result.status == "replay_proven"
         review_surface_seen = self.session.candidate_preview is not None or self._candidate_full_frame_opened
         undecided = replay_proven and self.session.review_decision is None and review_surface_seen
-        self.open_finding_button.configure(state="disabled" if "finding_import" in self._busy_kinds else "normal")
+        self.open_finding_button.configure(
+            state="disabled"
+            if "finding_import" in self._busy_kinds or automated_busy
+            else "normal"
+        )
         self.build_packet_button.configure(
-            state="normal" if finding_ready and "bundle" not in self._busy_kinds else "disabled"
+            state="normal"
+            if finding_ready and "bundle" not in self._busy_kinds and not automated_busy
+            else "disabled"
         )
         self.copy_packet_button.configure(state="normal" if bundle_ready else "disabled")
         self.open_bundle_button.configure(state="normal" if bundle_ready else "disabled")
@@ -1070,13 +1427,38 @@ class UserWorkflowApp:
             else "disabled"
         )
         override_ready = bundle_ready and bool(self.session.override_text.strip())
-        self.prove_button.configure(state="normal" if override_ready and not proof_busy else "disabled")
+        self.override_text.configure(state="disabled" if automated_busy else "normal")
+        self.prove_button.configure(
+            state="normal" if override_ready and not proof_busy and not automated_busy else "disabled"
+        )
         self.open_candidate_frame_button.configure(state="normal" if replay_proven else "disabled")
         self.accept_button.configure(text=_candidate_accept_action_label(result))
-        self.accept_button.configure(state="normal" if undecided and not proof_busy else "disabled")
-        self.revision_button.configure(state="normal" if undecided and not proof_busy else "disabled")
+        self.accept_button.configure(
+            state="normal" if undecided and not proof_busy and not automated_busy else "disabled"
+        )
+        self.revision_button.configure(
+            state="normal" if undecided and not proof_busy and not automated_busy else "disabled"
+        )
         self.launch_button.configure(
-            state="normal" if self.session.state == SessionState.LAUNCH_READY and not proof_busy else "disabled"
+            state="normal"
+            if self.session.state == SessionState.LAUNCH_READY and not proof_busy and not automated_busy
+            else "disabled"
+        )
+        self.run_automated_button.configure(
+            state="normal"
+            if bundle_ready and self._credential_available and not self._busy_kinds
+            else "disabled"
+        )
+        self.cancel_automated_button.configure(state="normal" if automated_busy else "disabled")
+        self.open_automated_results_button.configure(
+            state="normal" if self._automated_result_dir is not None else "disabled"
+        )
+        self.set_api_key_button.configure(state="disabled" if automated_busy else "normal")
+        self.auto_promote_check.configure(state="disabled" if automated_busy else "normal")
+        credential_summary = "credential available" if self._credential_available else "credential not configured"
+        disposition_summary = self.automated_disposition_var.get().removeprefix("Disposition: ")
+        self.automated_summary_var.set(
+            f"{credential_summary} · {disposition_summary}"
         )
         self.copy_error_button.configure(state="normal" if self._last_copyable_error else "disabled")
 
@@ -1084,6 +1466,8 @@ class UserWorkflowApp:
         if self._closed:
             return
         self._closed = True
+        if self._automated_job_id is not None:
+            self.runner.cancel(self._automated_job_id)
         if self._owns_runner:
             self.runner.shutdown(wait=False)
         self.root.destroy()

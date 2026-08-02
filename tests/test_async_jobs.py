@@ -54,6 +54,35 @@ class AsyncJobRunnerTests(unittest.TestCase):
         callbacks.pop(0)()
         outcome = callbacks.pop(0)
         self.assertTrue(outcome.cancelled)
+
+    def test_cancel_one_job_does_not_cancel_an_unrelated_job(self) -> None:
+        callbacks = []
+        runner = AsyncJobRunner(callbacks.append, max_workers=2, max_pending_jobs=2)
+        started = threading.Event()
+        release = threading.Event()
+        outcomes = []
+
+        def waiting(context):
+            started.set()
+            while not release.wait(0.01):
+                context.raise_if_cancelled()
+            return "completed"
+
+        first = runner.submit("one", JobRequestIdentity(generation=1), waiting, outcomes.append)
+        runner.submit("two", JobRequestIdentity(generation=1), waiting, outcomes.append)
+        self.assertTrue(started.wait(2.0))
+        self.assertTrue(runner.cancel(first))
+        release.set()
+        deadline = time.time() + 3.0
+        while len(callbacks) < 2 and time.time() < deadline:
+            time.sleep(0.01)
+        for callback in callbacks:
+            callback()
+        runner.shutdown(wait=True)
+        self.assertEqual(len(outcomes), 2)
+        self.assertEqual(sum(outcome.cancelled for outcome in outcomes), 1)
+        self.assertIn("completed", [outcome.value for outcome in outcomes])
+        self.assertFalse(runner.cancel("missing-job"))
         runner.shutdown(wait=True)
 
 

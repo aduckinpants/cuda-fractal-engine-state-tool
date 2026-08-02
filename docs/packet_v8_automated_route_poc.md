@@ -6,7 +6,7 @@
 - Starting branch: `codex/v8-automated-route-poc`.
 - Exact starting commit: `3f42290abb734ae17e8ae95f2c2c9f111d631fb4`.
 - Baseline: clean merged `main`, 100 Python 3.14 tests passing.
-- Current owner: `thin-ui-entry`.
+- Current owner: `qualification-and-review-hold`.
 
 ## Goal
 
@@ -332,6 +332,27 @@ commits, pushes, and proves a clean tree before continuing.
 - Shared-worker cancellation is classified as `CANCELLED` and cannot proceed
   into promotion or packet refresh.
 - Continuation: `continue_to=thin-ui-entry`.
+
+### Slice 4 - complete
+
+- The accepted two-column manual workflow retains its original hierarchy. A
+  single compact `Automated Session...` entry opens a dedicated child panel;
+  automation status no longer compresses the candidate-preview or human-review
+  surfaces.
+- The panel exposes credential setup, bounded run, per-session cancellation,
+  automation-only promotion policy, protocol state, exact current packet
+  authority, budgets, controller disposition, and the durable result folder.
+- API and engine work run through the existing bounded `AsyncJobRunner`.
+  Per-job cancellation stops only the automated session; reset and shutdown
+  retain their established broader ownership semantics.
+- Manual mutation controls are disabled while automated work owns the current
+  packet binding. The controller still records no human acceptance and cannot
+  enable the manual launch path by itself.
+- Empty-state screenshots were rendered for both the preserved main workflow
+  and the dedicated automation panel. Credential absence visibly disables the
+  run control, and no credential lookup resulted in a live API request.
+- Focused automation/UI checks: 34 passed. Full Python 3.14 suite: 146 passed.
+- Continuation: `continue_to=qualification-and-review-hold`.
 
 Final acceptance-ready wording:
 
