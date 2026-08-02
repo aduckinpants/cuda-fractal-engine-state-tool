@@ -6,7 +6,7 @@
 - Starting branch: `codex/v8-automated-route-poc`.
 - Exact starting commit: `3f42290abb734ae17e8ae95f2c2c9f111d631fb4`.
 - Baseline: clean merged `main`, 100 Python 3.14 tests passing.
-- Current owner: `timeout-and-contract-foundation`.
+- Current owner: `openai-transport-and-run-store`.
 
 ## Goal
 
@@ -247,6 +247,32 @@ git diff --check
 
 Every slice also exercises its affected workflow, performs hostile review,
 commits, pushes, and proves a clean tree before continuing.
+
+## Execution Ledger
+
+### Slice 0 - complete
+
+- Packet V8 merged as PR #7 at
+  `3f42290abb734ae17e8ae95f2c2c9f111d631fb4`.
+- Seven A-G results are tracked; Fixture F remains the timeout witness.
+- Scanner focused suite: 12 passed; applicability: `NOT_APPLICABLE`.
+- Baseline authority trace records canonical owners and the bounded missing
+  derived-finding promotion seam.
+- Baseline and post-merge state-tool suites: 100 passed.
+- Continuation: `continue_to=timeout-and-contract-foundation`.
+
+### Slice 1 - complete
+
+- One shared timeout resolver serves UI and CLI proof callers.
+- Fixture F's exact Packet V8 resolves `203542.34375 ms` to `438 seconds`.
+- Proof receipt V5 records the complete timeout resolution.
+- Protocol foundation locks states, gate proposals, controller dispositions,
+  round rebinding, no-op outcome classification, and budgets.
+- Run store locks append-only `events.ndjson`, derived `active-turn.json`, and
+  fail-closed recovery.
+- The real slow Fixture F engine proof remains intentionally assigned to Slice
+  5; Slice 1 proves its exact immutable packet resolves the correct policy.
+- Continuation: `continue_to=openai-transport-and-run-store`.
 
 Final acceptance-ready wording:
 

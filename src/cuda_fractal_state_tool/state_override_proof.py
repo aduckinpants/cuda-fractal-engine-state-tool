@@ -20,6 +20,7 @@ from .agent_bundle import SUPPORTED_PACKET_MANIFEST_VERSIONS, load_agent_bundle_
 from .async_jobs import AsyncJobRunner, JobCancelledError, JobContext, JobRequestIdentity
 from .json_utils import loads_strict_no_duplicates
 from .preview_worker import create_preview
+from .proof_timeout import ProofTimeoutResolution, resolve_packet_proof_timeout
 from .runtime_surface import (
     build_detached_viewer_launch_command,
     build_materialization_command,
@@ -37,7 +38,7 @@ from .state_compare import compare_json_documents
 from .state_override import StateOverrideMaterialization, materialize_state_override
 
 
-PROOF_RECEIPT_VERSION = 4
+PROOF_RECEIPT_VERSION = 5
 REVIEW_DECISION_VERSION = 2
 LAUNCH_RECEIPT_VERSION = 3
 _PATH_PART = re.compile(r"([^.[\]]+)|\[(\d+)\]")
@@ -457,7 +458,7 @@ def execute_state_override_proof(
     *,
     proofs_root: Path | None = None,
     expected_manifest_sha256: str | None = None,
-    timeout_seconds: float = 90.0,
+    timeout_seconds: float | None = None,
     runtime_compatibility_mode: str | None = None,
 ) -> StateOverrideProofResult:
     packet_dir = packet_dir.resolve()
@@ -484,6 +485,7 @@ def execute_state_override_proof(
     }
     runtime_identity: dict[str, Any] | None = None
     materialization: StateOverrideMaterialization | None = None
+    timeout_resolution: ProofTimeoutResolution | None = None
     runtime_attempts: dict[str, Any] = {}
     materialization_dir = proof_dir / "materialization"
     replay_dir = proof_dir / "replay"
@@ -501,6 +503,9 @@ def execute_state_override_proof(
             "created_at_utc": _utc_now(),
             "binding": binding,
             "runtime_identity": runtime_identity,
+            "proof_timeout": (
+                timeout_resolution.to_receipt() if timeout_resolution is not None else None
+            ),
             "errors": errors,
             "runtime_attempts": runtime_attempts,
             "visual_review": "not_available",
@@ -526,6 +531,11 @@ def execute_state_override_proof(
 
     try:
         manifest, manifest_sha256 = _packet_manifest(packet_dir, expected_manifest_sha256)
+        timeout_resolution = resolve_packet_proof_timeout(
+            packet_dir,
+            expected_manifest_sha256=manifest_sha256,
+            explicit_timeout_seconds=timeout_seconds,
+        )
         packet_id = manifest.get("packet_id")
         if not isinstance(packet_id, str) or packet_id != packet_dir.name:
             raise StateOverrideProofError("Packet ID does not match its immutable directory name")
@@ -546,6 +556,7 @@ def execute_state_override_proof(
                 "runtime_identity": runtime_summary,
                 "runtime_compatibility": runtime_compatibility,
                 "authority_identities": authority_identities,
+                "proof_timeout": timeout_resolution.to_receipt(),
             }
         )
         _atomic_write_json(proof_dir / "binding.json", binding)
@@ -574,7 +585,7 @@ def execute_state_override_proof(
             runtime_cmd_path,
             merged_path,
             materialization_dir,
-            timeout_seconds,
+            timeout_resolution.timeout_seconds,
             apply_loaded_draft=materialization.apply_loaded_color_pipeline_draft,
         )
         runtime_attempts["materialization"] = _runtime_attempt_receipt(
@@ -606,7 +617,11 @@ def execute_state_override_proof(
             return rejected(requested_errors)
 
         replay_result, replay_command = _run_capture(
-            job, runtime_cmd_path, engine_state, replay_dir, timeout_seconds
+            job,
+            runtime_cmd_path,
+            engine_state,
+            replay_dir,
+            timeout_resolution.timeout_seconds,
         )
         runtime_attempts["replay"] = _runtime_attempt_receipt(
             replay_result, replay_dir, replay_command
@@ -651,6 +666,7 @@ def execute_state_override_proof(
             "created_at_utc": _utc_now(),
             "binding": binding,
             "runtime_identity": current_identity,
+            "proof_timeout": timeout_resolution.to_receipt(),
             "override": {
                 "path": "override.json",
                 "sha256": override_sha256,
@@ -739,10 +755,15 @@ def run_state_override_proof_sync(
     *,
     proofs_root: Path | None = None,
     expected_manifest_sha256: str | None = None,
-    timeout_seconds: float = 90.0,
+    timeout_seconds: float | None = None,
     runtime_compatibility_mode: str | None = None,
 ) -> StateOverrideProofResult:
     """Run the same owned-process worker path used by the desktop controller."""
+    timeout_resolution = resolve_packet_proof_timeout(
+        packet_dir,
+        expected_manifest_sha256=expected_manifest_sha256,
+        explicit_timeout_seconds=timeout_seconds,
+    )
     completed = threading.Event()
     outcome_box: list[Any] = []
     runner = AsyncJobRunner(lambda callback: callback(), max_workers=1, max_pending_jobs=1)
@@ -776,7 +797,7 @@ def run_state_override_proof_sync(
         completion,
     )
     try:
-        if not completed.wait(timeout_seconds * 2 + 15.0):
+        if not completed.wait(timeout_resolution.timeout_seconds * 2 + 15.0):
             runner.cancel_all()
             raise TimeoutError("State override proof worker did not finish within the bounded wait")
         outcome = outcome_box[0]

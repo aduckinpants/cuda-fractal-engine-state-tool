@@ -18,7 +18,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--runtime-cmd", type=Path, default=DEFAULT_RUNTIME_CMD)
     parser.add_argument("--proofs-root", type=Path)
     parser.add_argument("--manifest-sha256")
-    parser.add_argument("--timeout-seconds", type=float, default=90.0)
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=None,
+        help="Explicit timeout override. Omit to derive a bounded timeout from the captured render receipt.",
+    )
     parser.add_argument(
         "--runtime-compatibility",
         choices=("development", "strict"),
@@ -60,6 +65,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "runtime_compatibility": receipt.get("binding", {}).get(
                     "runtime_compatibility"
                 ),
+                "proof_timeout": receipt.get("proof_timeout"),
             },
             indent=2,
             ensure_ascii=False,
