@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from typing import Mapping, Protocol
+
+
+OPENAI_CREDENTIAL_TARGET = "openai/api_key"
+OPENAI_CREDENTIAL_USERNAME = "api_key"
+
+
+class CredentialStore(Protocol):
+    def get_password(self, service: str, username: str) -> str | None: ...
+
+    def set_password(self, service: str, username: str, password: str) -> None: ...
+
+    def delete_password(self, service: str, username: str) -> None: ...
+
+
+@dataclass(frozen=True)
+class OpenAICredential:
+    value: str
+    source: str
+
+
+def _default_store() -> CredentialStore:
+    try:
+        import keyring
+    except ImportError as exc:  # pragma: no cover - packaging guard
+        raise RuntimeError("The keyring package is required for Windows Credential Manager") from exc
+    return keyring
+
+
+def resolve_openai_api_key(
+    *,
+    environment: Mapping[str, str] | None = None,
+    store: CredentialStore | None = None,
+) -> OpenAICredential | None:
+    values = os.environ if environment is None else environment
+    environment_value = values.get("OPENAI_API_KEY", "").strip()
+    if environment_value:
+        return OpenAICredential(environment_value, "environment:OPENAI_API_KEY")
+    credential_value = (store or _default_store()).get_password(
+        OPENAI_CREDENTIAL_TARGET,
+        OPENAI_CREDENTIAL_USERNAME,
+    )
+    if credential_value and credential_value.strip():
+        return OpenAICredential(credential_value.strip(), "windows_credential_manager")
+    return None
+
+
+def set_openai_api_key(value: str, *, store: CredentialStore | None = None) -> None:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("OpenAI API key cannot be empty")
+    if any(character in normalized for character in "\r\n\x00"):
+        raise ValueError("OpenAI API key contains an invalid control character")
+    (store or _default_store()).set_password(
+        OPENAI_CREDENTIAL_TARGET,
+        OPENAI_CREDENTIAL_USERNAME,
+        normalized,
+    )
+
+
+def delete_openai_api_key(*, store: CredentialStore | None = None) -> None:
+    target = store or _default_store()
+    try:
+        target.delete_password(OPENAI_CREDENTIAL_TARGET, OPENAI_CREDENTIAL_USERNAME)
+    except Exception as exc:
+        # keyring backends use backend-specific exceptions for an absent credential.
+        if exc.__class__.__name__ not in {"PasswordDeleteError", "CredentialNotFoundError"}:
+            raise

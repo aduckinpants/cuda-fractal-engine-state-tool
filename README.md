@@ -84,6 +84,47 @@ receipt.
 `launch.json` proves creation of the exact-candidate launcher process; it does
 not claim machine-verified viewer startup or rendering.
 
+## Bounded automated Packet V8 route
+
+`Automated Session...` opens the optional Packet V8 automation panel without
+changing the manual two-column workflow. It runs the same packet, sparse
+override, timeout, engine proof, proof-image, finding-import, and packet-build
+services as the manual route. It does not click Tk controls and never records
+human candidate acceptance or launches a viewer.
+
+The POC is intentionally bounded:
+
+- model `gpt-5.6` with high reasoning;
+- at most two replay-proven rounds;
+- two primary responses per round (combined authoring, then combined review/gate);
+- at most six model responses including one correction turn per round;
+- cumulative total/cached/uncached input and output token usage shown in the panel;
+- one correction turn for malformed, unauthorized, or unintended `{}` output;
+- exact `ROUND_ADVANCE` and `ROUND_REVISE` current-packet rebinding;
+- explicit terminal controller disposition and durable result folder.
+
+The Run button remains disabled until an exact Packet V8 is bound and an API
+key is available. `Set OpenAI API Key...` stores a key in Windows Credential
+Manager at target `openai/api_key`. An `OPENAI_API_KEY` environment value takes
+precedence. Secret values are never written to app evidence, packets, receipts,
+logs, or Git.
+
+`Auto-promote replay-proven candidates` means automation may create a derived
+finding from the exact engine state and proof-owned PNG, then refresh Packet V8
+for the next round. That promotion records `human_acceptance: false`. Clearing
+the option stops at `MANUAL_REVIEW_REQUIRED` immediately after replay proof.
+
+Cancellation is session-local. It stops local progression, cancels owned
+runtime work, never resends an ambiguous provider turn, and preserves the run
+store for inspection. `events.ndjson` is append-only history;
+`active-turn.json` is its atomic current-state projection. Domain receipts and
+packet/state/frame artifacts remain the underlying authority.
+The automation panel streams a compact field-allowlisted view of
+`events.ndjson`; `Open Run Folder` is available as soon as durable run evidence
+exists, even when a session stops before final qualification.
+The bounded paid-run outcome and exact receipts are summarized in
+[`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md).
+
 ## Packet V8 and override authority
 
 Packet V8 is the seven-file authority handoff when a frame exists:

@@ -7,7 +7,11 @@ name = "cuda-fractal-state-tool"
 version = "0.1.0"
 description = "Experimental authority probe and state workflow tool for the CUDA fractal runtime"
 requires-python = ">=3.14,<3.15"
-dependencies = ["Pillow>=12.1,<13"]
+dependencies = [
+  "Pillow>=12.1,<13",
+  "keyring>=25.7,<26",
+  "openai>=2.52,<3",
+]
 
 [project.scripts]
 cuda-fractal-runtime-probe = "cuda_fractal_state_tool.runtime_probe:main"

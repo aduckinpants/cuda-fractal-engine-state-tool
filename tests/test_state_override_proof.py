@@ -39,12 +39,14 @@ def _sha256(payload: bytes) -> str:
 class FakeProofJob:
     def __init__(self, *, contradict_requested: bool = False, alter_replay: bool = False) -> None:
         self.commands: list[list[str]] = []
+        self.timeout_seconds: list[float | None] = []
         self.contradict_requested = contradict_requested
         self.alter_replay = alter_replay
 
     def run_process(self, command, cwd, timeout_seconds=None, env=None):
         command = list(command)
         self.commands.append(command)
+        self.timeout_seconds.append(timeout_seconds)
         source = Path(command[command.index("--load-state-json") + 1])
         output = Path(command[command.index("--diagnostics-out-dir") + 1])
         output.mkdir(parents=True, exist_ok=True)
@@ -131,7 +133,14 @@ class StateOverrideProofTests(unittest.TestCase):
         (runtime / "fractal_ui.exe").write_bytes(b"test runtime")
         return launcher
 
-    def _packet(self, root: Path, runtime: Path, *, with_pipeline: bool = False) -> Path:
+    def _packet(
+        self,
+        root: Path,
+        runtime: Path,
+        *,
+        with_pipeline: bool = False,
+        last_render_ms: float | None = None,
+    ) -> Path:
         packet = root / "finding" / "packets" / "packet-test"
         packet.mkdir(parents=True)
         state = {
@@ -148,6 +157,8 @@ class StateOverrideProofTests(unittest.TestCase):
             "params": {"explaino_damping": 1.0},
             "render": {"width": 6, "height": 4, "device_id": 0},
         }
+        if last_render_ms is not None:
+            state["stats"] = {"last_render_ms": last_render_ms}
         surface = {
             "version": 1,
             "lanes": [
@@ -338,6 +349,7 @@ class StateOverrideProofTests(unittest.TestCase):
             self.assertEqual(result.status, "replay_proven")
             self.assertFalse(result.empty_override_byte_exact)
             self.assertEqual(len(job.commands), 2)
+            self.assertEqual(job.timeout_seconds, [90.0, 90.0])
             self.assertNotIn("--color-pipeline-action", job.commands[0])
             self.assertNotIn("--apply-loaded-color-pipeline-draft", job.commands[0])
             receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
@@ -369,6 +381,29 @@ class StateOverrideProofTests(unittest.TestCase):
                     "replay",
                     "receipt.json",
                 },
+            )
+
+    def test_proof_uses_adaptive_packet_timeout_and_records_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = self._runtime(root)
+            packet = self._packet(root, runtime, last_render_ms=203542.34375)
+            job = FakeProofJob()
+
+            result = execute_state_override_proof(
+                packet,
+                '{"params":{"explaino_damping":0.9}}',
+                runtime,
+                job,
+                proofs_root=root / "proofs",
+            )
+
+            self.assertEqual(result.status, "replay_proven")
+            self.assertEqual(job.timeout_seconds, [438.0, 438.0])
+            receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(receipt["proof_timeout"]["timeout_seconds"], 438.0)
+            self.assertEqual(
+                receipt["proof_timeout"]["source"], "captured_last_render_ms"
             )
 
     def test_empty_override_result_is_explicit_exact_base_replay(self) -> None:
@@ -412,7 +447,7 @@ class StateOverrideProofTests(unittest.TestCase):
             self.assertIn("--apply-loaded-color-pipeline-draft", job.commands[0])
             self.assertNotIn("--apply-loaded-color-pipeline-draft", job.commands[1])
             receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
-            self.assertEqual(receipt["proof_receipt_version"], 4)
+            self.assertEqual(receipt["proof_receipt_version"], 5)
             self.assertTrue(receipt["override"]["apply_loaded_color_pipeline_draft"])
             self.assertTrue(receipt["materialization"]["applied_loaded_color_pipeline_draft"])
             self.assertEqual(

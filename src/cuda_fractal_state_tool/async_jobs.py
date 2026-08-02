@@ -186,16 +186,25 @@ class AsyncJobRunner:
 
     def cancel_all(self) -> None:
         with self._lock:
-            cancel_events = list(self._cancel_events.values())
-            processes = [process for owned in self._processes.values() for process in owned]
-            futures = list(self._futures.values())
-        for event in cancel_events:
-            event.set()
-        for future in futures:
+            job_ids = list(self._cancel_events)
+        for job_id in job_ids:
+            self.cancel(job_id)
+
+    def cancel(self, job_id: str) -> bool:
+        """Cancel one job and terminate only processes registered to that job."""
+        with self._lock:
+            cancel_event = self._cancel_events.get(job_id)
+            future = self._futures.get(job_id)
+            processes = list(self._processes.get(job_id, ()))
+        if cancel_event is None:
+            return False
+        cancel_event.set()
+        if future is not None:
             future.cancel()
         for process in processes:
             if process.poll() is None:
                 kill_process_tree(process.pid)
+        return True
 
     def shutdown(self, wait: bool = False) -> None:
         with self._lock:
