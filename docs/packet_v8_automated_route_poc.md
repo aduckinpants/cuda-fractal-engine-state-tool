@@ -354,6 +354,27 @@ commits, pushes, and proves a clean tree before continuing.
 - Focused automation/UI checks: 34 passed. Full Python 3.14 suite: 146 passed.
 - Continuation: `continue_to=qualification-and-review-hold`.
 
+### Slice 5 - acceptance-ready hold
+
+- Deterministic qualification covers two-round advance/revise authority,
+  no-op correction, malformed output, definite and ambiguous provider failure,
+  cumulative budgets, cancellation, recovery, authority tampering, exact PNG
+  promotion, and canonical service delegation.
+- The exact historical Fixture F packet and override passed real engine
+  materialization plus action-free replay in 523 seconds total. Both stages
+  used the captured-timing-derived 438-second policy, completed normally, and
+  produced identical decoded RGBA. Visual review remains pending and launch is
+  false.
+- Fixture G remains accepted manual conversational evidence. It has not been
+  misrepresented as an automated provider session.
+- The post-implementation responsibility trace proves one owner for packet,
+  validator/merge, timeout, proof/process, proof image, importer, and packet
+  refresh semantics. Human acceptance and launch remain independently owned.
+- The final full Python 3.14 suite passes 148 tests. No credential was available
+  and no live or paid OpenAI request was made.
+- Hold: one capped `gpt-5.6` high-reasoning session and user review are the next
+  approved boundary. No second run, merge, or broader automation is authorized.
+
 Final acceptance-ready wording:
 
 ```text

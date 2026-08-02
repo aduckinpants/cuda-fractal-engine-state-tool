@@ -84,6 +84,41 @@ receipt.
 `launch.json` proves creation of the exact-candidate launcher process; it does
 not claim machine-verified viewer startup or rendering.
 
+## Bounded automated Packet V8 route
+
+`Automated Session...` opens the optional Packet V8 automation panel without
+changing the manual two-column workflow. It runs the same packet, sparse
+override, timeout, engine proof, proof-image, finding-import, and packet-build
+services as the manual route. It does not click Tk controls and never records
+human candidate acceptance or launches a viewer.
+
+The POC is intentionally bounded:
+
+- model `gpt-5.6` with high reasoning;
+- at most two replay-proven rounds;
+- at most 16 model responses;
+- cumulative input/output token budgets shown in the panel;
+- one correction turn for malformed, unauthorized, or unintended `{}` output;
+- exact `ROUND_ADVANCE` and `ROUND_REVISE` current-packet rebinding;
+- explicit terminal controller disposition and durable result folder.
+
+The Run button remains disabled until an exact Packet V8 is bound and an API
+key is available. `Set OpenAI API Key...` stores a key in Windows Credential
+Manager at target `openai/api_key`. An `OPENAI_API_KEY` environment value takes
+precedence. Secret values are never written to app evidence, packets, receipts,
+logs, or Git.
+
+`Auto-promote replay-proven candidates` means automation may create a derived
+finding from the exact engine state and proof-owned PNG, then refresh Packet V8
+for the next round. That promotion records `human_acceptance: false`. Clearing
+the option stops at `MANUAL_REVIEW_REQUIRED` immediately after replay proof.
+
+Cancellation is session-local. It stops local progression, cancels owned
+runtime work, never resends an ambiguous provider turn, and preserves the run
+store for inspection. `events.ndjson` is append-only history;
+`active-turn.json` is its atomic current-state projection. Domain receipts and
+packet/state/frame artifacts remain the underlying authority.
+
 ## Packet V8 and override authority
 
 Packet V8 is the seven-file authority handoff when a frame exists:

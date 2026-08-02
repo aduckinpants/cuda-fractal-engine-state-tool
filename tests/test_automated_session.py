@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from cuda_fractal_state_tool.agent_bundle import AgentBundle
-from cuda_fractal_state_tool.automated_protocol import ControllerDisposition
+from cuda_fractal_state_tool.automated_protocol import ControllerDisposition, SessionBudgets
 from cuda_fractal_state_tool.automated_run_store import AutomatedRunStore
 from cuda_fractal_state_tool.automated_session import (
     AutomatedRouteServices,
@@ -19,7 +19,11 @@ from cuda_fractal_state_tool.automated_session import (
 )
 from cuda_fractal_state_tool.derived_finding import DerivedFindingPromotion
 from cuda_fractal_state_tool.finding_workspace import ImportResult
-from cuda_fractal_state_tool.openai_transport import TransportTurnResult
+from cuda_fractal_state_tool.openai_transport import (
+    ProviderFailureKind,
+    ProviderTransportError,
+    TransportTurnResult,
+)
 from cuda_fractal_state_tool.state_override_proof import StateOverrideProofResult
 from cuda_fractal_state_tool.workspace_layout import initialize_workspace_root
 from cuda_fractal_state_tool.async_jobs import JobCancelledError
@@ -382,6 +386,58 @@ class AutomatedSessionTests(unittest.TestCase):
             ).run()
             self.assertEqual(result.disposition, ControllerDisposition.MANUAL_REVIEW_REQUIRED)
             self.assertEqual(result.proven_rounds, 1)
+            self.assertEqual(services.promotions, 0)
+
+    def test_controller_separates_definite_and_ambiguous_provider_failures(self) -> None:
+        class FailingTransport(FakeTransport):
+            def __init__(self, *, ambiguous: bool) -> None:
+                super().__init__([])
+                self.ambiguous = ambiguous
+
+            def send_turn(self, **kwargs) -> TransportTurnResult:
+                self.calls.append(kwargs)
+                raise ProviderTransportError(
+                    ProviderFailureKind.TIMEOUT if self.ambiguous else ProviderFailureKind.AUTHENTICATION,
+                    "provider failure",
+                    remote_completion_ambiguous=self.ambiguous,
+                )
+
+        for ambiguous, expected in (
+            (False, ControllerDisposition.TRANSPORT_FAILED),
+            (True, ControllerDisposition.MANUAL_REVIEW_REQUIRED),
+        ):
+            with self.subTest(ambiguous=ambiguous), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                initial = _bundle(root, "packet-base", "finding-base", "base")
+                services = ServiceHarness(root, initial, [])
+                transport = FailingTransport(ambiguous=ambiguous)
+                result = AutomatedSessionController(
+                    transport=transport,
+                    run_store=self._store(root, initial),
+                    initial_bundle=initial,
+                    services=services.services(),
+                ).run()
+                self.assertEqual(result.disposition, expected)
+                self.assertEqual(len(transport.calls), 1)
+                self.assertEqual(services.promotions, 0)
+
+    def test_cumulative_token_budget_exhaustion_is_controller_owned(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            initial = _bundle(root, "packet-base", "finding-base", "base")
+            services = ServiceHarness(root, initial, [])
+            result = AutomatedSessionController(
+                transport=FakeTransport(["observation"]),
+                run_store=self._store(root, initial),
+                initial_bundle=initial,
+                services=services.services(),
+                budgets=SessionBudgets(
+                    maximum_cumulative_input_tokens=50,
+                    maximum_cumulative_output_tokens=24_000,
+                ),
+            ).run()
+            self.assertEqual(result.disposition, ControllerDisposition.BUDGET_EXHAUSTED)
+            self.assertEqual(result.usage.model_responses, 1)
             self.assertEqual(services.promotions, 0)
 
     def test_parsers_require_one_json_block_and_one_gate_line(self) -> None:
