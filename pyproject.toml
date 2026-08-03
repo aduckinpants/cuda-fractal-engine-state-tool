@@ -18,9 +18,14 @@ cuda-fractal-runtime-probe = "cuda_fractal_state_tool.runtime_probe:main"
 cuda-fractal-agent-bundle = "cuda_fractal_state_tool.agent_bundle_cli:main"
 cuda-fractal-state-override = "cuda_fractal_state_tool.state_override_cli:main"
 cuda-fractal-state-proof = "cuda_fractal_state_tool.state_override_proof_cli:main"
+cuda-fractal-finding-enrichment = "cuda_fractal_state_tool.finding_enrichment_cli:main"
+cuda-fractal-scalar-sweep = "cuda_fractal_state_tool.scalar_sweep_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+cuda_fractal_state_tool = ["*.json"]

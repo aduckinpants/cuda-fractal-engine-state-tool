@@ -99,6 +99,10 @@ The POC is intentionally bounded:
 - two primary responses per round (combined authoring, then combined review/gate);
 - at most six model responses including one correction turn per round;
 - cumulative total/cached/uncached input and output token usage shown in the panel;
+- separate cache-write usage and usage-derived USD calculation;
+- exact provider input-token counting before generation dispatch;
+- a user-entered run-dollar ceiling, initialized to `0.00`;
+- one explicit context profile: `blind`, `assisted`, or `break_blind`;
 - one correction turn for malformed, unauthorized, or unintended `{}` output;
 - exact `ROUND_ADVANCE` and `ROUND_REVISE` current-packet rebinding;
 - explicit terminal controller disposition and durable result folder.
@@ -108,6 +112,28 @@ key is available. `Set OpenAI API Key...` stores a key in Windows Credential
 Manager at target `openai/api_key`. An `OPENAI_API_KEY` environment value takes
 precedence. Secret values are never written to app evidence, packets, receipts,
 logs, or Git.
+
+Before `responses.create`, the route asks the provider to count the exact
+constructed request, prices that count conservatively with maximum output, and
+rejects generation when the result exceeds the remaining explicit run budget.
+Rejected-turn uploads are cleaned up. The tracked V1 standard pricing policy is
+versioned and hashed; override it with
+`CUDA_FRACTAL_OPENAI_PRICING_POLICY=<exact-json-path>`. Pricing is a local gate,
+not a provider invoice. Cache reads and cache writes are retained separately in
+receipts. See
+[`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md).
+
+Every authoring round starts with only its current Packet V8 authority. Review
+starts in another fresh provider context with the replay-proven derived packet
+and a compact, exact controller ledger for the prior decision, override, and
+proof. It never retains the original packet through response continuation.
+Exact file resources may be reused only when role and SHA-256 match; Packet V8
+construction still owns their meaning and order. `blind` discloses no analysis,
+`assisted` discloses receipted enrichment for authoring and review, and
+`break_blind` keeps authoring blind before disclosing enrichment for review.
+Disclosure manifests select immutable outputs without changing analysis/cache
+identity. See
+[`docs/finding_enrichment_slice4_context_evidence.md`](docs/finding_enrichment_slice4_context_evidence.md).
 
 `Auto-promote replay-proven candidates` means automation may create a derived
 finding from the exact engine state and proof-owned PNG, then refresh Packet V8
@@ -125,13 +151,77 @@ exists, even when a session stops before final qualification.
 The bounded paid-run outcome and exact receipts are summarized in
 [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md).
 
-Future V9 work is intentionally paused at a documentation boundary. Cost
-remediation precedes any larger automated battery; the first later local
-experiment is a one-axis scalar bracket that expands into ordinary independently
-proven sparse overrides. The restart plan and exact pickup point are recorded in
-[`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
-and [`PICK_UP_HERE.md`](PICK_UP_HERE.md). No V9 implementation is present on
-this checkpoint.
+The approved finding-enrichment and V9 campaign is active on
+`codex/finding-enrichment-v9-sweep`. Deterministic common/model enrichment is
+implemented before final V9 context shaping so model turns do not repeatedly
+rediscover engine-declared mathematics. The exact-count dollar gate and fresh
+review-context partition are complete; no paid battery was run. The bounded
+one-axis scalar bracket is the current local
+route over ordinary independently proven sparse overrides. The current
+execution contract is
+[`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md);
+[`PICK_UP_HERE.md`](PICK_UP_HERE.md) records the exact restart point.
+
+Common Packet V8 enrichment can also be exercised headlessly without invoking
+the runtime model provider:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+py -3.14 -m cuda_fractal_state_tool.finding_enrichment_cli `
+  --workspace-root D:\salt-fractal\cuda-fractal-engine-state-tool `
+  --packet-dir <exact-packet-v8-directory>
+```
+
+This route validates the immutable packet through the same loader used by the
+workflow, writes exact common facts under the finding's `analyses` directory,
+and reports model enrichment as unavailable until an exact engine receipt is
+bound. Slice 1 evidence is recorded in
+[`docs/finding_enrichment_slice1_evidence.md`](docs/finding_enrichment_slice1_evidence.md).
+
+Pass the exact published executable to request model enrichment:
+
+```powershell
+py -3.14 -m cuda_fractal_state_tool.finding_enrichment_cli `
+  --workspace-root D:\salt-fractal\cuda-fractal-engine-state-tool `
+  --packet-dir <exact-packet-v8-directory> `
+  --runtime-executable D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.exe `
+  --runtime-compatibility development
+```
+
+`development` records runtime drift and attempts the current authority;
+`strict` records the warning and stops before invocation. The first production
+provider is limited to the engine-declared zero-warp
+`laurent_polynomial_escape_time.v1` model. It derives bounded mathematical
+features, verifies selected points through `fractal.sample`, and creates a
+separately receipted annotation derivative. Evidence is recorded in
+[`docs/finding_enrichment_slice2_evidence.md`](docs/finding_enrichment_slice2_evidence.md).
+
+One bounded local scalar bracket can be run without a provider credential:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+py -3.14 -m cuda_fractal_state_tool.scalar_sweep_cli `
+  --packet-dir <exact-packet-v8-directory> `
+  --plan <scalar-sweep-v1.json> `
+  --runtime-cmd D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd
+```
+
+The V1 plan names one direct `params` leaf and 3–9 explicit ordered values.
+An optional fixed sparse override is validated independently and may not contain
+the sweep axis. Every member begins from the same exact packet base and uses the
+ordinary override materializer, packet-derived timeout, engine proof, and
+proof-owned PNG. Plan failures render nothing; member failures are preserved
+and either continue independently or stop according to the explicit policy.
+The aggregate receipt never records human acceptance. See
+[`docs/finding_enrichment_slice5_scalar_sweep_evidence.md`](docs/finding_enrichment_slice5_scalar_sweep_evidence.md).
+
+The same bounded service is available from **Local Scalar Sweep...** beside the
+State Override editor. The sweep window validates the exact current Packet V8,
+fixed override, and plan before enabling execution; streams compact per-member
+progress through the shared async owner; and renders a derived contact sheet
+from hash-verified proof-owned PNGs. The contact sheet and aggregate receipt are
+comparison evidence only and never record human acceptance. See the
+[Slice 6 manual gate](docs/finding_enrichment_slice6_manual_gate.md).
 
 ## Packet V8 and override authority
 

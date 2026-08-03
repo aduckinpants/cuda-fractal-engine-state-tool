@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum
 
 
@@ -49,7 +50,9 @@ class SessionBudgets:
     maximum_model_responses: int = 6
     maximum_cumulative_input_tokens: int = 2_000_000
     maximum_cumulative_output_tokens: int = 160_000
+    maximum_input_tokens_per_response: int = 200_000
     maximum_output_tokens_per_response: int = 24_000
+    maximum_calculated_cost_usd: Decimal = Decimal("10.00")
 
     def __post_init__(self) -> None:
         if any(
@@ -59,18 +62,26 @@ class SessionBudgets:
                 self.maximum_model_responses,
                 self.maximum_cumulative_input_tokens,
                 self.maximum_cumulative_output_tokens,
+                self.maximum_input_tokens_per_response,
                 self.maximum_output_tokens_per_response,
             )
         ):
             raise ValueError("Automated session budgets must be positive")
+        if (
+            not self.maximum_calculated_cost_usd.is_finite()
+            or self.maximum_calculated_cost_usd < 0
+        ):
+            raise ValueError("Automated session dollar budget must be finite and non-negative")
 
-    def to_dict(self) -> dict[str, int]:
+    def to_dict(self) -> dict[str, int | str]:
         return {
             "maximum_proven_rounds": self.maximum_proven_rounds,
             "maximum_model_responses": self.maximum_model_responses,
             "maximum_cumulative_input_tokens": self.maximum_cumulative_input_tokens,
             "maximum_cumulative_output_tokens": self.maximum_cumulative_output_tokens,
+            "maximum_input_tokens_per_response": self.maximum_input_tokens_per_response,
             "maximum_output_tokens_per_response": self.maximum_output_tokens_per_response,
+            "maximum_calculated_cost_usd": format(self.maximum_calculated_cost_usd, "f"),
         }
 
 
@@ -81,6 +92,8 @@ class BudgetUsage:
     cumulative_input_tokens: int = 0
     cumulative_cached_input_tokens: int = 0
     cumulative_output_tokens: int = 0
+    cumulative_cache_write_tokens: int = 0
+    cumulative_calculated_cost_usd: Decimal = Decimal("0")
 
     def __post_init__(self) -> None:
         if any(
@@ -91,11 +104,22 @@ class BudgetUsage:
                 self.cumulative_input_tokens,
                 self.cumulative_cached_input_tokens,
                 self.cumulative_output_tokens,
+                self.cumulative_cache_write_tokens,
             )
         ):
             raise ValueError("Automated session budget usage cannot be negative")
         if self.cumulative_cached_input_tokens > self.cumulative_input_tokens:
             raise ValueError("Cached input tokens cannot exceed total input tokens")
+        if (
+            self.cumulative_cached_input_tokens + self.cumulative_cache_write_tokens
+            > self.cumulative_input_tokens
+        ):
+            raise ValueError("Cache reads and writes cannot exceed total input tokens")
+        if (
+            not self.cumulative_calculated_cost_usd.is_finite()
+            or self.cumulative_calculated_cost_usd < 0
+        ):
+            raise ValueError("Calculated cost usage must be finite and non-negative")
 
     @property
     def cumulative_uncached_input_tokens(self) -> int:
@@ -108,9 +132,12 @@ def budget_exhaustion_reason(
     *,
     next_input_tokens: int = 0,
     next_output_tokens: int = 0,
+    next_calculated_cost_usd: Decimal = Decimal("0"),
 ) -> str | None:
     if next_input_tokens < 0 or next_output_tokens < 0:
         raise ValueError("Projected token use cannot be negative")
+    if not next_calculated_cost_usd.is_finite() or next_calculated_cost_usd < 0:
+        raise ValueError("Projected calculated cost cannot be negative or non-finite")
     if usage.proven_rounds >= budgets.maximum_proven_rounds:
         return "maximum_proven_rounds"
     if usage.model_responses >= budgets.maximum_model_responses:
@@ -125,8 +152,15 @@ def budget_exhaustion_reason(
         > budgets.maximum_cumulative_output_tokens
     ):
         return "maximum_cumulative_output_tokens"
+    if next_input_tokens > budgets.maximum_input_tokens_per_response:
+        return "maximum_input_tokens_per_response"
     if next_output_tokens > budgets.maximum_output_tokens_per_response:
         return "maximum_output_tokens_per_response"
+    if (
+        usage.cumulative_calculated_cost_usd + next_calculated_cost_usd
+        > budgets.maximum_calculated_cost_usd
+    ):
+        return "maximum_calculated_cost_usd"
     return None
 
 

@@ -47,6 +47,10 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("Cancel Automation", source)
         self.assertIn("Open Run Folder", source)
         self.assertIn("Sanitized live event stream", source)
+        self.assertIn("Local Scalar Sweep…", source)
+        self.assertIn("Run Local Sweep", source)
+        self.assertIn("Derived contact sheet (not acceptance)", source)
+        self.assertIn("human acceptance: false", source)
         self.assertNotIn("--packet-dir", source)
         self.assertNotIn("proposal_v1", source)
         self.assertNotIn("Repair Packet", source)
@@ -98,10 +102,17 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
                     "cumulative_cached_input_tokens": 100000,
                     "cumulative_uncached_input_tokens": 23456,
                     "cumulative_output_tokens": 7890,
+                    "cumulative_cache_write_tokens": 4567,
+                    "cumulative_calculated_cost_usd": "1.23",
+                    "maximum_calculated_cost_usd": "4.00",
+                    "last_estimated_call_cost_usd": "1.97",
+                    "pricing_policy": {"policy_id": "openai-standard-2026-08-03"},
                 }
             ),
             "Rounds 1/2 · Responses 2/6 · Tokens total/cached/uncached/out "
-            "123,456/100,000/23,456/7,890",
+            "123,456/100,000/23,456/7,890 · Cache writes 4,567 · "
+            "Calculated USD 1.23/4.00 · Next max 1.97 · "
+            "Pricing openai-standard-2026-08-03",
         )
 
     def test_automated_event_view_is_compact_and_field_allowlisted(self) -> None:
@@ -127,6 +138,27 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("MODEL_RESPONSE", line)
         self.assertIn("1,000/800/200/50", line)
         self.assertNotIn("must-not-render", line)
+
+    def test_scalar_sweep_progress_is_compact_and_non_accepting(self) -> None:
+        from cuda_fractal_state_tool.user_workflow_app import _format_scalar_sweep_progress
+
+        self.assertEqual(
+            _format_scalar_sweep_progress(
+                {"event": "MEMBER_STARTED", "index": 2, "value": 0.5}
+            ),
+            "MEMBER 2  value=0.5  RUNNING",
+        )
+        completed = _format_scalar_sweep_progress(
+            {
+                "event": "MEMBER_COMPLETED",
+                "index": 2,
+                "value": 0.5,
+                "status": "REPLAY_PROVEN",
+                "proof_id": "proof-2",
+            }
+        )
+        self.assertIn("REPLAY_PROVEN", completed)
+        self.assertNotIn("ACCEPTED", completed)
 
     def test_proposal_era_modules_are_absent_from_active_package(self) -> None:
         package_dir = Path(inspect.getfile(app_entry)).parent

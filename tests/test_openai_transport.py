@@ -11,6 +11,7 @@ from cuda_fractal_state_tool.agent_bundle import AgentBundleHandoff
 from cuda_fractal_state_tool.automated_run_store import AutomatedRunStore
 from cuda_fractal_state_tool.openai_transport import (
     AmbiguousRemoteCompletion,
+    DispatchAuthorizationRejected,
     PacketV8ResponsesTransport,
     ProviderFailureKind,
     ProviderFile,
@@ -36,6 +37,7 @@ class FakeProvider:
         self.response_error: Exception | None = None
         self.response_status = "completed"
         self.on_response = None
+        self.count_requests: list[dict[str, object]] = []
 
     def upload_file(self, filename: str, payload: bytes) -> ProviderFile:
         self.uploaded.append(filename)
@@ -52,18 +54,30 @@ class FakeProvider:
             model="gpt-5.6-2026-07-01",
             status=self.response_status,
             output_text="A grounded response.",
-            usage={"input_tokens": 123, "cached_input_tokens": 23, "output_tokens": 45},
+            usage={
+                "input_tokens": 123,
+                "cached_input_tokens": 23,
+                "cache_write_tokens": 17,
+                "output_tokens": 45,
+            },
             raw={
                 "id": "resp-1",
                 "model": "gpt-5.6-2026-07-01",
                 "output_text": "A grounded response.",
                 "usage": {
                     "input_tokens": 123,
-                    "input_tokens_details": {"cached_tokens": 23},
+                    "input_tokens_details": {
+                        "cached_tokens": 23,
+                        "cache_write_tokens": 17,
+                    },
                     "output_tokens": 45,
                 },
             },
         )
+
+    def count_input_tokens(self, request, *, timeout_seconds: float) -> int:
+        self.count_requests.append({"request": request, "timeout_seconds": timeout_seconds})
+        return 123
 
     def delete_file(self, file_id: str) -> None:
         self.deleted.append(file_id)
@@ -163,6 +177,7 @@ class OpenAITransportTests(unittest.TestCase):
                 )
 
             self.assertEqual(provider.uploaded, ["packet.md", "manifest.json", "state.json"])
+            self.assertEqual(len(provider.count_requests), 1)
             self.assertEqual(provider.deleted, [])
             self.assertEqual(
                 transport.owned_provider_file_ids,
@@ -182,6 +197,7 @@ class OpenAITransportTests(unittest.TestCase):
             self.assertTrue(content[-1]["image_url"].startswith("data:image/png;base64,"))
             self.assertEqual(result.input_tokens, 123)
             self.assertEqual(result.cached_input_tokens, 23)
+            self.assertEqual(result.cache_write_tokens, 17)
             self.assertEqual(result.uncached_input_tokens, 100)
             self.assertEqual(result.output_tokens, 45)
             self.assertEqual(result.requested_model, "gpt-5.6")
@@ -215,7 +231,65 @@ class OpenAITransportTests(unittest.TestCase):
             self.assertEqual(response_evidence["requested_model"], "gpt-5.6")
             self.assertEqual(response_evidence["resolved_model"], "gpt-5.6-2026-07-01")
             self.assertEqual(response_evidence["cached_input_tokens"], 23)
+            self.assertEqual(response_evidence["cache_write_tokens"], 17)
             self.assertEqual(response_evidence["uncached_input_tokens"], 100)
+
+    def test_exact_token_count_gate_rejects_before_generation_and_cleans_uploads(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = PacketFixture(root)
+            provider = FakeProvider()
+            transport = PacketV8ResponsesTransport(provider)
+            with (
+                patch(
+                    "cuda_fractal_state_tool.openai_transport.load_agent_bundle_handoff",
+                    return_value=fixture.handoff,
+                ),
+                self.assertRaisesRegex(DispatchAuthorizationRejected, "dollar gate"),
+            ):
+                transport.send_turn(
+                    instructions="Stable protocol instructions",
+                    prompt="What do you notice?",
+                    packet_dir=fixture.packet_dir,
+                    authorize_dispatch=lambda _count: (_ for _ in ()).throw(
+                        DispatchAuthorizationRejected("dollar gate rejected")
+                    ),
+                )
+            self.assertEqual(len(provider.count_requests), 1)
+            self.assertEqual(provider.requests, [])
+            self.assertEqual(
+                provider.deleted,
+                ["file-state.json", "file-manifest.json", "file-packet.md"],
+            )
+            self.assertEqual(transport.owned_provider_file_ids, ())
+
+    def test_exact_role_and_hash_resources_reuse_one_owned_provider_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = PacketFixture(root)
+            provider = FakeProvider()
+            transport = PacketV8ResponsesTransport(provider)
+            with patch(
+                "cuda_fractal_state_tool.openai_transport.load_agent_bundle_handoff",
+                return_value=fixture.handoff,
+            ):
+                first = transport.send_turn(
+                    instructions="Stable protocol instructions",
+                    prompt="First",
+                    packet_dir=fixture.packet_dir,
+                )
+                second = transport.send_turn(
+                    instructions="Stable protocol instructions",
+                    prompt="Second fresh context",
+                    packet_dir=fixture.packet_dir,
+                )
+            self.assertEqual(provider.uploaded, ["packet.md", "manifest.json", "state.json"])
+            self.assertTrue(all(not item.provider_reused for item in first.resources))
+            second_files = [item for item in second.resources if item.media_role == "file"]
+            self.assertTrue(all(item.provider_reused for item in second_files))
+            self.assertEqual(len(transport.owned_provider_file_ids), 3)
+            transport.close_owned_files()
+            self.assertEqual(len(provider.deleted), 3)
 
     def test_continuation_without_packet_sends_only_prompt_and_repeats_instructions(self) -> None:
         provider = FakeProvider()

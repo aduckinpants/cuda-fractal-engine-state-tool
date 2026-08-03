@@ -237,6 +237,11 @@ def _walk_leaves(value: Any, prefix: str) -> Iterable[tuple[str, Any]]:
     yield prefix, value
 
 
+def enumerate_override_leaf_paths(override: ParsedStateOverride) -> tuple[str, ...]:
+    """Return exact authored leaf paths for collision checks beside the canonical parser."""
+    return tuple(path for path, _value in _walk_leaves(override.document, ""))
+
+
 def _validate_existing_object_shape(override: dict[str, Any], base: dict[str, Any], prefix: str) -> None:
     for key, value in override.items():
         path = f"{prefix}.{key}" if prefix else key

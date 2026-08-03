@@ -3,11 +3,13 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Callable, Protocol
 
 from .agent_bundle import AgentBundle, build_agent_bundle
 from .async_jobs import JobCancelledError, JobContext
+from .automated_context import build_round_review_ledger, ledger_transport_resource
 from .automated_protocol import (
     BudgetUsage,
     ControllerDisposition,
@@ -23,15 +25,33 @@ from .automated_protocol import (
 )
 from .automated_run_store import AutomatedRunStore, RunStoreWriteError
 from .derived_finding import DerivedFindingPromotion, promote_replay_proven_candidate
+from .enrichment_disclosure import (
+    DisclosureProfile,
+    EnrichmentDisclosure,
+    FindingDisclosureService,
+    build_blind_disclosure,
+)
 from .openai_transport import (
+    DEFAULT_MODEL,
     AmbiguousRemoteCompletion,
+    DispatchAuthorizationRejected,
     PacketV8ResponsesTransport,
     ProviderTransportError,
     TransportCancelled,
     TransportTurnResult,
+    TransportResource,
+)
+from .pricing_policy import (
+    PROVIDER_BILLING_DISCLAIMER,
+    PricingPolicy,
+    calculate_usage_cost,
+    decimal_text,
+    estimate_maximum_call_cost,
+    load_pricing_policy,
 )
 from .state_override import StateOverrideMaterialization, materialize_state_override, parse_state_override
 from .state_override_proof import StateOverrideProofResult, execute_state_override_proof
+from .runtime_surface import resolve_launcher
 
 
 AUTOMATED_SESSION_INSTRUCTIONS = """You are participating in a bounded fractal-finding exploration session.
@@ -52,7 +72,8 @@ AUTHOR_ROUND_PROMPT = """Complete one bounded experiment-authoring round in this
 Do not propose a controller gate in this response.
 """
 
-REVIEW_AND_GATE_PROMPT = """The attached Packet V8 is the replay-proven derived finding for the experiment you just authored.
+REVIEW_AND_GATE_PROMPT = """The attached Packet V8 is the replay-proven derived finding. This is a fresh provider context.
+The attached controller round-review ledger carries the exact prior author decision, locked prediction, sparse override, and proof identities needed for comparison. It is not state authority.
 In one concise response:
 
 1. Compare the result with the locked prediction and identify what changed, what did not, and whether the experiment was informative.
@@ -99,12 +120,21 @@ class BundleService(Protocol):
     def __call__(self, finding_dir: Path) -> AgentBundle: ...
 
 
+class DisclosureService(Protocol):
+    def __call__(
+        self,
+        packet_dir: Path,
+        profile: DisclosureProfile,
+    ) -> EnrichmentDisclosure: ...
+
+
 @dataclass(frozen=True)
 class AutomatedRouteServices:
     proof: ProofService
     promote: PromotionService
     build_bundle: BundleService
     validate: ValidationService | None = None
+    disclosure: DisclosureService | None = None
 
 
 @dataclass(frozen=True)
@@ -192,11 +222,20 @@ def create_job_bound_automated_route_services(
     def bundle(finding_dir: Path) -> AgentBundle:
         return build_agent_bundle(finding_dir, runtime_cmd_path, job=job)
 
+    launcher = resolve_launcher(runtime_cmd_path)
+    runtime_executable = Path(launcher.resolved_executable_path or runtime_cmd_path)
+    disclosure = FindingDisclosureService(
+        workspace_root=workspace_root,
+        runtime_executable=runtime_executable,
+        runtime_compatibility_mode=runtime_compatibility_mode,
+    )
+
     return AutomatedRouteServices(
         proof=proof,
         promote=promote,
         build_bundle=bundle,
         validate=_default_validate,
+        disclosure=disclosure.prepare,
     )
 
 
@@ -209,6 +248,9 @@ class AutomatedSessionController:
         initial_bundle: AgentBundle,
         services: AutomatedRouteServices,
         budgets: SessionBudgets = SessionBudgets(),
+        pricing_policy: PricingPolicy | None = None,
+        requested_model: str = DEFAULT_MODEL,
+        disclosure_profile: DisclosureProfile = DisclosureProfile.BLIND,
         cancelled: Callable[[], bool] = lambda: False,
         auto_promote: bool = True,
     ) -> None:
@@ -218,6 +260,10 @@ class AutomatedSessionController:
         self.run_store = run_store
         self.services = services
         self.budgets = budgets
+        self.pricing_policy = pricing_policy or load_pricing_policy()
+        self.requested_model = requested_model
+        self.disclosure_profile = DisclosureProfile(disclosure_profile)
+        self.pricing_policy.model(requested_model)
         self.cancelled = cancelled
         self.auto_promote = auto_promote
         self.current_bundle = initial_bundle
@@ -234,6 +280,8 @@ class AutomatedSessionController:
         self._last_requested_model: str | None = None
         self._last_resolved_model: str | None = None
         self._cumulative_latency_seconds = 0.0
+        self._last_estimated_call_cost_usd = Decimal("0")
+        self._last_counted_input_tokens = 0
 
     @staticmethod
     def _binding(bundle: AgentBundle) -> PacketAuthorityBinding:
@@ -254,6 +302,23 @@ class AutomatedSessionController:
             "cumulative_cached_input_tokens": self.usage.cumulative_cached_input_tokens,
             "cumulative_uncached_input_tokens": self.usage.cumulative_uncached_input_tokens,
             "cumulative_output_tokens": self.usage.cumulative_output_tokens,
+            "cumulative_cache_write_tokens": self.usage.cumulative_cache_write_tokens,
+            "cumulative_calculated_cost_usd": decimal_text(
+                self.usage.cumulative_calculated_cost_usd
+            ),
+            "maximum_calculated_cost_usd": decimal_text(
+                self.budgets.maximum_calculated_cost_usd
+            ),
+            "remaining_calculated_cost_usd": decimal_text(
+                self.budgets.maximum_calculated_cost_usd
+                - self.usage.cumulative_calculated_cost_usd
+            ),
+            "last_estimated_call_cost_usd": decimal_text(
+                self._last_estimated_call_cost_usd
+            ),
+            "last_counted_input_tokens": self._last_counted_input_tokens,
+            "pricing_policy": self.pricing_policy.identity_dict(),
+            "disclosure_profile": self.disclosure_profile.value,
             "cumulative_provider_latency_seconds": self._cumulative_latency_seconds,
             "last_requested_model": self._last_requested_model,
             "last_resolved_model": self._last_resolved_model,
@@ -274,12 +339,23 @@ class AutomatedSessionController:
         )
 
     def _ask(self, prompt: str, *, attach_packet: bool) -> TransportTurnResult:
+        return self._ask_with_resources(prompt, attach_packet=attach_packet, additional_resources=())
+
+    def _ask_with_resources(
+        self,
+        prompt: str,
+        *,
+        attach_packet: bool,
+        additional_resources: tuple[TransportResource, ...],
+    ) -> TransportTurnResult:
         response_usage = BudgetUsage(
             proven_rounds=0,
             model_responses=self.usage.model_responses,
             cumulative_input_tokens=self.usage.cumulative_input_tokens,
             cumulative_cached_input_tokens=self.usage.cumulative_cached_input_tokens,
             cumulative_output_tokens=self.usage.cumulative_output_tokens,
+            cumulative_cache_write_tokens=self.usage.cumulative_cache_write_tokens,
+            cumulative_calculated_cost_usd=self.usage.cumulative_calculated_cost_usd,
         )
         exhaustion = budget_exhaustion_reason(
             self.budgets,
@@ -288,6 +364,43 @@ class AutomatedSessionController:
         )
         if exhaustion is not None:
             raise RuntimeError(f"Automated session budget exhausted before response: {exhaustion}")
+
+        def authorize_dispatch(exact_input_tokens: int) -> None:
+            self._last_counted_input_tokens = exact_input_tokens
+            estimate = estimate_maximum_call_cost(
+                self.pricing_policy,
+                model_name=self.requested_model,
+                maximum_input_tokens=exact_input_tokens,
+                maximum_output_tokens=self.budgets.maximum_output_tokens_per_response,
+            )
+            self._last_estimated_call_cost_usd = estimate.cost_usd
+            reason = budget_exhaustion_reason(
+                self.budgets,
+                response_usage,
+                next_input_tokens=exact_input_tokens,
+                next_output_tokens=self.budgets.maximum_output_tokens_per_response,
+                next_calculated_cost_usd=estimate.cost_usd,
+            )
+            payload = {
+                "reason": reason,
+                "exact_counted_input_tokens": exact_input_tokens,
+                "estimate": estimate.to_dict(),
+                "pricing_policy": self.pricing_policy.identity_dict(),
+                "remaining_calculated_cost_usd_before_dispatch": decimal_text(
+                    self.budgets.maximum_calculated_cost_usd
+                    - self.usage.cumulative_calculated_cost_usd
+                ),
+                "provider_billing_disclaimer": PROVIDER_BILLING_DISCLAIMER,
+            }
+            self._record(
+                "provider_dispatch_rejected" if reason else "provider_dispatch_estimated",
+                payload,
+            )
+            if reason is not None:
+                raise DispatchAuthorizationRejected(
+                    f"Automated session budget exhausted before response: {reason}"
+                )
+
         self._turn_number += 1
         result = self.transport.send_turn(
             instructions=AUTOMATED_SESSION_INSTRUCTIONS,
@@ -298,6 +411,17 @@ class AutomatedSessionController:
             turn_id=f"turn-{self._turn_number:04d}",
             cancelled=self.cancelled,
             max_output_tokens=self.budgets.maximum_output_tokens_per_response,
+            model=self.requested_model,
+            authorize_dispatch=authorize_dispatch,
+            additional_resources=additional_resources,
+        )
+        actual_cost = calculate_usage_cost(
+            self.pricing_policy,
+            model_name=result.model,
+            input_tokens=result.input_tokens,
+            cached_input_tokens=result.cached_input_tokens,
+            cache_write_tokens=result.cache_write_tokens,
+            output_tokens=result.output_tokens,
         )
         self.previous_response_id = result.response_id
         self._last_requested_model = result.requested_model
@@ -311,6 +435,12 @@ class AutomatedSessionController:
                 self.usage.cumulative_cached_input_tokens + result.cached_input_tokens
             ),
             cumulative_output_tokens=self.usage.cumulative_output_tokens + result.output_tokens,
+            cumulative_cache_write_tokens=(
+                self.usage.cumulative_cache_write_tokens + result.cache_write_tokens
+            ),
+            cumulative_calculated_cost_usd=(
+                self.usage.cumulative_calculated_cost_usd + actual_cost.cost_usd
+            ),
         )
         self._record(
             "model_response",
@@ -319,7 +449,12 @@ class AutomatedSessionController:
                 "requested_model": result.requested_model,
                 "resolved_model": result.model,
                 "input_tokens": result.input_tokens,
+                "pre_dispatch_counted_input_tokens": self._last_counted_input_tokens,
+                "input_token_count_delta": (
+                    result.input_tokens - self._last_counted_input_tokens
+                ),
                 "cached_input_tokens": result.cached_input_tokens,
+                "cache_write_tokens": result.cache_write_tokens,
                 "uncached_input_tokens": result.uncached_input_tokens,
                 "output_tokens": result.output_tokens,
                 "latency_seconds": result.latency_seconds,
@@ -327,6 +462,12 @@ class AutomatedSessionController:
                 "cumulative_cached_input_tokens": self.usage.cumulative_cached_input_tokens,
                 "cumulative_uncached_input_tokens": self.usage.cumulative_uncached_input_tokens,
                 "cumulative_output_tokens": self.usage.cumulative_output_tokens,
+                "calculated_call_cost": actual_cost.to_dict(),
+                "cumulative_calculated_cost_usd": decimal_text(
+                    self.usage.cumulative_calculated_cost_usd
+                ),
+                "pricing_policy": self.pricing_policy.identity_dict(),
+                "provider_billing_disclaimer": PROVIDER_BILLING_DISCLAIMER,
                 "cumulative_provider_latency_seconds": self._cumulative_latency_seconds,
                 "response_text_sha256": hashlib.sha256(result.output_text.encode("utf-8")).hexdigest(),
             },
@@ -339,7 +480,91 @@ class AutomatedSessionController:
             raise RuntimeError(
                 "Automated session budget exhausted after response: maximum_cumulative_output_tokens"
             )
+        if (
+            self.usage.cumulative_calculated_cost_usd
+            > self.budgets.maximum_calculated_cost_usd
+        ):
+            raise RuntimeError(
+                "Automated session budget exhausted after response: maximum_calculated_cost_usd"
+            )
         return result
+
+    def _phase_disclosure_profile(self, phase: str) -> DisclosureProfile:
+        if self.disclosure_profile is DisclosureProfile.ASSISTED:
+            return DisclosureProfile.ASSISTED
+        if self.disclosure_profile is DisclosureProfile.BREAK_BLIND and phase == "review":
+            return DisclosureProfile.BREAK_BLIND
+        return DisclosureProfile.BLIND
+
+    def _raise_if_no_dollar_budget(self) -> None:
+        if (
+            self.usage.cumulative_calculated_cost_usd
+            >= self.budgets.maximum_calculated_cost_usd
+        ):
+            raise RuntimeError(
+                "Automated session budget exhausted before context preparation: "
+                "maximum_calculated_cost_usd"
+            )
+
+    def _disclosure_resources(
+        self,
+        *,
+        round_number: int,
+        phase: str,
+    ) -> tuple[TransportResource, ...]:
+        profile = self._phase_disclosure_profile(phase)
+        if profile is DisclosureProfile.BLIND:
+            disclosure = build_blind_disclosure(self.current_bundle)
+        else:
+            if self.services.disclosure is None:
+                raise RuntimeError(
+                    f"Enrichment disclosure service is unavailable for profile {profile.value}"
+                )
+            disclosure = self.services.disclosure(self.current_bundle.packet_dir, profile)
+        if (
+            disclosure.packet_id != self.current_packet.packet_id
+            or disclosure.packet_manifest_sha256 != self.current_packet.manifest_sha256
+            or disclosure.finding_id != self.current_packet.finding_id
+        ):
+            raise RuntimeError("Enrichment disclosure disagrees with current packet authority")
+        relative = (
+            f"rounds/round-{round_number:02d}/context/{phase}-enrichment-disclosure.json"
+        )
+        manifest_path = self.run_store.write_evidence_bytes(relative, disclosure.manifest_bytes)
+        manifest_resource = TransportResource(
+            filename="enrichment-disclosure.json",
+            role="enrichment_disclosure_manifest",
+            media_role="file",
+            sha256=hashlib.sha256(disclosure.manifest_bytes).hexdigest(),
+            size_bytes=len(disclosure.manifest_bytes),
+            local_path=manifest_path,
+            payload=disclosure.manifest_bytes,
+        )
+        resources = tuple(
+            TransportResource(
+                filename=item.transport_filename,
+                role=item.role,
+                media_role=item.media_role,
+                sha256=item.sha256,
+                size_bytes=item.size_bytes,
+                local_path=item.local_path,
+                payload=item.payload,
+            )
+            for item in disclosure.resources
+        )
+        self._record(
+            "enrichment_disclosure_prepared",
+            {
+                "round_number": round_number,
+                "phase": phase,
+                "configured_profile": self.disclosure_profile.value,
+                "effective_profile": profile.value,
+                "disclosure_id": disclosure.disclosure_id,
+                "analysis_id": disclosure.analysis_id,
+                "resource_count": len(resources),
+            },
+        )
+        return (manifest_resource, *resources)
 
     def _finish(
         self,
@@ -460,9 +685,14 @@ class AutomatedSessionController:
                         "provider_chain_reset": True,
                     },
                 )
-                author_response = self._ask(
+                self._raise_if_no_dollar_budget()
+                author_response = self._ask_with_resources(
                     self._author_round_prompt(round_number),
                     attach_packet=True,
+                    additional_resources=self._disclosure_resources(
+                        round_number=round_number,
+                        phase="author",
+                    ),
                 )
                 self._move(ProtocolState.EXPLORE)
                 self._move(ProtocolState.SELECT_EXPERIMENT)
@@ -474,7 +704,7 @@ class AutomatedSessionController:
                         ControllerDisposition.MANUAL_REVIEW_REQUIRED,
                         "The model did not produce one valid observable state override after its correction turn.",
                     )
-                override_text, _ = validated
+                override_text, materialization = validated
                 self._move(ProtocolState.VALIDATE_OVERRIDE)
                 self._move(ProtocolState.PROVE_CANDIDATE)
                 self._raise_if_cancelled()
@@ -496,6 +726,10 @@ class AutomatedSessionController:
                     cumulative_input_tokens=self.usage.cumulative_input_tokens,
                     cumulative_cached_input_tokens=self.usage.cumulative_cached_input_tokens,
                     cumulative_output_tokens=self.usage.cumulative_output_tokens,
+                    cumulative_cache_write_tokens=self.usage.cumulative_cache_write_tokens,
+                    cumulative_calculated_cost_usd=(
+                        self.usage.cumulative_calculated_cost_usd
+                    ),
                 )
                 self._record("candidate_replay_proven", {"proof_id": proof.proof_id})
                 if not self.auto_promote:
@@ -537,7 +771,38 @@ class AutomatedSessionController:
                 self.current_packet = derived_binding
                 self._record("derived_packet_refreshed", {"packet": derived_binding.to_dict()})
                 self._move(ProtocolState.REVIEW_RESULT)
-                gate_response = self._ask(REVIEW_AND_GATE_PROMPT, attach_packet=True)
+                ledger = build_round_review_ledger(
+                    round_number=round_number,
+                    author_packet=preceding_binding,
+                    derived_packet=derived_binding,
+                    author_response_text=author_response.output_text,
+                    override_text=override_text,
+                    materialization=materialization,
+                    proof=proof,
+                )
+                ledger_path = self.run_store.write_evidence_bytes(
+                    f"rounds/round-{round_number:02d}/context/round-review-ledger.json",
+                    ledger.payload,
+                )
+                self.previous_response_id = None
+                self._record(
+                    "review_conversation_started",
+                    {
+                        "round_number": round_number,
+                        "provider_chain_reset": True,
+                        "review_ledger_sha256": ledger.sha256,
+                    },
+                )
+                self._raise_if_no_dollar_budget()
+                review_resources = (
+                    ledger_transport_resource(ledger_path, ledger),
+                    *self._disclosure_resources(round_number=round_number, phase="review"),
+                )
+                gate_response = self._ask_with_resources(
+                    REVIEW_AND_GATE_PROMPT,
+                    attach_packet=True,
+                    additional_resources=review_resources,
+                )
                 self._move(ProtocolState.SELF_AUDIT)
                 self._move(ProtocolState.GATE_DECISION)
                 try:
@@ -596,6 +861,8 @@ class AutomatedSessionController:
             )
         except TransportCancelled as exc:
             return self._finish(ControllerDisposition.CANCELLED, str(exc))
+        except DispatchAuthorizationRejected as exc:
+            return self._finish(ControllerDisposition.BUDGET_EXHAUSTED, str(exc))
         except JobCancelledError as exc:
             return self._finish(ControllerDisposition.CANCELLED, str(exc))
         except AmbiguousRemoteCompletion as exc:

@@ -21,6 +21,7 @@ class JobRequestIdentity:
     packet_sha256: Optional[str] = None
     packet_manifest_sha256: Optional[str] = None
     override_text_sha256: Optional[str] = None
+    sweep_plan_sha256: Optional[str] = None
     candidate_sha256: Optional[str] = None
     runtime_identity_sha256: Optional[str] = None
     ui_salt_contract_sha256: Optional[str] = None

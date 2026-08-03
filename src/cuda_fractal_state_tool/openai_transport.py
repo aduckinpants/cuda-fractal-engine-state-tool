@@ -39,6 +39,10 @@ class TransportCancelled(RuntimeError):
     pass
 
 
+class DispatchAuthorizationRejected(RuntimeError):
+    pass
+
+
 class ProviderTransportError(RuntimeError):
     def __init__(
         self,
@@ -79,6 +83,8 @@ class ResponsesProvider(Protocol):
 
     def create_response(self, request: dict[str, Any], *, timeout_seconds: float) -> ProviderResponse: ...
 
+    def count_input_tokens(self, request: dict[str, Any], *, timeout_seconds: float) -> int: ...
+
     def delete_file(self, file_id: str) -> None: ...
 
 
@@ -92,6 +98,7 @@ class TransportResource:
     local_path: Path
     payload: bytes
     provider_file_id: str | None = None
+    provider_reused: bool = False
 
     def to_evidence(self) -> dict[str, Any]:
         return {
@@ -101,6 +108,7 @@ class TransportResource:
             "sha256": self.sha256,
             "size_bytes": self.size_bytes,
             "provider_file_id": self.provider_file_id,
+            "provider_reused": self.provider_reused,
         }
 
 
@@ -124,6 +132,7 @@ class TransportTurnResult:
     unavailable_optional_attachments: tuple[str, ...]
     requested_model: str = ""
     cached_input_tokens: int = 0
+    cache_write_tokens: int = 0
     latency_seconds: float = 0.0
     request_evidence_path: Path | None = None
     response_evidence_path: Path | None = None
@@ -157,6 +166,7 @@ class OpenAISDKProvider:
         usage = {
             "input_tokens": int(usage_raw.get("input_tokens") or 0),
             "cached_input_tokens": int(input_details.get("cached_tokens") or 0),
+            "cache_write_tokens": int(input_details.get("cache_write_tokens") or 0),
             "output_tokens": int(usage_raw.get("output_tokens") or 0),
         }
         return ProviderResponse(
@@ -167,6 +177,21 @@ class OpenAISDKProvider:
             usage=usage,
             raw=raw,
         )
+
+    def count_input_tokens(self, request: dict[str, Any], *, timeout_seconds: float) -> int:
+        count_request = {
+            key: request[key]
+            for key in ("model", "instructions", "input", "previous_response_id")
+            if key in request
+        }
+        value = self._client.responses.input_tokens.count(
+            **count_request,
+            timeout=timeout_seconds,
+        )
+        count = int(value.input_tokens)
+        if count < 0:
+            raise ValueError("Provider returned a negative input-token count")
+        return count
 
     def delete_file(self, file_id: str) -> None:
         self._client.files.delete(file_id)
@@ -312,6 +337,7 @@ class PacketV8ResponsesTransport:
     def __init__(self, provider: ResponsesProvider) -> None:
         self.provider = provider
         self._owned_provider_file_ids: list[str] = []
+        self._provider_file_by_identity: dict[tuple[str, str], str] = {}
 
     @property
     def owned_provider_file_ids(self) -> tuple[str, ...]:
@@ -369,6 +395,11 @@ class PacketV8ResponsesTransport:
             else:
                 if file_id in self._owned_provider_file_ids:
                     self._owned_provider_file_ids.remove(file_id)
+                self._provider_file_by_identity = {
+                    identity: owned_id
+                    for identity, owned_id in self._provider_file_by_identity.items()
+                    if owned_id != file_id
+                }
         return failures
 
     def send_turn(
@@ -385,6 +416,8 @@ class PacketV8ResponsesTransport:
         reasoning_effort: str = DEFAULT_REASONING_EFFORT,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
         timeout_seconds: float = DEFAULT_RESPONSE_TIMEOUT_SECONDS,
+        authorize_dispatch: Callable[[int], None] | None = None,
+        additional_resources: tuple[TransportResource, ...] = (),
     ) -> TransportTurnResult:
         if not instructions.strip() or not prompt.strip():
             raise ValueError("Automated response instructions and prompt are required")
@@ -394,6 +427,31 @@ class PacketV8ResponsesTransport:
             raise TransportCancelled("Automated turn was cancelled before API dispatch")
         prepared = prepare_packet_transport(packet_dir) if packet_dir is not None else None
         resources = list(prepared.resources if prepared else ())
+        for resource in additional_resources:
+            if not isinstance(resource, TransportResource):
+                raise ValueError("Additional transport resources must be exact TransportResource values")
+            current = resource.local_path.read_bytes()
+            if (
+                current != resource.payload
+                or _sha256(current) != resource.sha256
+                or len(current) != resource.size_bytes
+            ):
+                raise ValueError(f"Additional transport resource changed: {resource.filename}")
+            resources.append(resource)
+        by_filename: dict[str, tuple[str, str, str]] = {}
+        deduplicated: list[TransportResource] = []
+        seen_identities: set[tuple[str, str, str]] = set()
+        for resource in resources:
+            identity = (resource.role, resource.sha256, resource.media_role)
+            prior = by_filename.get(resource.filename)
+            if prior is not None and prior != identity:
+                raise ValueError(f"Transport filename identifies different resources: {resource.filename}")
+            by_filename[resource.filename] = identity
+            if identity in seen_identities:
+                continue
+            seen_identities.add(identity)
+            deduplicated.append(resource)
+        resources = deduplicated
         turn_uploaded_ids: list[str] = []
         request_content: list[dict[str, Any]] = [{"type": "input_text", "text": prompt}]
         dispatched = False
@@ -408,11 +466,22 @@ class PacketV8ResponsesTransport:
                         {"type": "input_image", "detail": "high", "image_url": _image_data_url(resource)}
                     )
                     continue
+                provider_identity = (resource.role, resource.sha256)
+                reused_file_id = self._provider_file_by_identity.get(provider_identity)
+                if reused_file_id is not None:
+                    resources[index] = replace(
+                        resource,
+                        provider_file_id=reused_file_id,
+                        provider_reused=True,
+                    )
+                    request_content.append({"type": "input_file", "file_id": reused_file_id})
+                    continue
                 provider_file = self.provider.upload_file(resource.filename, resource.payload)
                 if not provider_file.id:
                     raise ValueError("Provider returned an invalid uploaded-file identity")
                 turn_uploaded_ids.append(provider_file.id)
                 self._owned_provider_file_ids.append(provider_file.id)
+                self._provider_file_by_identity[provider_identity] = provider_file.id
                 self._record_owned_files(run_store)
                 resources[index] = replace(resource, provider_file_id=provider_file.id)
                 request_content.append({"type": "input_file", "file_id": provider_file.id})
@@ -441,6 +510,30 @@ class PacketV8ResponsesTransport:
                 request_evidence_path = run_store.write_evidence_json(
                     f"transport/{turn_id}/request.json", sanitize_evidence(request_evidence)
                 )
+            try:
+                counted_input_tokens = self.provider.count_input_tokens(
+                    request,
+                    timeout_seconds=timeout_seconds,
+                )
+            except Exception as exc:
+                raise classify_provider_failure(exc, dispatched=False) from exc
+            if counted_input_tokens < 0:
+                raise ProviderTransportError(
+                    ProviderFailureKind.MALFORMED_RESPONSE,
+                    "Provider returned an invalid input-token count",
+                )
+            if run_store is not None:
+                run_store.write_evidence_json(
+                    f"transport/{turn_id}/input-token-count.json",
+                    {
+                        "input_tokens": counted_input_tokens,
+                        "phase": "before_generation_dispatch",
+                    },
+                )
+            if authorize_dispatch is not None:
+                authorize_dispatch(counted_input_tokens)
+            if cancelled():
+                raise TransportCancelled("Automated turn was cancelled before API dispatch")
             dispatched = True
             started_at = time.monotonic()
             try:
@@ -467,11 +560,14 @@ class PacketV8ResponsesTransport:
                 )
             input_tokens = int(response.usage.get("input_tokens", 0))
             cached_input_tokens = int(response.usage.get("cached_input_tokens", 0))
+            cache_write_tokens = int(response.usage.get("cache_write_tokens", 0))
             output_tokens = int(response.usage.get("output_tokens", 0))
             if (
                 input_tokens < 0
                 or cached_input_tokens < 0
                 or cached_input_tokens > input_tokens
+                or cache_write_tokens < 0
+                or cached_input_tokens + cache_write_tokens > input_tokens
                 or output_tokens < 0
             ):
                 raise ProviderTransportError(
@@ -491,6 +587,7 @@ class PacketV8ResponsesTransport:
                 ),
                 requested_model=model,
                 cached_input_tokens=cached_input_tokens,
+                cache_write_tokens=cache_write_tokens,
                 latency_seconds=latency_seconds,
                 request_evidence_path=request_evidence_path,
             )
@@ -505,6 +602,7 @@ class PacketV8ResponsesTransport:
                             "resolved_model": result.model,
                             "input_tokens": result.input_tokens,
                             "cached_input_tokens": result.cached_input_tokens,
+                            "cache_write_tokens": result.cache_write_tokens,
                             "uncached_input_tokens": result.uncached_input_tokens,
                             "output_tokens": result.output_tokens,
                             "latency_seconds": result.latency_seconds,
@@ -525,6 +623,15 @@ class PacketV8ResponsesTransport:
                 raise ProviderTransportError(
                     ProviderFailureKind.FILE_CLEANUP,
                     "Pre-dispatch cancellation cleanup failed: " + "; ".join(failures),
+                )
+            raise
+        except DispatchAuthorizationRejected:
+            failures = self._cleanup_file_ids(tuple(turn_uploaded_ids))
+            self._record_owned_files(run_store)
+            if failures:
+                raise ProviderTransportError(
+                    ProviderFailureKind.FILE_CLEANUP,
+                    "Rejected-dispatch cleanup failed: " + "; ".join(failures),
                 )
             raise
         except ProviderTransportError as exc:

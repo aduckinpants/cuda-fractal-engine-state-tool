@@ -1,0 +1,67 @@
+{
+  "schema": "openai_pricing_policy.v1",
+  "policy_id": "openai-standard-2026-08-03",
+  "effective_date": "2026-08-03",
+  "currency": "USD",
+  "tokens_per_rate_unit": 1000000,
+  "long_context_threshold_tokens": 272000,
+  "source_url": "https://developers.openai.com/api/docs/pricing",
+  "service_tier": "standard",
+  "models": [
+    {
+      "pricing_model": "gpt-5.6-sol",
+      "aliases": [
+        "gpt-5.6-sol",
+        "gpt-5.6"
+      ],
+      "short_context": {
+        "input": "5.00",
+        "cached_input": "0.50",
+        "cache_write": "6.25",
+        "output": "30.00"
+      },
+      "long_context": {
+        "input": "10.00",
+        "cached_input": "1.00",
+        "cache_write": "12.50",
+        "output": "45.00"
+      }
+    },
+    {
+      "pricing_model": "gpt-5.6-terra",
+      "aliases": [
+        "gpt-5.6-terra"
+      ],
+      "short_context": {
+        "input": "2.00",
+        "cached_input": "0.20",
+        "cache_write": "2.50",
+        "output": "12.00"
+      },
+      "long_context": {
+        "input": "4.00",
+        "cached_input": "0.40",
+        "cache_write": "5.00",
+        "output": "18.00"
+      }
+    },
+    {
+      "pricing_model": "gpt-5.6-luna",
+      "aliases": [
+        "gpt-5.6-luna"
+      ],
+      "short_context": {
+        "input": "0.20",
+        "cached_input": "0.02",
+        "cache_write": "0.25",
+        "output": "1.20"
+      },
+      "long_context": {
+        "input": "0.40",
+        "cached_input": "0.04",
+        "cache_write": "0.50",
+        "output": "1.80"
+      }
+    }
+  ]
+}
