@@ -2,8 +2,8 @@
 
 Date: 2026-08-03
 
-Status: Slices 0 through 3 complete; the authorized Slice 4 paid cell was
-attempted once and blocked before generation by provider credit exhaustion
+Status: Slices 0 through 3 complete; the authorized Slice 4 paid cell completed
+on one explicitly approved retry and stopped at independent manual review
 
 ## Locked authority
 
@@ -217,6 +217,21 @@ complete provider-file cleanup. No retry was made.
 
 The attempt is documented in
 `docs/v9_luna_high_paid_calibrator_attempt.md`. Slice 4 remains incomplete and
-is blocked on provider billing state. Resume only after the API organization or
-project used by the stored credential has usable credits; then obtain fresh
-authorization for one retry of the same exact cell.
+was initially blocked on provider billing state.
+
+After the user reset the credential and separately authorized one retry, the
+unchanged cell completed for a calculated `$0.079157`. Luna produced one valid
+Color Pipeline override, the engine replay proof passed, and the derived packet
+was reviewed in a fresh context. Luna proposed `MANUAL_REVIEW_REQUIRED` because
+that review context did not contain a clean base/result pair or quantitative
+pixel comparison. This was evidence-disciplined behavior, but it prevents the
+automatic `SESSION_PASS` qualification.
+
+The retry also exposed a qualification-gate defect: the disclosure gate expects
+the initial assisted analysis ID for both author and derived-result review.
+Those analyses must differ when the derived state and frame differ. The exact
+result and remediation boundary are documented in
+`docs/v9_luna_high_hard_calibrator_result.md`.
+
+Slice 4 remains incomplete pending independent user review and a newly approved
+bounded correction plan. No additional provider calls are authorized.
