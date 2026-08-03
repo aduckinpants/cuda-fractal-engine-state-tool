@@ -1,0 +1,53 @@
+{
+  "budgets": {
+    "maximum_calculated_cost_usd": "0.10",
+    "maximum_correction_output_tokens_per_response": 4000,
+    "maximum_cumulative_input_tokens": 400000,
+    "maximum_cumulative_output_tokens": 12000,
+    "maximum_input_tokens_per_response": 200000,
+    "maximum_model_responses": 2,
+    "maximum_output_tokens_per_response": 8000,
+    "maximum_proven_rounds": 1,
+    "maximum_review_output_tokens_per_response": 4000
+  },
+  "campaign_ceiling_usd": "8.00",
+  "disclosure": {
+    "expected_analysis_id": "7b0a7eeba2ad7102c9f3b9f82cf57fa31808d5943f28fefb2127f4c446d82fa4",
+    "profile": "assisted"
+  },
+  "model_profile": {
+    "model": "gpt-5.6-luna",
+    "pricing_tier": "standard",
+    "profile_version": 1,
+    "prompt_cache_policy": "explicit_no_cache",
+    "reasoning_effort": "high",
+    "sha256": "dbf174b6e03c074b26588e606e6ddb4a27eb5d36bcbb70184863116e39e268b7"
+  },
+  "packet": {
+    "finding_id": "d0ebae039f19758575fae1407cffa14baadf260f006c047d23a6345dc695e510",
+    "manifest_sha256": "8c809bf64ea0944dfb9b157f55eda03683661bdd5741582124659ee6e32e70c4",
+    "packet_id": "ea1f8e62-a8ff-4b3d-ae0c-ee019e4314d5",
+    "selected_fractal_type": "explaino_fold"
+  },
+  "pricing_policy": {
+    "currency": "USD",
+    "effective_date": "2026-08-03",
+    "long_context_threshold_tokens": 272000,
+    "policy_id": "openai-standard-2026-08-03",
+    "schema": "openai_pricing_policy.v1",
+    "service_tier": "standard",
+    "sha256": "7934d36c4865098494c52da4001f6c008b92a8f0cce2e261b8bd273ed44c088e",
+    "source_url": "https://developers.openai.com/api/docs/pricing"
+  },
+  "pricing_policy_sha256": "7934d36c4865098494c52da4001f6c008b92a8f0cce2e261b8bd273ed44c088e",
+  "prompt_identities": {
+    "author_prompt_sha256": "0ef287f7043432021013a2bdfb8112c1c135c4becf63f37f38927ca633e97dba",
+    "instructions_sha256": "cc64a4325da4c97c1d91053e8a1a8790f25d193c253996163002ed0e04b4b817",
+    "review_prompt_sha256": "aba44f74b13568caf701431b9bd84a3c88aa16b0ba59f8cfbdd83c1cbfa6f63b"
+  },
+  "protocol_schema": "agent_session_protocol.v1",
+  "qualification_case_version": 1,
+  "role": "hard_calibrator",
+  "rubric_version": "v9-economic-qualification-rubric.v1",
+  "sha256": "4ecddf7109ecedb23fc5573e7b7aa9f33ac13ebc6222a145f05a19a187f8b2f2"
+}

@@ -265,7 +265,8 @@ def _image_fingerprint(path: Path) -> dict[str, Any]:
         }
 
 
-def _image_comparison(left_path: Path, right_path: Path) -> dict[str, Any]:
+def compare_image_files(left_path: Path, right_path: Path) -> dict[str, Any]:
+    """Compare exact image files through the proof service's canonical decoder path."""
     left_fp = _image_fingerprint(left_path)
     right_fp = _image_fingerprint(right_path)
     with Image.open(left_path) as left_image, Image.open(right_path) as right_image:
@@ -295,7 +296,7 @@ def _create_candidate_display_derivative(engine_frame: Path) -> tuple[Path, dict
         50_000_000,
         16_384,
     )
-    comparison = _image_comparison(engine_frame, display_path)
+    comparison = compare_image_files(engine_frame, display_path)
     if worker.get("upscaled") is not False:
         raise StateOverrideProofError("Candidate PNG display derivative was unexpectedly upscaled")
     if not comparison.get("decoded_equal"):
@@ -611,7 +612,7 @@ def execute_state_override_proof(
             captured_frame_path = (packet_dir / captured_frame_name).resolve()
             if captured_frame_path.parent != packet_dir or not captured_frame_path.is_file():
                 return rejected(["Packet captured visual evidence path is invalid"])
-            base_to_candidate_frame_comparison = _image_comparison(captured_frame_path, engine_frame)
+            base_to_candidate_frame_comparison = compare_image_files(captured_frame_path, engine_frame)
         requested_values, requested_errors = _requested_value_receipts(materialization, emitted)
         if requested_errors:
             return rejected(requested_errors)
@@ -640,7 +641,7 @@ def execute_state_override_proof(
         comparison = compare_json_documents(
             engine_state.read_text(encoding="utf-8"), replay_state.read_text(encoding="utf-8")
         )
-        frame_comparison = _image_comparison(engine_frame, replay_frame)
+        frame_comparison = compare_image_files(engine_frame, replay_frame)
         errors: list[str] = []
         if any(difference.classification != "volatile_diagnostic_data" for difference in comparison.differences):
             errors.append("Action-free replay changed stable authoring state")

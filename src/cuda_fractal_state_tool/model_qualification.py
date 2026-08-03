@@ -441,6 +441,98 @@ def _contains_true_human_acceptance(value: Any) -> bool:
     return False
 
 
+def _expected_effective_disclosure_profile(
+    configured: DisclosureProfile,
+    phase: str,
+) -> DisclosureProfile:
+    if configured is DisclosureProfile.ASSISTED:
+        return DisclosureProfile.ASSISTED
+    if configured is DisclosureProfile.BREAK_BLIND and phase == "review":
+        return DisclosureProfile.BREAK_BLIND
+    return DisclosureProfile.BLIND
+
+
+def _disclosure_binding_matches(
+    *,
+    case: QualificationCaseV1,
+    result: AutomatedSessionResult,
+    run_store: AutomatedRunStore,
+    disclosures: list[dict[str, Any]],
+) -> bool:
+    if len(disclosures) != 2:
+        return False
+    by_phase: dict[str, dict[str, Any]] = {}
+    for event in disclosures:
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            return False
+        phase = payload.get("phase")
+        if phase not in {"author", "review"} or phase in by_phase:
+            return False
+        by_phase[phase] = payload
+    expected_packets = {
+        "author": {
+            "packet_id": case.packet_id,
+            "packet_manifest_sha256": case.packet_manifest_sha256,
+            "finding_id": case.finding_id,
+        },
+        "review": {
+            "packet_id": result.current_packet.packet_id,
+            "packet_manifest_sha256": result.current_packet.manifest_sha256,
+            "finding_id": result.current_packet.finding_id,
+        },
+    }
+    for phase in ("author", "review"):
+        payload = by_phase[phase]
+        expected_profile = _expected_effective_disclosure_profile(
+            case.disclosure_profile,
+            phase,
+        )
+        if (
+            payload.get("round_number") != 1
+            or payload.get("configured_profile") != case.disclosure_profile.value
+            or payload.get("effective_profile") != expected_profile.value
+            or any(payload.get(key) != value for key, value in expected_packets[phase].items())
+        ):
+            return False
+        path = (
+            run_store.run_dir
+            / "rounds"
+            / "round-01"
+            / "context"
+            / f"{phase}-enrichment-disclosure.json"
+        )
+        if not path.is_file():
+            return False
+        try:
+            manifest = loads_strict_no_duplicates(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            return False
+        if not isinstance(manifest, dict):
+            return False
+        expected_manifest_fields = {
+            "profile": expected_profile.value,
+            **expected_packets[phase],
+            "disclosure_id": payload.get("disclosure_id"),
+            "analysis_id": payload.get("analysis_id"),
+        }
+        if any(manifest.get(key) != value for key, value in expected_manifest_fields.items()):
+            return False
+        resources = manifest.get("resources")
+        if not isinstance(resources, list) or payload.get("resource_count") != len(resources):
+            return False
+        analysis_id = payload.get("analysis_id")
+        if expected_profile is DisclosureProfile.BLIND:
+            if analysis_id is not None:
+                return False
+        elif not isinstance(analysis_id, str) or not analysis_id:
+            return False
+        if phase == "author" and expected_profile is DisclosureProfile.ASSISTED:
+            if analysis_id != case.expected_analysis_id:
+                return False
+    return True
+
+
 def evaluate_automatic_gates(
     *,
     case: QualificationCaseV1,
@@ -505,12 +597,14 @@ def evaluate_automatic_gates(
         == PromptCachePolicy.EXPLICIT_NO_CACHE.value
         for event in responses
     )
-    disclosure_matches = len(disclosures) == 2 and all(
-        event.get("payload", {}).get("configured_profile") == case.disclosure_profile.value
-        and event.get("payload", {}).get("analysis_id") == case.expected_analysis_id
-        for event in disclosures
+    disclosure_matches = _disclosure_binding_matches(
+        case=case,
+        result=result,
+        run_store=run_store,
+        disclosures=disclosures,
     )
     review_ledger_matches = False
+    review_comparison_matches = False
     ledger_path = (
         run_store.run_dir
         / "rounds"
@@ -536,6 +630,54 @@ def evaluate_automatic_gates(
             )
         except (OSError, UnicodeError, json.JSONDecodeError):
             review_ledger_matches = False
+    comparison_path = (
+        run_store.run_dir
+        / "rounds"
+        / "round-01"
+        / "context"
+        / "round-review-comparison.json"
+    )
+    base_review_frame = comparison_path.with_name("review-base-web-agent-frame.png")
+    result_review_frame = comparison_path.with_name("review-result-web-agent-frame.png")
+    review_events = [
+        event for event in events if event.get("event_type") == "review_conversation_started"
+    ]
+    if (
+        comparison_path.is_file()
+        and base_review_frame.is_file()
+        and result_review_frame.is_file()
+        and len(review_events) == 1
+        and result.last_proof is not None
+    ):
+        try:
+            comparison_payload = comparison_path.read_bytes()
+            comparison = loads_strict_no_duplicates(comparison_payload.decode("utf-8"))
+            base_payload = base_review_frame.read_bytes()
+            result_payload = result_review_frame.read_bytes()
+            review_event = review_events[0].get("payload", {})
+            review_comparison_matches = (
+                hashlib.sha256(comparison_payload).hexdigest()
+                == review_event.get("review_comparison_sha256")
+                and hashlib.sha256(base_payload).hexdigest()
+                == review_event.get("base_web_frame_sha256")
+                == comparison.get("base_web_frame", {}).get("sha256")
+                and hashlib.sha256(result_payload).hexdigest()
+                == review_event.get("result_web_frame_sha256")
+                == comparison.get("result_web_frame", {}).get("sha256")
+                and comparison.get("author_packet")
+                == {
+                    "packet_id": case.packet_id,
+                    "manifest_sha256": case.packet_manifest_sha256,
+                    "finding_id": case.finding_id,
+                }
+                and comparison.get("derived_packet") == result.current_packet.to_dict()
+                and comparison.get("proof", {}).get("proof_id") == result.last_proof.proof_id
+                and comparison.get("proof", {}).get("status") == "replay_proven"
+                and comparison.get("proof", {}).get("receipt_sha256")
+                == result.last_proof.receipt_sha256
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            review_comparison_matches = False
     review_binding_complete = (
         sum(event.get("event_type") == "candidate_replay_proven" for event in events) == 1
         and sum(event.get("event_type") == "derived_packet_refreshed" for event in events) == 1
@@ -543,6 +685,7 @@ def evaluate_automatic_gates(
         == 1
         and sum(event.get("event_type") == "model_gate_proposal" for event in events) == 1
         and review_ledger_matches
+        and review_comparison_matches
     )
     gates = (
         AutomaticGateResult(
@@ -587,7 +730,8 @@ def evaluate_automatic_gates(
             and result.last_proof is not None,
             (
                 f"transport={transport_paths_complete};cleanup={cleanup_complete};"
-                f"review_binding={review_binding_complete};ledger={review_ledger_matches}"
+                f"review_binding={review_binding_complete};ledger={review_ledger_matches};"
+                f"comparison={review_comparison_matches}"
             ),
         ),
         AutomaticGateResult(

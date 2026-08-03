@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 import unittest
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from PIL import Image
 
 from cuda_fractal_state_tool.agent_bundle import AgentBundle
 from cuda_fractal_state_tool.automated_protocol import ControllerDisposition, SessionBudgets
@@ -167,8 +170,29 @@ def _bundle(root: Path, name: str, finding: str, marker: str) -> AgentBundle:
     packet_dir.mkdir()
     packet = packet_dir / "packet.md"
     manifest = packet_dir / "manifest.json"
+    web_frame = packet_dir / "web-agent-frame.png"
     packet.write_text(f"# {marker}\n", encoding="utf-8")
-    manifest.write_text(f'{{"marker":"{marker}"}}\n', encoding="utf-8")
+    color = tuple(hashlib.sha256(marker.encode("utf-8")).digest()[:3])
+    Image.new("RGB", (4, 3), color).save(web_frame, format="PNG")
+    frame_payload = web_frame.read_bytes()
+    manifest.write_text(
+        json.dumps(
+            {
+                "marker": marker,
+                "files": [
+                    {
+                        "path": "web-agent-frame.png",
+                        "role": "web_discussion_derivative",
+                        "sha256": hashlib.sha256(frame_payload).hexdigest(),
+                        "size_bytes": len(frame_payload),
+                    }
+                ],
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     return AgentBundle(
         packet_version=8,
         packet_id=name,
@@ -179,7 +203,7 @@ def _bundle(root: Path, name: str, finding: str, marker: str) -> AgentBundle:
         manifest_sha256=hashlib.sha256(manifest.read_bytes()).hexdigest(),
         finding_id=finding,
         selected_fractal_type="explaino_all",
-        required_attachments=("packet.md", "manifest.json"),
+        required_attachments=("packet.md", "manifest.json", "web-agent-frame.png"),
         recommended_attachments=(),
         unavailable_optional_attachments=(),
     )
@@ -238,11 +262,26 @@ class AutomatedSessionTests(unittest.TestCase):
             review_resources = transport.calls[1]["additional_resources"]
             self.assertEqual(
                 [resource.role for resource in review_resources],
-                ["controller_round_review_ledger", "enrichment_disclosure_manifest"],
+                [
+                    "controller_round_review_ledger",
+                    "controller_round_review_comparison",
+                    "controller_review_base_frame",
+                    "enrichment_disclosure_manifest",
+                ],
             )
             ledger = review_resources[0]
             self.assertEqual(ledger.filename, "round-review-ledger.json")
             self.assertTrue(ledger.local_path.is_file())
+            comparison = review_resources[1]
+            self.assertEqual(comparison.filename, "round-review-comparison.json")
+            comparison_value = json.loads(comparison.payload)
+            self.assertEqual(comparison_value["changed_paths"], ["params.explaino_damping"])
+            self.assertFalse(
+                comparison_value["decoded_pixel_comparison"]["decoded_equal"]
+            )
+            base_frame = review_resources[2]
+            self.assertEqual(base_frame.filename, "review-base-web-agent-frame.png")
+            self.assertEqual(base_frame.media_role, "vision")
             events = store.read_events()
             reviews = [
                 event for event in events if event["event_type"] == "review_conversation_started"

@@ -1,0 +1,107 @@
+{
+  "panel_version": 1,
+  "panel_id": "v9-v8-historical-comparison-panel",
+  "source_result_notebook": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Result-Notebook.md",
+  "source_results_summary": "docs/packet_v8_seven_fixture_manual_results.md",
+  "execution_policy": {
+    "dispatch_mode": "one_cell_then_stop_for_review",
+    "first_fixture": "A",
+    "first_profile": "luna_high_assisted",
+    "count_only_required": true,
+    "separate_paid_authorization_required": true,
+    "full_panel_automation_authorized": false,
+    "bracketed_questions_authorized": false
+  },
+  "prepared_first_case": {
+    "case_path": "docs/v9_v8_fixture_a_luna_high_assisted_case.v1.json",
+    "case_sha256": "4ecddf7109ecedb23fc5573e7b7aa9f33ac13ebc6222a145f05a19a187f8b2f2",
+    "count_only_receipt": "docs/v9_v8_fixture_a_luna_high_count_only.md",
+    "maximum_cell_cost_usd": "0.0886872"
+  },
+  "fixtures": [
+    {
+      "fixture_id": "A",
+      "label": "ExplainO Fold",
+      "packet_dir": "D:/salt-fractal/cuda-fractal-engine-state-tool/findings/d0ebae039f19758575fae1407cffa14baadf260f006c047d23a6345dc695e510/packets/ea1f8e62-a8ff-4b3d-ae0c-ee019e4314d5",
+      "packet_id": "ea1f8e62-a8ff-4b3d-ae0c-ee019e4314d5",
+      "finding_id": "d0ebae039f19758575fae1407cffa14baadf260f006c047d23a6345dc695e510",
+      "manifest_sha256": "8c809bf64ea0944dfb9b157f55eda03683661bdd5741582124659ee6e32e70c4",
+      "selector": "explaino_fold",
+      "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-A-fractal_agentic_workflow_session_transcript.md",
+      "historical_disposition": "successful_color_pipeline_comparison",
+      "comparison_pressure": "separate large-scale geometry from layered Color Pipeline emphasis"
+    },
+    {
+      "fixture_id": "B",
+      "label": "ExplainO All complex pipeline",
+      "packet_dir": "D:/salt-fractal/cuda-fractal-engine-state-tool/findings/6676d59ebd8e1a6cb23ee7754b5ee3e7d68db6aba83be0c27215047922badb00/packets/bb430c93-1747-490d-92a0-59f998fe451c",
+      "packet_id": "bb430c93-1747-490d-92a0-59f998fe451c",
+      "finding_id": "6676d59ebd8e1a6cb23ee7754b5ee3e7d68db6aba83be0c27215047922badb00",
+      "manifest_sha256": "cf371ed8e191479e86e6407d15098ada5177f8cf23f4377edf0a7cf9e6e9b2b3",
+      "selector": "explaino_all",
+      "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-B-fractal_web_session_transcript.md",
+      "historical_disposition": "successful_pipeline_experiment_with_prediction_miss",
+      "comparison_pressure": "one coherent test of a layered pipeline interpretation"
+    },
+    {
+      "fixture_id": "C",
+      "label": "ExplainO All gold field",
+      "packet_dir": "D:/salt-fractal/cuda-fractal-engine-state-tool/findings/1f3c878c60b13b9e66aeddcc107eea85672a6d85882b07d66903feda9f580f41/packets/06dc4aef-7a5e-4c62-9eab-76b7ddcb6eed",
+      "packet_id": "06dc4aef-7a5e-4c62-9eab-76b7ddcb6eed",
+      "finding_id": "1f3c878c60b13b9e66aeddcc107eea85672a6d85882b07d66903feda9f580f41",
+      "manifest_sha256": "9f2ea0e027bf1f93efea7f5efd4a9c748b55a55a8db576c22bce341d30cdd4d7",
+      "selector": "explaino_all",
+      "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-C-fractal_session_transcript.md",
+      "historical_disposition": "useful_dynamics_change_with_camera_failure",
+      "comparison_pressure": "high-zoom camera safety under a dynamics edit"
+    },
+    {
+      "fixture_id": "D",
+      "label": "ExplainO Mult high zoom and multi-source color",
+      "packet_dir": "D:/salt-fractal/cuda-fractal-engine-state-tool/findings/15d62ebd7b1fbd9195c0e3aa4cb3610b4699645c1f8a2b4cd3b5b5be1d0ee03a/packets/73d407bd-618d-4c49-9505-c0fe2a21087d",
+      "packet_id": "73d407bd-618d-4c49-9505-c0fe2a21087d",
+      "finding_id": "15d62ebd7b1fbd9195c0e3aa4cb3610b4699645c1f8a2b4cd3b5b5be1d0ee03a",
+      "manifest_sha256": "181b5b48a940f324c1646fbc817fee953de3d7a98bfba0a1718261ec6a2c0605",
+      "selector": "explaino_mult",
+      "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-D-fractal_agentic_workflow_session_transcript.md",
+      "historical_disposition": "successful_high_zoom_color_only_experiment",
+      "comparison_pressure": "observable outcome with exact camera discipline"
+    },
+    {
+      "fixture_id": "E",
+      "label": "ExplainO Mult auto-iteration capture",
+      "packet_dir": "D:/salt-fractal/cuda-fractal-engine-state-tool/findings/e125c0b066fb7318379545561b0e93090e9347c4b5d32e196b84e2b71e54bed1/packets/81d0d8d2-fd6a-41e4-ac05-2c32ff3ed703",
+      "packet_id": "81d0d8d2-fd6a-41e4-ac05-2c32ff3ed703",
+      "finding_id": "e125c0b066fb7318379545561b0e93090e9347c4b5d32e196b84e2b71e54bed1",
+      "manifest_sha256": "4e7f9861d14bae76eb669437297316cc2e50f2484d9d9e23dbf10fc24d05b2d6",
+      "selector": "explaino_mult",
+      "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-E-fractal_agent_workflow_session_transcript.md",
+      "historical_disposition": "successful_basin_observation_with_iteration_caveat",
+      "comparison_pressure": "avoid causal overclaim under automatic iteration context"
+    },
+    {
+      "fixture_id": "F",
+      "label": "ExplainO Balance Void red iteration collapse",
+      "packet_dir": "D:/salt-fractal/cuda-fractal-engine-state-tool/findings/529d0037634964e430ea654ea4d17d2c220e23cfc6a3844192ddcfa1f91696a3/packets/6fb115b4-8e90-46c9-ad23-8dd11da383c5",
+      "packet_id": "6fb115b4-8e90-46c9-ad23-8dd11da383c5",
+      "finding_id": "529d0037634964e430ea654ea4d17d2c220e23cfc6a3844192ddcfa1f91696a3",
+      "manifest_sha256": "7b2e3d9bef02bdedb9bd39f34af0f57dd47f7df2f12c3d5f2e673a7f0d02ff8d",
+      "selector": "explaino_balance_void",
+      "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-F-fractal_web_session_transcript.md",
+      "historical_disposition": "valid_workflow_attempt_blocked_by_fixed_timeout",
+      "comparison_pressure": "diagnose compressed color variation without inventing a cause"
+    },
+    {
+      "fixture_id": "G",
+      "label": "ExplainO Tension lens and SDF",
+      "packet_dir": "D:/salt-fractal/cuda-fractal-engine-state-tool/findings/649c5e1ab68b4144ac257214b239dcd3b4888d8d034a91c6efc8018caf22c66c/packets/71bae9d2-c49b-4219-be8e-8e2699d60823",
+      "packet_id": "71bae9d2-c49b-4219-be8e-8e2699d60823",
+      "finding_id": "649c5e1ab68b4144ac257214b239dcd3b4888d8d034a91c6efc8018caf22c66c",
+      "manifest_sha256": "883802ff8b838d3333655ef56cf12ae994e0d1bcdab70e1012820fdd8250aefe",
+      "selector": "explaino_tension",
+      "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-G-fractal_workflow_session_transcript.md",
+      "historical_disposition": "successful_lens_sdf_experiment_with_prediction_limits",
+      "comparison_pressure": "test geometry interpretation through the active lens-field signal"
+    }
+  ]
+}
