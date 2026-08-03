@@ -24,7 +24,7 @@ class V9PanelContractTests(unittest.TestCase):
         self.assertFalse(panel["execution_policy"]["bracketed_questions_authorized"])
         self.assertEqual(
             panel["prepared_first_case"]["case_sha256"],
-            "4ecddf7109ecedb23fc5573e7b7aa9f33ac13ebc6222a145f05a19a187f8b2f2",
+            "7c83fa206468ec14b44bc02b4775700526219bfd89832063242b7852cdaf7d72",
         )
         self.assertEqual(panel["prepared_first_case"]["maximum_cell_cost_usd"], "0.0886872")
         available_packet_dirs = [
@@ -61,7 +61,14 @@ class V9PanelContractTests(unittest.TestCase):
         ]["enum"]
         self.assertEqual(
             support_values,
-            ["packet_v8_only", "enrichment_only", "packet_v8_and_enrichment"],
+            [
+                "packet_v8_only",
+                "enrichment_only",
+                "controller_comparison_only",
+                "packet_v8_and_enrichment",
+                "packet_v8_and_controller_comparison",
+                "all_three",
+            ],
         )
 
     def test_fixture_a_spot_check_case_reopens_against_exact_authority(self) -> None:
@@ -70,7 +77,7 @@ class V9PanelContractTests(unittest.TestCase):
         serialized = json.loads(case_path.read_text(encoding="utf-8"))
         self.assertEqual(
             serialized["sha256"],
-            "4ecddf7109ecedb23fc5573e7b7aa9f33ac13ebc6222a145f05a19a187f8b2f2",
+            "7c83fa206468ec14b44bc02b4775700526219bfd89832063242b7852cdaf7d72",
         )
         packet_dir = Path(
             "D:/salt-fractal/cuda-fractal-engine-state-tool/findings/"
@@ -86,9 +93,62 @@ class V9PanelContractTests(unittest.TestCase):
         )
         self.assertEqual(
             case.sha256,
-            "4ecddf7109ecedb23fc5573e7b7aa9f33ac13ebc6222a145f05a19a187f8b2f2",
+            "7c83fa206468ec14b44bc02b4775700526219bfd89832063242b7852cdaf7d72",
         )
         self.assertEqual(case.expected_analysis_id, "7b0a7eeba2ad7102c9f3b9f82cf57fa31808d5943f28fefb2127f4c446d82fa4")
+
+    def test_fixture_a_live_comparison_ledger_is_bound_and_pending_human_review(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        result_root = (
+            root
+            / "docs"
+            / "manual-test-results"
+            / "v9_v8_panel_luna_high_assisted_08-03-2026"
+        )
+        ledger = json.loads(
+            (result_root / "Fixture-A-comparison-ledger.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(ledger["fixture_id"], "A")
+        self.assertEqual(
+            ledger["qualification_case_sha256"],
+            "7c83fa206468ec14b44bc02b4775700526219bfd89832063242b7852cdaf7d72",
+        )
+        self.assertEqual(ledger["cost"]["actual_calculated_usd"], "0.0752966")
+        self.assertEqual(ledger["workflow_result"]["proof_status"], "replay_proven")
+        self.assertEqual(ledger["workflow_result"]["model_gate"], "ROUND_ADVANCE")
+        self.assertEqual(ledger["human_disposition"], "pending")
+        support_classes = {item["support_class"] for item in ledger["enrichment_use"]}
+        self.assertEqual(
+            support_classes,
+            {
+                "packet_v8_only",
+                "enrichment_only",
+                "controller_comparison_only",
+                "packet_v8_and_enrichment",
+                "packet_v8_and_controller_comparison",
+            },
+        )
+
+        reevaluation = json.loads(
+            (result_root / "Fixture-A-gate-reevaluation.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(reevaluation["original_receipt_preserved"])
+        self.assertTrue(reevaluation["automatic_gates_passed"])
+        terminal = next(
+            item for item in reevaluation["gates"] if item["gate_id"] == "terminal_controller"
+        )
+        self.assertEqual(
+            terminal,
+            {
+                "gate_id": "terminal_controller",
+                "passed": True,
+                "detail": "bounded_round_limit_after_ROUND_ADVANCE",
+            },
+        )
 
 
 if __name__ == "__main__":

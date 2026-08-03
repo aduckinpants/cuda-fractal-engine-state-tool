@@ -14,7 +14,7 @@
   },
   "prepared_first_case": {
     "case_path": "docs/v9_v8_fixture_a_luna_high_assisted_case.v1.json",
-    "case_sha256": "4ecddf7109ecedb23fc5573e7b7aa9f33ac13ebc6222a145f05a19a187f8b2f2",
+    "case_sha256": "7c83fa206468ec14b44bc02b4775700526219bfd89832063242b7852cdaf7d72",
     "count_only_receipt": "docs/v9_v8_fixture_a_luna_high_count_only.md",
     "maximum_cell_cost_usd": "0.0886872"
   },

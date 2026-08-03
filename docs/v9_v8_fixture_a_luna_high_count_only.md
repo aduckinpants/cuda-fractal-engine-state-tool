@@ -11,7 +11,7 @@ model: gpt-5.6-luna
 reasoning: high
 disclosure: assisted
 initial analysis ID: 7b0a7eeba2ad7102c9f3b9f82cf57fa31808d5943f28fefb2127f4c446d82fa4
-case SHA-256: 4ecddf7109ecedb23fc5573e7b7aa9f33ac13ebc6222a145f05a19a187f8b2f2
+case SHA-256: 7c83fa206468ec14b44bc02b4775700526219bfd89832063242b7852cdaf7d72
 ```
 
 The immutable case is `docs/v9_v8_fixture_a_luna_high_assisted_case.v1.json`.
@@ -22,7 +22,7 @@ The exact author request was submitted to the provider input-token count endpoin
 
 ```text
 run directory:
-D:\salt-fractal\cuda-fractal-engine-state-tool\automated-runs\v9-v8-a-luna-high-count-0db8f2ed-b4ee-4d4b-a33a-0e965f1a84d3
+D:\salt-fractal\cuda-fractal-engine-state-tool\automated-runs\v9-v8-a-luna-high-tight-count-a361ac05-7c9e-4711-b5c8-90f6b6aa2e5d
 
 input tokens: 171436
 maximum author output tokens: 8000
@@ -39,7 +39,7 @@ $0.0438872 author maximum
 = $0.0886872 full-cell hard maximum
 ```
 
-This is below the case ceiling of `$0.10`. It is not authorization to dispatch either response.
+The executable case ceiling is exactly `$0.0886872`; it does not retain the looser `$0.10` planning allowance. This count-only receipt does not itself authorize response generation.
 
 ## Next Boundary
 

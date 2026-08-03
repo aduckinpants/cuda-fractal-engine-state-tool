@@ -1,0 +1,95 @@
+{
+  "ledger_version": 1,
+  "fixture_id": "A",
+  "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-A-fractal_agentic_workflow_session_transcript.md",
+  "qualification_case_sha256": "7c83fa206468ec14b44bc02b4775700526219bfd89832063242b7852cdaf7d72",
+  "run_id": "v9-v8-a-luna-high-live-a4d47dc8-e300-4323-93db-01359e7e84d7",
+  "cost": {
+    "count_only_maximum_usd": "0.0886872",
+    "actual_calculated_usd": "0.0752966"
+  },
+  "workflow_result": {
+    "override_effect": "AUTHORIZED_CHANGE",
+    "proof_status": "replay_proven",
+    "model_gate": "ROUND_ADVANCE",
+    "controller_disposition": "BUDGET_EXHAUSTED"
+  },
+  "historical_comparison": {
+    "experiment_selection": {
+      "historical": "A fixture-specific user question requested a categorical Color Pipeline comparison; the model selected root_index to identity to root_classic_palette to basin_default. It separately identified fold_coupling=0 as a later dynamics control.",
+      "current": "The generic automated author prompt selected the pure-Newton dynamics control by changing only params.fold_coupling from approximately 0.35 to 0.",
+      "assessment": "different"
+    },
+    "prediction": {
+      "historical": "Predicted that the four large categorical territories would persist while most layered interior ornament disappeared; the result mostly confirmed this and retained more scalloped boundary structure than expected.",
+      "current": "Predicted fewer fold-induced fine kinks and a trend toward ordinary Newton geometry; the result was informative but reorganized the frame globally and much more strongly than predicted.",
+      "assessment": "comparable"
+    },
+    "camera": {
+      "historical": "Preserved the broad zoom-1 viewport for a color-only comparison.",
+      "current": "Preserved the same broad zoom-1 viewport after verifying the explicit roots and visible comparison field remained contained.",
+      "assessment": "comparable"
+    },
+    "observability": {
+      "historical": "Used categorical root classification to isolate macroscopic partition geometry from continuous layered coloring.",
+      "current": "Used the active rendered frame to test whether fold coupling visibly contributes to this capture.",
+      "assessment": "different"
+    },
+    "override_quality": {
+      "historical": "Returned one complete, contract-valid fixed-topology Color Pipeline replacement and passed engine materialization.",
+      "current": "Returned one minimal authorized leaf change, passed validation, engine materialization, and action-free replay without camera or pipeline mutation.",
+      "assessment": "comparable"
+    },
+    "result_review": {
+      "historical": "Produced a detailed direct-observation, state-fact, inference, and hypothesis review after a user-supplied follow-up capture.",
+      "current": "Produced a concise prediction audit from an exact refreshed packet and controller-owned pixel comparison, correctly recognizing that the effect was global and larger than predicted.",
+      "assessment": "different"
+    }
+  },
+  "enrichment_use": [
+    {
+      "claim_or_decision": "The retained camera safely contains the explicit root anchors and preserves the comparison window.",
+      "support_class": "packet_v8_and_enrichment",
+      "exact_refs": [
+        "packet ea1f8e62-a8ff-4b3d-ae0c-ee019e4314d5",
+        "analysis 7b0a7eeba2ad7102c9f3b9f82cf57fa31808d5943f28fefb2127f4c446d82fa4/common-facts.json sha256 af9515ba9b26e42f48011ee687dfad746c4d75925521827aa13f6d3e49a3a80a"
+      ],
+      "assessment": "The enrichment restated exact viewport bounds and dimensions already present in Packet V8; it supported concise containment reasoning but did not introduce new camera authority."
+    },
+    {
+      "claim_or_decision": "An automated provider probe was unavailable for explaino_fold and therefore could not support experiment selection.",
+      "support_class": "enrichment_only",
+      "exact_refs": [
+        "analysis 7b0a7eeba2ad7102c9f3b9f82cf57fa31808d5943f28fefb2127f4c446d82fa4/provider-result.json sha256 4b648e955b30d58a6da72926b0840681e97b523b205915e523850fe470599135"
+      ],
+      "assessment": "The model used the unavailable status as negative capability evidence and did not fabricate provider mathematics."
+    },
+    {
+      "claim_or_decision": "Changing params.fold_coupling to zero is an authorized pure-Newton endpoint experiment for this captured state.",
+      "support_class": "packet_v8_only",
+      "exact_refs": [
+        "packet ea1f8e62-a8ff-4b3d-ae0c-ee019e4314d5",
+        "round-review-ledger author_decision_record sha256 6ea61b2389c78193f5a9097faea3d170b4dbd161c08c4a80c8d32b58f89cbd52"
+      ],
+      "assessment": "Packet V8 supplied the recurrence description, current value, writable leaf, and observable rendered channel; the enrichment provider did not support this selection."
+    },
+    {
+      "claim_or_decision": "The proven change was global and substantially larger than the locked fine-filament prediction.",
+      "support_class": "packet_v8_and_controller_comparison",
+      "exact_refs": [
+        "derived packet 9402148c-2682-4a1a-96bc-d89e75b93866 manifest b16ee17eb8b8a76417b98e4be6877427a75bfc7c6b9eab0a85282696fcf4c4e5",
+        "round-review-comparison.json sha256 702d624c495189b53fd5a638cb0382f5611fded9c8ddb54981656ac0947d82fd"
+      ],
+      "assessment": "The refreshed result packet supplied result authority; the controller comparison bound the exact base and result derivatives and quantified a large RGB difference."
+    },
+    {
+      "claim_or_decision": "The exact compared web derivatives differ with mean absolute RGBA channel differences [66.87244482689113, 56.96288718908816, 77.99851644961885, 0.0].",
+      "support_class": "controller_comparison_only",
+      "exact_refs": [
+        "round-review-comparison.json sha256 702d624c495189b53fd5a638cb0382f5611fded9c8ddb54981656ac0947d82fd"
+      ],
+      "assessment": "This quantitative comparison is controller-owned comparison evidence and is not a mathematical or engine-state claim."
+    }
+  ],
+  "human_disposition": "pending"
+}
