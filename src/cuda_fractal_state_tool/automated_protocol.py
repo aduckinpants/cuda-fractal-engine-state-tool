@@ -49,9 +49,11 @@ class SessionBudgets:
     maximum_proven_rounds: int = 2
     maximum_model_responses: int = 6
     maximum_cumulative_input_tokens: int = 2_000_000
-    maximum_cumulative_output_tokens: int = 160_000
+    maximum_cumulative_output_tokens: int = 48_000
     maximum_input_tokens_per_response: int = 200_000
-    maximum_output_tokens_per_response: int = 24_000
+    maximum_output_tokens_per_response: int = 8_000
+    maximum_review_output_tokens_per_response: int = 4_000
+    maximum_correction_output_tokens_per_response: int = 4_000
     maximum_calculated_cost_usd: Decimal = Decimal("10.00")
 
     def __post_init__(self) -> None:
@@ -64,6 +66,8 @@ class SessionBudgets:
                 self.maximum_cumulative_output_tokens,
                 self.maximum_input_tokens_per_response,
                 self.maximum_output_tokens_per_response,
+                self.maximum_review_output_tokens_per_response,
+                self.maximum_correction_output_tokens_per_response,
             )
         ):
             raise ValueError("Automated session budgets must be positive")
@@ -72,6 +76,13 @@ class SessionBudgets:
             or self.maximum_calculated_cost_usd < 0
         ):
             raise ValueError("Automated session dollar budget must be finite and non-negative")
+        if (
+            self.maximum_review_output_tokens_per_response
+            > self.maximum_output_tokens_per_response
+            or self.maximum_correction_output_tokens_per_response
+            > self.maximum_output_tokens_per_response
+        ):
+            raise ValueError("Stage output-token caps cannot exceed the response maximum")
 
     def to_dict(self) -> dict[str, int | str]:
         return {
@@ -81,6 +92,12 @@ class SessionBudgets:
             "maximum_cumulative_output_tokens": self.maximum_cumulative_output_tokens,
             "maximum_input_tokens_per_response": self.maximum_input_tokens_per_response,
             "maximum_output_tokens_per_response": self.maximum_output_tokens_per_response,
+            "maximum_review_output_tokens_per_response": (
+                self.maximum_review_output_tokens_per_response
+            ),
+            "maximum_correction_output_tokens_per_response": (
+                self.maximum_correction_output_tokens_per_response
+            ),
             "maximum_calculated_cost_usd": format(self.maximum_calculated_cost_usd, "f"),
         }
 

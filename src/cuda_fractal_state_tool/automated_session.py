@@ -36,6 +36,7 @@ from .openai_transport import (
     AmbiguousRemoteCompletion,
     DispatchAuthorizationRejected,
     PacketV8ResponsesTransport,
+    PromptCachePolicy,
     ProviderTransportError,
     TransportCancelled,
     TransportTurnResult,
@@ -251,6 +252,7 @@ class AutomatedSessionController:
         pricing_policy: PricingPolicy | None = None,
         requested_model: str = DEFAULT_MODEL,
         disclosure_profile: DisclosureProfile = DisclosureProfile.BLIND,
+        prompt_cache_policy: PromptCachePolicy = PromptCachePolicy.EXPLICIT_NO_CACHE,
         cancelled: Callable[[], bool] = lambda: False,
         auto_promote: bool = True,
     ) -> None:
@@ -263,6 +265,7 @@ class AutomatedSessionController:
         self.pricing_policy = pricing_policy or load_pricing_policy()
         self.requested_model = requested_model
         self.disclosure_profile = DisclosureProfile(disclosure_profile)
+        self.prompt_cache_policy = PromptCachePolicy(prompt_cache_policy)
         self.pricing_policy.model(requested_model)
         self.cancelled = cancelled
         self.auto_promote = auto_promote
@@ -318,6 +321,7 @@ class AutomatedSessionController:
             ),
             "last_counted_input_tokens": self._last_counted_input_tokens,
             "pricing_policy": self.pricing_policy.identity_dict(),
+            "prompt_cache_policy": self.prompt_cache_policy.value,
             "disclosure_profile": self.disclosure_profile.value,
             "cumulative_provider_latency_seconds": self._cumulative_latency_seconds,
             "last_requested_model": self._last_requested_model,
@@ -338,8 +342,19 @@ class AutomatedSessionController:
             {"from": prior.value, "to": target.value},
         )
 
-    def _ask(self, prompt: str, *, attach_packet: bool) -> TransportTurnResult:
-        return self._ask_with_resources(prompt, attach_packet=attach_packet, additional_resources=())
+    def _ask(
+        self,
+        prompt: str,
+        *,
+        attach_packet: bool,
+        max_output_tokens: int | None = None,
+    ) -> TransportTurnResult:
+        return self._ask_with_resources(
+            prompt,
+            attach_packet=attach_packet,
+            additional_resources=(),
+            max_output_tokens=max_output_tokens,
+        )
 
     def _ask_with_resources(
         self,
@@ -347,7 +362,18 @@ class AutomatedSessionController:
         *,
         attach_packet: bool,
         additional_resources: tuple[TransportResource, ...],
+        max_output_tokens: int | None = None,
     ) -> TransportTurnResult:
+        selected_output_tokens = (
+            self.budgets.maximum_output_tokens_per_response
+            if max_output_tokens is None
+            else max_output_tokens
+        )
+        if (
+            selected_output_tokens < 1
+            or selected_output_tokens > self.budgets.maximum_output_tokens_per_response
+        ):
+            raise ValueError("Selected output-token cap exceeds the session response budget")
         response_usage = BudgetUsage(
             proven_rounds=0,
             model_responses=self.usage.model_responses,
@@ -360,7 +386,7 @@ class AutomatedSessionController:
         exhaustion = budget_exhaustion_reason(
             self.budgets,
             response_usage,
-            next_output_tokens=self.budgets.maximum_output_tokens_per_response,
+            next_output_tokens=selected_output_tokens,
         )
         if exhaustion is not None:
             raise RuntimeError(f"Automated session budget exhausted before response: {exhaustion}")
@@ -371,14 +397,15 @@ class AutomatedSessionController:
                 self.pricing_policy,
                 model_name=self.requested_model,
                 maximum_input_tokens=exact_input_tokens,
-                maximum_output_tokens=self.budgets.maximum_output_tokens_per_response,
+                maximum_output_tokens=selected_output_tokens,
+                prompt_cache_policy=self.prompt_cache_policy.value,
             )
             self._last_estimated_call_cost_usd = estimate.cost_usd
             reason = budget_exhaustion_reason(
                 self.budgets,
                 response_usage,
                 next_input_tokens=exact_input_tokens,
-                next_output_tokens=self.budgets.maximum_output_tokens_per_response,
+                next_output_tokens=selected_output_tokens,
                 next_calculated_cost_usd=estimate.cost_usd,
             )
             payload = {
@@ -386,6 +413,8 @@ class AutomatedSessionController:
                 "exact_counted_input_tokens": exact_input_tokens,
                 "estimate": estimate.to_dict(),
                 "pricing_policy": self.pricing_policy.identity_dict(),
+                "prompt_cache_policy": self.prompt_cache_policy.value,
+                "maximum_output_tokens": selected_output_tokens,
                 "remaining_calculated_cost_usd_before_dispatch": decimal_text(
                     self.budgets.maximum_calculated_cost_usd
                     - self.usage.cumulative_calculated_cost_usd
@@ -410,8 +439,9 @@ class AutomatedSessionController:
             run_store=self.run_store,
             turn_id=f"turn-{self._turn_number:04d}",
             cancelled=self.cancelled,
-            max_output_tokens=self.budgets.maximum_output_tokens_per_response,
+            max_output_tokens=selected_output_tokens,
             model=self.requested_model,
+            prompt_cache_policy=self.prompt_cache_policy,
             authorize_dispatch=authorize_dispatch,
             additional_resources=additional_resources,
         )
@@ -455,6 +485,8 @@ class AutomatedSessionController:
                 ),
                 "cached_input_tokens": result.cached_input_tokens,
                 "cache_write_tokens": result.cache_write_tokens,
+                "prompt_cache_policy": result.prompt_cache_policy,
+                "maximum_output_tokens": selected_output_tokens,
                 "uncached_input_tokens": result.uncached_input_tokens,
                 "output_tokens": result.output_tokens,
                 "latency_seconds": result.latency_seconds,
@@ -666,6 +698,7 @@ class AutomatedSessionController:
                 f"Validation result: {error}. Return one corrected, non-empty, authorized sparse override "
                 "for the already selected experiment, or ask exactly one clarification question with no JSON.",
                 attach_packet=False,
+                max_output_tokens=self.budgets.maximum_correction_output_tokens_per_response,
             )
         return None
 
@@ -802,6 +835,7 @@ class AutomatedSessionController:
                     REVIEW_AND_GATE_PROMPT,
                     attach_packet=True,
                     additional_resources=review_resources,
+                    max_output_tokens=self.budgets.maximum_review_output_tokens_per_response,
                 )
                 self._move(ProtocolState.SELF_AUDIT)
                 self._move(ProtocolState.GATE_DECISION)

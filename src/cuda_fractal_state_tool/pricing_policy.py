@@ -233,13 +233,30 @@ def estimate_maximum_call_cost(
     model_name: str,
     maximum_input_tokens: int,
     maximum_output_tokens: int,
+    prompt_cache_policy: str = "implicit",
 ) -> CallCost:
     if maximum_input_tokens < 0 or maximum_output_tokens < 0:
         raise ValueError("Maximum token estimates cannot be negative")
     model = policy.model(model_name)
     long_context = maximum_input_tokens >= policy.long_context_threshold_tokens
     rates = model.long_context if long_context else model.short_context
-    conservative_input_rate = max(rates.input, rates.cached_input, rates.cache_write)
+    if prompt_cache_policy == "explicit_no_cache":
+        conservative_input_rate = rates.input
+        cached_input_tokens = 0
+        cache_write_tokens = 0
+        ordinary_input_tokens = maximum_input_tokens
+        assumption = (
+            "Prompt caching is explicitly disabled; all bounded input is priced at the "
+            "ordinary input rate."
+        )
+    elif prompt_cache_policy == "implicit":
+        conservative_input_rate = max(rates.input, rates.cached_input, rates.cache_write)
+        cached_input_tokens = 0
+        cache_write_tokens = maximum_input_tokens
+        ordinary_input_tokens = 0
+        assumption = "All bounded input is priced at the maximum applicable input-side rate."
+    else:
+        raise ValueError(f"Unsupported prompt-cache policy: {prompt_cache_policy}")
     cost = (
         Decimal(maximum_input_tokens) * conservative_input_rate
         + Decimal(maximum_output_tokens) * rates.output
@@ -248,13 +265,13 @@ def estimate_maximum_call_cost(
         pricing_model=model.pricing_model,
         context_tier="long" if long_context else "short",
         input_tokens=maximum_input_tokens,
-        cached_input_tokens=0,
-        cache_write_tokens=maximum_input_tokens,
-        ordinary_input_tokens=0,
+        cached_input_tokens=cached_input_tokens,
+        cache_write_tokens=cache_write_tokens,
+        ordinary_input_tokens=ordinary_input_tokens,
         output_tokens=maximum_output_tokens,
         cost_usd=cost,
         conservative=True,
-        assumption="All bounded input is priced at the maximum applicable input-side rate.",
+        assumption=assumption,
     )
 
 

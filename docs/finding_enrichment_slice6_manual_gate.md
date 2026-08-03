@@ -103,8 +103,16 @@ C:\code\cuda-fractal-engine-state-tool\.local\slice6-sweep-ui\
    owned in-flight proof resolves or is terminated, while earlier evidence is
    retained.
 
+## User disposition and merge
+
+The user observed the real UI-driven five-member sweep, accepted the workflow,
+and explicitly approved merge on 2026-08-03. PR #10 merged to `main` as:
+
+```text
+027a7419085dc28fe2af0a9108754b8c4030c3c4
+```
+
 ## Closure boundary
 
-This gate is the only remaining approved action. No paid model call is needed.
-All preplanned implementation slices are exhausted. Record the user's manual
-review disposition before authorizing further product mutation or merge.
+This gate passed. No paid model call was used. All implementation slices in the
+finding-enrichment and scalar-sweep campaign are exhausted and merged.

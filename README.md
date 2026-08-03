@@ -98,8 +98,10 @@ The POC is intentionally bounded:
 - at most two replay-proven rounds;
 - two primary responses per round (combined authoring, then combined review/gate);
 - at most six model responses including one correction turn per round;
+- 8,000-token author and 4,000-token review/correction request caps;
 - cumulative total/cached/uncached input and output token usage shown in the panel;
 - separate cache-write usage and usage-derived USD calculation;
+- explicit no-cache request policy for fresh one-off author/review contexts;
 - exact provider input-token counting before generation dispatch;
 - a user-entered run-dollar ceiling, initialized to `0.00`;
 - one explicit context profile: `blind`, `assisted`, or `break_blind`;
@@ -122,6 +124,14 @@ versioned and hashed; override it with
 not a provider invoice. Cache reads and cache writes are retained separately in
 receipts. See
 [`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md).
+
+The provider-cost hardening pass disables GPT-5.6's implicit prompt-cache
+breakpoint without weakening Packet V8. A response reporting cache activity
+under that policy fails closed. The shared transport also exposes an exact
+count-only preflight which prepares the same request and cleans its uploads
+without dispatching generation. Current evidence and conservative Luna, Terra,
+and Sol ceilings are recorded in
+[`docs/v9_cost_hardening_evidence.md`](docs/v9_cost_hardening_evidence.md).
 
 Every authoring round starts with only its current Packet V8 authority. Review
 starts in another fresh provider context with the replay-proven derived packet
@@ -151,16 +161,15 @@ exists, even when a session stops before final qualification.
 The bounded paid-run outcome and exact receipts are summarized in
 [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md).
 
-The approved finding-enrichment and V9 campaign is active on
-`codex/finding-enrichment-v9-sweep`. Deterministic common/model enrichment is
-implemented before final V9 context shaping so model turns do not repeatedly
-rediscover engine-declared mathematics. The exact-count dollar gate and fresh
-review-context partition are complete; no paid battery was run. The bounded
-one-axis scalar bracket is the current local
-route over ordinary independently proven sparse overrides. The current
-execution contract is
+The finding-enrichment and local scalar-sweep campaign is merged on `main` at
+`027a741`. Deterministic common/model enrichment prevents repeated discovery of
+engine-declared mathematics. The exact-count dollar gate and fresh review-
+context partition are complete; no paid model-ablation battery was run. The
+bounded one-axis scalar bracket is the current local route over ordinary
+independently proven sparse overrides. The completed execution contract is
 [`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md);
-[`PICK_UP_HERE.md`](PICK_UP_HERE.md) records the exact restart point.
+the proposed next campaign is
+[`docs/v9_economic_qualification_model_ladder_plan.md`](docs/v9_economic_qualification_model_ladder_plan.md).
 
 Common Packet V8 enrichment can also be exercised headlessly without invoking
 the runtime model provider:

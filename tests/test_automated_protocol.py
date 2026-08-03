@@ -103,9 +103,11 @@ class AutomatedProtocolTests(unittest.TestCase):
         self.assertEqual(budgets.maximum_proven_rounds, 2)
         self.assertEqual(budgets.maximum_model_responses, 6)
         self.assertEqual(budgets.maximum_cumulative_input_tokens, 2_000_000)
-        self.assertEqual(budgets.maximum_cumulative_output_tokens, 160_000)
+        self.assertEqual(budgets.maximum_cumulative_output_tokens, 48_000)
         self.assertEqual(budgets.maximum_input_tokens_per_response, 200_000)
-        self.assertEqual(budgets.maximum_output_tokens_per_response, 24_000)
+        self.assertEqual(budgets.maximum_output_tokens_per_response, 8_000)
+        self.assertEqual(budgets.maximum_review_output_tokens_per_response, 4_000)
+        self.assertEqual(budgets.maximum_correction_output_tokens_per_response, 4_000)
         self.assertEqual(budgets.maximum_calculated_cost_usd, Decimal("10.00"))
         self.assertIsNone(
             budget_exhaustion_reason(
@@ -134,10 +136,13 @@ class AutomatedProtocolTests(unittest.TestCase):
             budget_exhaustion_reason(
                 budgets,
                 BudgetUsage(),
-                next_output_tokens=24_001,
+                next_output_tokens=8_001,
             ),
             "maximum_output_tokens_per_response",
         )
+        encoded = budgets.to_dict()
+        self.assertEqual(encoded["maximum_review_output_tokens_per_response"], 4_000)
+        self.assertEqual(encoded["maximum_correction_output_tokens_per_response"], 4_000)
         self.assertEqual(
             budget_exhaustion_reason(
                 budgets,

@@ -13,6 +13,7 @@ from cuda_fractal_state_tool.openai_transport import (
     AmbiguousRemoteCompletion,
     DispatchAuthorizationRejected,
     PacketV8ResponsesTransport,
+    PromptCachePolicy,
     ProviderFailureKind,
     ProviderFile,
     ProviderResponse,
@@ -38,6 +39,8 @@ class FakeProvider:
         self.response_status = "completed"
         self.on_response = None
         self.count_requests: list[dict[str, object]] = []
+        self.cached_input_tokens = 0
+        self.cache_write_tokens = 0
 
     def upload_file(self, filename: str, payload: bytes) -> ProviderFile:
         self.uploaded.append(filename)
@@ -56,8 +59,8 @@ class FakeProvider:
             output_text="A grounded response.",
             usage={
                 "input_tokens": 123,
-                "cached_input_tokens": 23,
-                "cache_write_tokens": 17,
+                "cached_input_tokens": self.cached_input_tokens,
+                "cache_write_tokens": self.cache_write_tokens,
                 "output_tokens": 45,
             },
             raw={
@@ -67,8 +70,8 @@ class FakeProvider:
                 "usage": {
                     "input_tokens": 123,
                     "input_tokens_details": {
-                        "cached_tokens": 23,
-                        "cache_write_tokens": 17,
+                        "cached_tokens": self.cached_input_tokens,
+                        "cache_write_tokens": self.cache_write_tokens,
                     },
                     "output_tokens": 45,
                 },
@@ -186,7 +189,8 @@ class OpenAITransportTests(unittest.TestCase):
             request = provider.requests[0]["request"]
             self.assertEqual(request["model"], "gpt-5.6")
             self.assertEqual(request["reasoning"], {"effort": "high"})
-            self.assertEqual(request["max_output_tokens"], 24_000)
+            self.assertEqual(request["max_output_tokens"], 8_000)
+            self.assertEqual(request["prompt_cache_options"], {"mode": "explicit"})
             self.assertTrue(request["store"])
             self.assertEqual(request["previous_response_id"], "resp-previous")
             self.assertEqual(request["instructions"], "Stable protocol instructions")
@@ -196,9 +200,10 @@ class OpenAITransportTests(unittest.TestCase):
             ])
             self.assertTrue(content[-1]["image_url"].startswith("data:image/png;base64,"))
             self.assertEqual(result.input_tokens, 123)
-            self.assertEqual(result.cached_input_tokens, 23)
-            self.assertEqual(result.cache_write_tokens, 17)
-            self.assertEqual(result.uncached_input_tokens, 100)
+            self.assertEqual(result.cached_input_tokens, 0)
+            self.assertEqual(result.cache_write_tokens, 0)
+            self.assertEqual(result.uncached_input_tokens, 123)
+            self.assertEqual(result.prompt_cache_policy, "explicit_no_cache")
             self.assertEqual(result.output_tokens, 45)
             self.assertEqual(result.requested_model, "gpt-5.6")
             self.assertEqual(result.model, "gpt-5.6-2026-07-01")
@@ -230,9 +235,39 @@ class OpenAITransportTests(unittest.TestCase):
             )
             self.assertEqual(response_evidence["requested_model"], "gpt-5.6")
             self.assertEqual(response_evidence["resolved_model"], "gpt-5.6-2026-07-01")
-            self.assertEqual(response_evidence["cached_input_tokens"], 23)
-            self.assertEqual(response_evidence["cache_write_tokens"], 17)
-            self.assertEqual(response_evidence["uncached_input_tokens"], 100)
+            self.assertEqual(response_evidence["cached_input_tokens"], 0)
+            self.assertEqual(response_evidence["cache_write_tokens"], 0)
+            self.assertEqual(response_evidence["uncached_input_tokens"], 123)
+            self.assertEqual(response_evidence["prompt_cache_policy"], "explicit_no_cache")
+
+    def test_explicit_no_cache_fails_closed_if_provider_reports_cache_activity(self) -> None:
+        provider = FakeProvider()
+        provider.cache_write_tokens = 17
+        with self.assertRaises(ProviderTransportError) as captured:
+            PacketV8ResponsesTransport(provider).send_turn(
+                instructions="instructions",
+                prompt="prompt",
+                packet_dir=None,
+                previous_response_id="resp-1",
+            )
+        self.assertEqual(captured.exception.kind, ProviderFailureKind.MALFORMED_RESPONSE)
+
+    def test_implicit_cache_policy_preserves_provider_cache_usage(self) -> None:
+        provider = FakeProvider()
+        provider.cached_input_tokens = 23
+        provider.cache_write_tokens = 17
+        result = PacketV8ResponsesTransport(provider).send_turn(
+            instructions="instructions",
+            prompt="prompt",
+            packet_dir=None,
+            previous_response_id="resp-1",
+            prompt_cache_policy=PromptCachePolicy.IMPLICIT,
+        )
+        request = provider.requests[0]["request"]
+        self.assertNotIn("prompt_cache_options", request)
+        self.assertEqual(result.cached_input_tokens, 23)
+        self.assertEqual(result.cache_write_tokens, 17)
+        self.assertEqual(result.prompt_cache_policy, "implicit")
 
     def test_exact_token_count_gate_rejects_before_generation_and_cleans_uploads(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -262,6 +297,35 @@ class OpenAITransportTests(unittest.TestCase):
                 ["file-state.json", "file-manifest.json", "file-packet.md"],
             )
             self.assertEqual(transport.owned_provider_file_ids, ())
+
+    def test_count_only_preflight_returns_exact_count_without_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = PacketFixture(root)
+            provider = FakeProvider()
+            store = self._store(root / "workspace")
+            transport = PacketV8ResponsesTransport(provider)
+            with patch(
+                "cuda_fractal_state_tool.openai_transport.load_agent_bundle_handoff",
+                return_value=fixture.handoff,
+            ):
+                result = transport.count_turn_input(
+                    instructions="Stable protocol instructions",
+                    prompt="One exact authoring round",
+                    packet_dir=fixture.packet_dir,
+                    run_store=store,
+                    model="gpt-5.6-luna",
+                    max_output_tokens=8_000,
+                )
+            self.assertEqual(result.input_tokens, 123)
+            self.assertEqual(result.requested_model, "gpt-5.6-luna")
+            self.assertEqual(result.prompt_cache_policy, "explicit_no_cache")
+            self.assertEqual(provider.requests, [])
+            self.assertEqual(len(provider.count_requests), 1)
+            self.assertEqual(len(provider.deleted), 3)
+            self.assertEqual(transport.owned_provider_file_ids, ())
+            self.assertTrue(result.request_evidence_path.is_file())
+            self.assertTrue(result.count_evidence_path.is_file())
 
     def test_exact_role_and_hash_resources_reuse_one_owned_provider_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

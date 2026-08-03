@@ -1,11 +1,12 @@
-# Pick Up Here — Finding Enrichment, V9 Cost, and Scalar Sweep
+# Pick Up Here — V9 Economic Qualification Planning
 
 ## Active campaign state
 
-The state-tool campaign branch starts from clean merged main:
+The completed finding-enrichment and scalar-sweep campaign is merged on clean
+main:
 
 ```text
-main@28a6da4f6949ef01e6ea7b45a9affab0e32ee735
+main@027a7419085dc28fe2af0a9108754b8c4030c3c4
 ```
 
 The engine E0-E2 prerequisites are merged and published:
@@ -16,24 +17,22 @@ fractal_ui.exe sha256:
 501002f174068641b9a6105e56c277e6a4080bc9dbeb5e672282e77562b96f56
 ```
 
-The active state-tool branch is:
+The planning-only branch is:
 
 ```text
-codex/finding-enrichment-v9-sweep
+codex/v9-economic-qualification-plan
 ```
 
 Read first:
 
-1. [`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md)
-2. [`docs/finding_enrichment_slice1_evidence.md`](docs/finding_enrichment_slice1_evidence.md)
-3. [`docs/finding_enrichment_slice2_evidence.md`](docs/finding_enrichment_slice2_evidence.md)
-4. [`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md)
-5. [`docs/finding_enrichment_slice4_context_evidence.md`](docs/finding_enrichment_slice4_context_evidence.md)
-6. [`docs/finding_enrichment_slice5_scalar_sweep_evidence.md`](docs/finding_enrichment_slice5_scalar_sweep_evidence.md)
-7. [`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
-8. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
-9. [`docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md`](docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md)
-10. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
+1. [`docs/v9_economic_qualification_model_ladder_plan.md`](docs/v9_economic_qualification_model_ladder_plan.md)
+2. [`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md)
+3. [`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md)
+4. [`docs/finding_enrichment_slice4_context_evidence.md`](docs/finding_enrichment_slice4_context_evidence.md)
+5. [`docs/finding_enrichment_slice5_scalar_sweep_evidence.md`](docs/finding_enrichment_slice5_scalar_sweep_evidence.md)
+6. [`docs/finding_enrichment_slice6_manual_gate.md`](docs/finding_enrichment_slice6_manual_gate.md)
+7. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
+8. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
 
 ## Why cost is first
 
@@ -115,16 +114,12 @@ Then verify:
 
 ## Exact continuation
 
-Slice 0 is committed at `625f950`; Slice 1 at `18f3761`; Slice 2 at `a27ae92`;
-Slice 3 at `1f6999a`; Slice 4 at `ab2529a`; and Slice 5 at `6ab4e97`. Slice 6,
-the thin sweep UI and grouped presentation, is implemented at the branch-tip
-checkpoint. All preplanned implementation slices are exhausted.
+The Slice 6 UI gate passed and PR #10 merged at `027a741`. The next proposed
+campaign is the minimum-acceptable model ladder. Review
+`docs/v9_economic_qualification_model_ladder_plan.md` and obtain explicit plan
+approval before product mutation.
 
-Resume only at the user manual-review gate documented in
-`docs/finding_enrichment_slice6_manual_gate.md`. That review requires no
-provider credential. Record the user disposition before authorizing any new
-product mutation or merge.
-
-No paid provider call, model ablation, diagnostic-mosaic work, additional
-production provider, or engine mutation is authorized by the current state-tool
-campaign.
+Plan approval authorizes only zero-paid-call preparation Slices 0-2. Provider
+count calls and every paid model cell remain separate user approval gates. No
+diagnostic-mosaic work, additional production provider, sweep expansion, or
+engine mutation is authorized.
