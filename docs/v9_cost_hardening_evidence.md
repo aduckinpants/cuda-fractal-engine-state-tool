@@ -1,6 +1,6 @@
 # V9 Provider-Cost Hardening Evidence
 
-Status: zero-generation implementation checkpoint in progress
+Status: merged zero-generation prerequisite; economic qualification preparation follows
 
 Date: 2026-08-03
 

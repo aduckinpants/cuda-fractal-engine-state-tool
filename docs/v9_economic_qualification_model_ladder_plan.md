@@ -1,13 +1,14 @@
 # V9 Economic Qualification and Minimum-Acceptable Model Ladder
 
-Status: approved through zero-provider-call cost hardening. Provider count and
-generation remain behind the separate approvals defined below.
+Status: approved and implemented through Slice 2 zero-provider preparation.
+Provider count and generation remain behind the separate approvals defined
+below.
 
 Date: 2026-08-03
 
 ```text
-planning branch: codex/v9-economic-qualification-plan
-state-tool main: 027a7419085dc28fe2af0a9108754b8c4030c3c4
+implementation branch: codex/v9-economic-qualification-harness
+state-tool base: df5b9f1fcc2d4ecf20837e90d82fc6aa906c4630
 engine master:   deca3d93fac92ad93742e8d47714f91329808ead
 published exe:   D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.exe
 exe SHA-256:     501002f174068641b9a6105e56c277e6a4080bc9dbeb5e672282e77562b96f56

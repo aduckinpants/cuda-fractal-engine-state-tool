@@ -1,0 +1,43 @@
+{
+  "fixture_inventory_version": 1,
+  "runtime_executable_sha256": "501002f174068641b9a6105e56c277e6a4080bc9dbeb5e672282e77562b96f56",
+  "fixtures": [
+    {
+      "role": "hard_calibrator",
+      "source_capture": "D:\\salt-fractal\\cuda_newton_fractal_clone\\findings\\manual_capture\\2026-08-02\\160241_458__explaino_rational_escape",
+      "packet_directory": "D:\\salt-fractal\\cuda-fractal-engine-state-tool\\findings\\ffbd5143b3b8098867291cbe30ded9acd87d518877723c381e3e6aedd12ec138\\packets\\6e9ca581-fcb3-45aa-8aa9-5d03997f3569",
+      "packet_id": "6e9ca581-fcb3-45aa-8aa9-5d03997f3569",
+      "finding_id": "ffbd5143b3b8098867291cbe30ded9acd87d518877723c381e3e6aedd12ec138",
+      "selected_fractal_type": "explaino_rational_escape",
+      "packet_sha256": "1f91aecacf47e56364f570244f655d5f1a1a051524410b4086aa55447644005b",
+      "manifest_sha256": "9b01378f8cee99bfbb01619f238400e262c94e610c15da02d8d5f67af6caf8ea",
+      "disclosure_profile": "assisted",
+      "analysis_id": "4db4181f7b1e8108a0c571daea99d4750f1bce5587ff5fd2f230fea3aabd27e6",
+      "analysis_receipt_sha256": "88d43bdf9e4c81aed1629621d48e1c63673c0ae1e5410c255d9414c548a6592e"
+    },
+    {
+      "role": "dynamics_confirmation",
+      "source_capture": "D:\\salt-fractal\\cuda_newton_fractal_clone\\findings\\manual_capture\\2026-08-01\\223434_168__explaino_inertial",
+      "packet_directory": "D:\\salt-fractal\\cuda-fractal-engine-state-tool\\findings\\899294180356490a91886470d82becb9fffddc011fa6dc8b2a115dd6ee00023a\\packets\\5f082254-3b33-4871-bac0-36acb5690294",
+      "packet_id": "5f082254-3b33-4871-bac0-36acb5690294",
+      "finding_id": "899294180356490a91886470d82becb9fffddc011fa6dc8b2a115dd6ee00023a",
+      "selected_fractal_type": "explaino_inertial",
+      "packet_sha256": "76767accdc91b548a82d49637f77fc2ed58d0cb6639d0f5c6e3f0af6c5eec1a8",
+      "manifest_sha256": "a95273cd9b2a33948f78c5771e055b4990cceef2a3346a5eeb9872ceb77e4b07",
+      "disclosure_profile": "blind",
+      "analysis_id": null
+    },
+    {
+      "role": "observation_confirmation",
+      "source_capture": "D:\\salt-fractal\\cuda_newton_fractal_clone\\findings\\manual_capture\\2026-07-30\\222449_767__explaino_all",
+      "packet_directory": "D:\\salt-fractal\\cuda-fractal-engine-state-tool\\findings\\6676d59ebd8e1a6cb23ee7754b5ee3e7d68db6aba83be0c27215047922badb00\\packets\\68c848b7-ca63-418f-bce8-31a53e9e1ad0",
+      "packet_id": "68c848b7-ca63-418f-bce8-31a53e9e1ad0",
+      "finding_id": "6676d59ebd8e1a6cb23ee7754b5ee3e7d68db6aba83be0c27215047922badb00",
+      "selected_fractal_type": "explaino_all",
+      "packet_sha256": "9cb7b87159c095341b691557fd81c330bb8af0bde08387be68a24aa6affe7de5",
+      "manifest_sha256": "c848f44c7dae3adbdda75ed4595b2ebbf2fa95f7eeccbe5980a6c9ead40b3804",
+      "disclosure_profile": "blind",
+      "analysis_id": null
+    }
+  ]
+}

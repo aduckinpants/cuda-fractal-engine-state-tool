@@ -315,10 +315,14 @@ class OpenAITransportTests(unittest.TestCase):
                     packet_dir=fixture.packet_dir,
                     run_store=store,
                     model="gpt-5.6-luna",
+                    reasoning_effort="medium",
+                    model_profile_sha256="a" * 64,
                     max_output_tokens=8_000,
                 )
             self.assertEqual(result.input_tokens, 123)
             self.assertEqual(result.requested_model, "gpt-5.6-luna")
+            self.assertEqual(result.reasoning_effort, "medium")
+            self.assertEqual(result.model_profile_sha256, "a" * 64)
             self.assertEqual(result.prompt_cache_policy, "explicit_no_cache")
             self.assertEqual(provider.requests, [])
             self.assertEqual(len(provider.count_requests), 1)
@@ -326,6 +330,8 @@ class OpenAITransportTests(unittest.TestCase):
             self.assertEqual(transport.owned_provider_file_ids, ())
             self.assertTrue(result.request_evidence_path.is_file())
             self.assertTrue(result.count_evidence_path.is_file())
+            count_evidence = json.loads(result.count_evidence_path.read_text(encoding="utf-8"))
+            self.assertEqual(count_evidence["model_profile_sha256"], "a" * 64)
 
     def test_exact_role_and_hash_resources_reuse_one_owned_provider_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
