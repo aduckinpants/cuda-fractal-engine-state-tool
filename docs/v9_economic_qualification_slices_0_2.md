@@ -2,8 +2,8 @@
 
 Date: 2026-08-03
 
-Status: Slices 0 through 3 complete; one provider input count was authorized and
-completed without generation; response generation remains unauthorized
+Status: Slices 0 through 3 complete; the authorized Slice 4 paid cell was
+attempted once and blocked before generation by provider credit exhaustion
 
 ## Locked authority
 
@@ -209,7 +209,14 @@ offline controller witness, automatic gates, the Luna/high case manifest, and
 the count-only preflight are complete. Provider files were cleaned, no response
 generation was dispatched, and the exact bounded cell remains below `$0.10`.
 
-The next planned boundary is Slice 4: one paid Luna/high hard-calibrator cell
-using the exact case. It remains blocked on separate explicit authorization for
-response generation. No generation authority is implied by the `$8` campaign
-ceiling or by the completed count-only call.
+The exact Slice 4 paid cell was separately authorized and attempted once on
+2026-08-03. The provider accepted the exact input count but rejected response
+creation with HTTP 429 `credit_balance_exhausted`. The controller recorded zero
+model responses, zero calculated generation cost, `TRANSPORT_FAILED`, and
+complete provider-file cleanup. No retry was made.
+
+The attempt is documented in
+`docs/v9_luna_high_paid_calibrator_attempt.md`. Slice 4 remains incomplete and
+is blocked on provider billing state. Resume only after the API organization or
+project used by the stored credential has usable credits; then obtain fresh
+authorization for one retry of the same exact cell.
