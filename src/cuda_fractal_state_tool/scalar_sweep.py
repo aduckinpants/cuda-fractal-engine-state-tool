@@ -29,6 +29,7 @@ from .state_override import (
     parse_state_override,
 )
 from .state_override_proof import StateOverrideProofResult, execute_state_override_proof
+from .sweep_presentation import render_scalar_sweep_presentation
 
 
 SCALAR_SWEEP_VERSION = 1
@@ -293,6 +294,7 @@ class ScalarBracketSweepService:
         job: JobContext,
         sweeps_root: Path | None = None,
         runtime_compatibility_mode: str | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
     ) -> ScalarSweepResult:
         packet_dir = packet_dir.resolve()
         runtime_cmd_path = runtime_cmd_path.resolve()
@@ -301,6 +303,14 @@ class ScalarBracketSweepService:
             fixed_override_text=fixed_override_text,
             plan_text=plan_text,
             runtime_cmd_path=runtime_cmd_path,
+        )
+        _progress(
+            on_progress,
+            {
+                "event": "PLAN_VALIDATED",
+                "axis_path": validation.plan.axis_path,
+                "values": list(validation.plan.values),
+            },
         )
         if sweeps_root is None:
             if packet_dir.parent.name != "packets":
@@ -336,32 +346,40 @@ class ScalarBracketSweepService:
             zip(validation.plan.values, validation.concrete_overrides, strict=True)
         ):
             if stop_status is not None:
-                members.append(
-                    ScalarSweepMemberResult(
+                skipped = ScalarSweepMemberResult(
                         index=index,
                         value=value,
                         status=stop_status,
                         override_sha256=_sha256(override_bytes),
-                    )
                 )
+                members.append(skipped)
+                _progress(on_progress, _member_progress(skipped))
                 continue
             if job.cancelled:
                 disposition = "CANCELLED"
                 stop_status = "NOT_STARTED_AFTER_CANCEL"
-                members.append(
-                    ScalarSweepMemberResult(index, value, stop_status, _sha256(override_bytes))
+                skipped = ScalarSweepMemberResult(
+                    index, value, stop_status, _sha256(override_bytes)
                 )
+                members.append(skipped)
+                _progress(on_progress, _member_progress(skipped))
                 continue
             if not self._authority_matches(packet_dir, runtime_cmd_path, validation):
                 disposition = "AUTHORITY_DRIFT"
                 stop_status = "NOT_STARTED_AFTER_AUTHORITY_DRIFT"
-                members.append(
-                    ScalarSweepMemberResult(index, value, stop_status, _sha256(override_bytes))
+                skipped = ScalarSweepMemberResult(
+                    index, value, stop_status, _sha256(override_bytes)
                 )
+                members.append(skipped)
+                _progress(on_progress, _member_progress(skipped))
                 continue
 
             member_dir = sweep_dir / "members" / f"{index:03d}-{_value_slug(value)}"
             _write_once(member_dir / "override.json", override_bytes)
+            _progress(
+                on_progress,
+                {"event": "MEMBER_STARTED", "index": index, "value": value},
+            )
             try:
                 proof = self.proof(
                     packet_dir,
@@ -381,6 +399,7 @@ class ScalarBracketSweepService:
                 _write_json_once(
                     member_dir / "proof-ref.json", _member_receipt(cancelled_member)
                 )
+                _progress(on_progress, _member_progress(cancelled_member))
                 continue
             except Exception as exc:
                 proof = None
@@ -410,6 +429,7 @@ class ScalarBracketSweepService:
                 )
                 _write_json_once(member_dir / "proof-ref.json", _member_receipt(member))
             members.append(member)
+            _progress(on_progress, _member_progress(member))
 
             if job.cancelled:
                 disposition = "CANCELLED"
@@ -424,9 +444,18 @@ class ScalarBracketSweepService:
                 elif disposition == "COMPLETE":
                     disposition = "PARTIAL_MEMBER_FAILURES"
 
-        presentation = _presentation_index(sweep_id, validation.plan, members)
-        presentation_path = sweep_dir / "presentation" / "index.md"
-        _write_once(presentation_path, presentation.encode("utf-8"))
+        presentation = None
+        presentation_error = None
+        try:
+            presentation = render_scalar_sweep_presentation(
+                sweep_dir=sweep_dir,
+                sweep_id=sweep_id,
+                axis_path=validation.plan.axis_path,
+                members=members,
+            )
+        except Exception as exc:
+            presentation_error = str(exc)
+            disposition = "PRESENTATION_FAILED"
         receipt = {
             "scalar_sweep_receipt_version": SCALAR_SWEEP_RECEIPT_VERSION,
             "sweep_id": sweep_id,
@@ -443,14 +472,34 @@ class ScalarBracketSweepService:
             "fixed_override_path": "fixed-override.json",
             "members": [_member_receipt(item) for item in members],
             "presentation": {
-                "index_path": "presentation/index.md",
-                "index_sha256": _sha256(presentation.encode("utf-8")),
-                "contact_sheet": None,
+                "status": "complete" if presentation is not None else "failed",
+                "error": presentation_error,
+                "index_path": "presentation/index.md" if presentation else None,
+                "index_sha256": presentation.index_sha256 if presentation else None,
+                "contact_sheet_path": (
+                    "presentation/contact-sheet.png" if presentation else None
+                ),
+                "contact_sheet_sha256": (
+                    presentation.contact_sheet_sha256 if presentation else None
+                ),
+                "receipt_path": (
+                    "presentation/contact-sheet-receipt.json" if presentation else None
+                ),
+                "receipt_sha256": presentation.receipt_sha256 if presentation else None,
                 "human_acceptance": False,
             },
         }
         receipt_path = sweep_dir / "receipt.json"
         _write_json_once(receipt_path, receipt)
+        _progress(
+            on_progress,
+            {
+                "event": "SWEEP_COMPLETED",
+                "disposition": disposition,
+                "sweep_id": sweep_id,
+                "sweep_dir": str(sweep_dir),
+            },
+        )
         return ScalarSweepResult(
             sweep_id=sweep_id,
             disposition=disposition,
@@ -491,30 +540,24 @@ def _member_receipt(member: ScalarSweepMemberResult) -> dict[str, Any]:
     }
 
 
+def _member_progress(member: ScalarSweepMemberResult) -> dict[str, Any]:
+    return {
+        "event": "MEMBER_COMPLETED",
+        "index": member.index,
+        "value": member.value,
+        "status": member.status,
+        "proof_id": member.proof_id,
+    }
+
+
+def _progress(
+    callback: Callable[[dict[str, Any]], None] | None,
+    event: dict[str, Any],
+) -> None:
+    if callback is not None:
+        callback(dict(event))
+
+
 def _value_slug(value: int | float) -> str:
     text = json.dumps(value, ensure_ascii=True, allow_nan=False)
     return text.replace("-", "neg-").replace(".", "p")
-
-
-def _presentation_index(
-    sweep_id: str,
-    plan: ScalarSweepPlan,
-    members: list[ScalarSweepMemberResult],
-) -> str:
-    lines = [
-        f"# Scalar Bracket Sweep {sweep_id}",
-        "",
-        f"Axis: `{plan.axis_path}`",
-        "",
-        "This index is derived review evidence. It does not record human acceptance.",
-        "",
-        "| Index | Value | Status | Proof | Candidate display |",
-        "|---:|---:|---|---|---|",
-    ]
-    for item in members:
-        display = str(item.candidate_display_path) if item.candidate_display_path else "—"
-        lines.append(
-            f"| {item.index} | `{item.value}` | {item.status} | "
-            f"{item.proof_id or '—'} | {display} |"
-        )
-    return "\n".join(lines) + "\n"

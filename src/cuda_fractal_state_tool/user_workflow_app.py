@@ -34,6 +34,7 @@ from .preview_service import PreviewService
 from .pricing_policy import load_pricing_policy
 from .runtime_surface import DEFAULT_RUNTIME_CMD
 from .runtime_compatibility import resolve_runtime_compatibility_mode
+from .scalar_sweep import ScalarBracketSweepService, ScalarSweepResult
 from .state_override_proof import (
     StateOverrideProofResult,
     execute_state_override_proof,
@@ -143,6 +144,23 @@ def _format_automated_event(event: dict) -> str:
     return f"{sequence:>3}  {event_type}{('  ' + detail) if detail else ''}"
 
 
+def _format_scalar_sweep_progress(event: dict) -> str:
+    kind = str(event.get("event", "UNKNOWN"))
+    if kind == "PLAN_VALIDATED":
+        return f"PLAN VALIDATED  {event.get('axis_path')}  values={event.get('values')}"
+    if kind == "MEMBER_STARTED":
+        return f"MEMBER {event.get('index')}  value={event.get('value')}  RUNNING"
+    if kind == "MEMBER_COMPLETED":
+        proof = f"  proof={event.get('proof_id')}" if event.get("proof_id") else ""
+        return (
+            f"MEMBER {event.get('index')}  value={event.get('value')}  "
+            f"{event.get('status')}{proof}"
+        )
+    if kind == "SWEEP_COMPLETED":
+        return f"SWEEP {event.get('disposition')}  {event.get('sweep_id')}"
+    return kind
+
+
 class UserWorkflowApp:
     def __init__(
         self,
@@ -181,6 +199,10 @@ class UserWorkflowApp:
         self._automated_last_event_sequence = 0
         self._next_automated_refresh_at = 0.0
         self._credential_available = False
+        self._sweep_job_id: str | None = None
+        self._sweep_result_dir: Path | None = None
+        self._sweep_validation_binding: tuple[object, ...] | None = None
+        self._sweep_contact_photo = None
 
         self.source_path_var = tk.StringVar(value="")
         self.workspace_root_var = tk.StringVar(value=str(workspace_root.resolve()))
@@ -207,6 +229,8 @@ class UserWorkflowApp:
             )
         )
         self.automated_disposition_var = tk.StringVar(value="Disposition: not started")
+        self.sweep_status_var = tk.StringVar(value="Sweep: not validated")
+        self.sweep_binding_var = tk.StringVar(value="No validated scalar sweep binding.")
         self.automated_summary_var = tk.StringVar(
             value="Credential not configured · no automated run"
         )
@@ -222,6 +246,7 @@ class UserWorkflowApp:
         self._configure_root()
         self._build_shell()
         self._build_automation_window()
+        self._build_sweep_window()
         self._refresh_credential_status()
         self._render()
         self.root.after(25, self._drain_completions)
@@ -480,6 +505,119 @@ class UserWorkflowApp:
         self.automation_window.lift()
         self.automation_window.focus_set()
 
+    def _build_sweep_window(self) -> None:
+        from tkinter.scrolledtext import ScrolledText
+
+        ttk = self.ttk
+        window = self.tk.Toplevel(self.root)
+        window.title("Local Scalar Bracket Sweep V1")
+        window.geometry("1040x820")
+        window.minsize(820, 650)
+        window.protocol("WM_DELETE_WINDOW", window.withdraw)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(2, weight=1)
+        window.withdraw()
+        self.sweep_window = window
+
+        header = ttk.Frame(window, padding=(12, 12, 12, 8))
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        ttk.Label(
+            header,
+            text="Bounded Local Scalar Bracket Sweep",
+            font=("Segoe UI", 13, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            header,
+            text=(
+                "Each value starts from the exact Packet V8 base and reuses the ordinary "
+                "override, timeout, proof, and proof-owned PNG services. Results are review "
+                "evidence and never human acceptance."
+            ),
+            wraplength=940,
+        ).grid(row=1, column=0, sticky="w", pady=(5, 0))
+
+        controls = ttk.Frame(window, padding=(12, 0, 12, 8))
+        controls.grid(row=1, column=0, sticky="ew")
+        self.validate_sweep_button = ttk.Button(
+            controls, text="Validate Sweep", command=self.validate_scalar_sweep
+        )
+        self.validate_sweep_button.grid(row=0, column=0, padx=(0, 5))
+        self.run_sweep_button = ttk.Button(
+            controls, text="Run Local Sweep", command=self.run_scalar_sweep
+        )
+        self.run_sweep_button.grid(row=0, column=1, padx=5)
+        self.cancel_sweep_button = ttk.Button(
+            controls, text="Cancel Sweep", command=self.cancel_scalar_sweep
+        )
+        self.cancel_sweep_button.grid(row=0, column=2, padx=5)
+        self.open_sweep_folder_button = ttk.Button(
+            controls, text="Open Sweep Folder", command=self.open_sweep_folder
+        )
+        self.open_sweep_folder_button.grid(row=0, column=3, padx=5)
+        self.open_contact_sheet_button = ttk.Button(
+            controls, text="Open Contact Sheet", command=self.open_sweep_contact_sheet
+        )
+        self.open_contact_sheet_button.grid(row=0, column=4, padx=(5, 0))
+
+        body = ttk.Frame(window, padding=(12, 0, 12, 12))
+        body.grid(row=2, column=0, sticky="nsew")
+        body.columnconfigure(0, weight=1)
+        body.columnconfigure(1, weight=1)
+        body.rowconfigure(1, weight=1)
+
+        plan = ttk.LabelFrame(body, text="Scalar Bracket Sweep JSON", padding=8)
+        plan.grid(row=0, column=0, rowspan=2, sticky="nsew", padx=(0, 5))
+        plan.columnconfigure(0, weight=1)
+        plan.rowconfigure(1, weight=1)
+        ttk.Label(
+            plan,
+            text=(
+                "The main State Override editor is the optional fixed override. "
+                "A fixed override containing the axis is rejected."
+            ),
+            wraplength=460,
+        ).grid(row=0, column=0, sticky="w", pady=(0, 6))
+        self.sweep_plan_text = ScrolledText(plan, height=22, wrap="none", undo=True)
+        self.sweep_plan_text.grid(row=1, column=0, sticky="nsew")
+        self.sweep_plan_text.insert(
+            "1.0",
+            '{\n  "sweep_version": 1,\n  "axis": {\n'
+            '    "path": "params.vortex_strength",\n'
+            '    "values": [0, 0.25, 0.5, 0.75, 1]\n'
+            '  },\n  "member_failure_policy": "continue_independent"\n}\n',
+        )
+        self.sweep_plan_text.edit_modified(False)
+        self.sweep_plan_text.bind("<<Modified>>", self._sweep_plan_modified)
+        ttk.Label(plan, textvariable=self.sweep_binding_var, wraplength=460).grid(
+            row=2, column=0, sticky="w", pady=(6, 0)
+        )
+
+        progress = ttk.LabelFrame(body, text="Per-member progress", padding=8)
+        progress.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=(0, 5))
+        progress.columnconfigure(0, weight=1)
+        progress.rowconfigure(1, weight=1)
+        ttk.Label(progress, textvariable=self.sweep_status_var, wraplength=460).grid(
+            row=0, column=0, sticky="w", pady=(0, 5)
+        )
+        self.sweep_progress_text = ScrolledText(
+            progress, height=10, wrap="word", state="disabled", font=("Consolas", 9)
+        )
+        self.sweep_progress_text.grid(row=1, column=0, sticky="nsew")
+        self._set_text(self.sweep_progress_text, "No local sweep has run.")
+
+        contact = ttk.LabelFrame(body, text="Derived contact sheet (not acceptance)", padding=8)
+        contact.grid(row=1, column=1, sticky="nsew", padx=(5, 0), pady=(5, 0))
+        contact.columnconfigure(0, weight=1)
+        contact.rowconfigure(0, weight=1)
+        self.sweep_contact_label = ttk.Label(contact, text="No contact sheet", anchor="center")
+        self.sweep_contact_label.grid(row=0, column=0, sticky="nsew")
+
+    def open_sweep_panel(self) -> None:
+        self.sweep_window.deiconify()
+        self.sweep_window.lift()
+        self.sweep_window.focus_set()
+
     def _build_override_editor(self) -> None:
         from tkinter.scrolledtext import ScrolledText
 
@@ -496,6 +634,12 @@ class UserWorkflowApp:
             text="Starts empty. Paste one sparse state-shaped JSON object—no envelope, hashes, or action commands.",
             wraplength=670,
         ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.open_sweep_panel_button = ttk.Button(
+            override,
+            text="Local Scalar Sweep…",
+            command=self.open_sweep_panel,
+        )
+        self.open_sweep_panel_button.grid(row=2, column=0, sticky="w", pady=(6, 0))
 
         actions = ttk.LabelFrame(self.right, text="5. Validate and replay-prove", padding=8)
         actions.grid(row=2, column=0, sticky="ew", pady=(0, 8))
@@ -1075,6 +1219,7 @@ class UserWorkflowApp:
             return
         self.override_text.edit_modified(False)
         self.session.set_override_text(self.override_text.get("1.0", "end-1c"))
+        self._invalidate_sweep_validation("Fixed override changed; validate the sweep again.")
         self._clear_candidate_views()
         self._set_text(self.proof_text, "Override changed. Every prior proof and review binding is invalidated.")
         self._render()
@@ -1088,8 +1233,254 @@ class UserWorkflowApp:
         finally:
             self._setting_override = False
         self.session.set_override_text(text)
+        self._invalidate_sweep_validation("Fixed override changed; validate the sweep again.")
         self._clear_candidate_views()
         self._set_text(self.proof_text, "Override changed. Every prior proof and review binding is invalidated.")
+        self._render()
+
+    def _sweep_plan_modified(self, _event=None) -> None:
+        if not self.sweep_plan_text.edit_modified():
+            return
+        self.sweep_plan_text.edit_modified(False)
+        self._invalidate_sweep_validation("Sweep plan changed; validate it again.")
+        self._render()
+
+    def _invalidate_sweep_validation(self, message: str) -> None:
+        self._sweep_validation_binding = None
+        self.sweep_binding_var.set(message)
+
+    def _current_sweep_binding(self) -> tuple[object, ...] | None:
+        finding = self.session.finding
+        bundle = self.session.bundle
+        if finding is None or bundle is None:
+            return None
+        override_text = self.session.override_text
+        plan_text = self.sweep_plan_text.get("1.0", "end-1c")
+        return (
+            self.session.generation,
+            finding.finding_id,
+            finding.authoring_base_sha256,
+            bundle.packet_id,
+            bundle.manifest_sha256,
+            hashlib.sha256(override_text.encode("utf-8")).hexdigest(),
+            hashlib.sha256(plan_text.encode("utf-8")).hexdigest(),
+        )
+
+    def _sweep_identity(self) -> JobRequestIdentity | None:
+        binding = self._current_sweep_binding()
+        if binding is None:
+            return None
+        return JobRequestIdentity(
+            generation=binding[0],
+            finding_id=binding[1],
+            authoring_base_sha256=binding[2],
+            packet_id=binding[3],
+            packet_manifest_sha256=binding[4],
+            override_text_sha256=binding[5],
+            sweep_plan_sha256=binding[6],
+        )
+
+    def _sweep_outcome_is_current(self, outcome: JobOutcome) -> bool:
+        current = self._sweep_identity()
+        return current is not None and outcome.identity == current
+
+    def validate_scalar_sweep(self) -> None:
+        bundle = self.session.bundle
+        identity = self._sweep_identity()
+        if bundle is None or identity is None:
+            self._set_error("Open a finding and build its exact Packet V8 before validating a sweep.")
+            self._render()
+            return
+        fixed_text = self.session.override_text
+        plan_text = self.sweep_plan_text.get("1.0", "end-1c")
+        self._sweep_validation_binding = None
+        self.sweep_status_var.set("Sweep: validating exact Packet V8 authorability…")
+        self._set_text(self.sweep_progress_text, "Validating every concrete member before rendering.")
+
+        def operation(_context):
+            return ScalarBracketSweepService().validate(
+                packet_dir=bundle.packet_dir,
+                fixed_override_text=fixed_text,
+                plan_text=plan_text,
+                runtime_cmd_path=self.runtime_cmd_path,
+            )
+
+        self._sweep_job_id = self._submit(
+            "sweep_validation", identity, operation, self._sweep_validation_completed
+        )
+        self._render()
+
+    def _sweep_validation_completed(self, outcome: JobOutcome) -> None:
+        self._busy_kinds.discard(outcome.kind)
+        self._sweep_job_id = None
+        if not self._sweep_outcome_is_current(outcome) or outcome.cancelled:
+            self._render()
+            return
+        if outcome.error:
+            self.sweep_status_var.set("Sweep: PLAN INVALID")
+            self._set_error(f"Scalar sweep validation failed: {outcome.error}")
+            self._set_text(self.sweep_progress_text, f"PLAN FAILURE\n\n{outcome.error}")
+            self._render()
+            return
+        validation = outcome.value
+        binding = self._current_sweep_binding()
+        self._sweep_validation_binding = binding
+        values = list(validation.plan.values)
+        self.sweep_status_var.set(
+            f"Sweep: VALIDATED · {validation.plan.axis_path} · {len(values)} members"
+        )
+        self.sweep_binding_var.set(
+            f"Packet {validation.binding.packet_id} · manifest "
+            f"{validation.binding.manifest_sha256} · values {values}"
+        )
+        self._set_text(
+            self.sweep_progress_text,
+            "PLAN VALIDATED\nNo engine member has rendered. Run Local Sweep to begin.",
+        )
+        self._render()
+
+    def run_scalar_sweep(self) -> None:
+        bundle = self.session.bundle
+        identity = self._sweep_identity()
+        if (
+            bundle is None
+            or identity is None
+            or self._sweep_validation_binding != self._current_sweep_binding()
+        ):
+            self._set_error("Validate the exact current sweep plan and fixed override before running.")
+            self._render()
+            return
+        fixed_text = self.session.override_text
+        plan_text = self.sweep_plan_text.get("1.0", "end-1c")
+        self._sweep_result_dir = None
+        self._sweep_contact_photo = None
+        self.sweep_contact_label.configure(image="", text="Sweep running…")
+        self.sweep_status_var.set("Sweep: starting local proofs")
+        self._set_text(self.sweep_progress_text, "Starting independently bound members…")
+
+        def progress(event: dict) -> None:
+            self._completion_queue.put(
+                lambda captured=dict(event), expected=identity: self._handle_scalar_sweep_progress(
+                    captured, expected
+                )
+            )
+
+        def operation(context):
+            return ScalarBracketSweepService().execute(
+                packet_dir=bundle.packet_dir,
+                fixed_override_text=fixed_text,
+                plan_text=plan_text,
+                runtime_cmd_path=self.runtime_cmd_path,
+                job=context,
+                runtime_compatibility_mode=self.runtime_compatibility_mode,
+                on_progress=progress,
+            )
+
+        self._sweep_job_id = self._submit(
+            "scalar_sweep", identity, operation, self._scalar_sweep_completed
+        )
+        self._render()
+
+    def _handle_scalar_sweep_progress(
+        self, event: dict, expected_identity: JobRequestIdentity
+    ) -> None:
+        if self._closed or self._sweep_identity() != expected_identity:
+            return
+        line = _format_scalar_sweep_progress(event)
+        current = self.sweep_progress_text.get("1.0", "end-1c")
+        if current in {"Starting independently bound members…", "No local sweep has run."}:
+            current = ""
+        self._set_text(
+            self.sweep_progress_text,
+            (current + "\n" + line).strip(),
+        )
+        self.sweep_progress_text.see("end")
+        if event.get("event") == "MEMBER_STARTED":
+            self.sweep_status_var.set(
+                f"Sweep: member {event.get('index')} · value {event.get('value')} · RUNNING"
+            )
+        elif event.get("event") == "SWEEP_COMPLETED":
+            self.sweep_status_var.set(f"Sweep: {event.get('disposition')}")
+
+    def _scalar_sweep_completed(self, outcome: JobOutcome) -> None:
+        self._busy_kinds.discard(outcome.kind)
+        self._sweep_job_id = None
+        if not self._sweep_outcome_is_current(outcome) or outcome.cancelled:
+            if outcome.cancelled:
+                self.sweep_status_var.set("Sweep: CANCELLED")
+            self._render()
+            return
+        if outcome.error:
+            self.sweep_status_var.set("Sweep: FAILED")
+            self._set_error(f"Scalar sweep failed: {outcome.error}")
+            self._render()
+            return
+        result = outcome.value
+        if not isinstance(result, ScalarSweepResult):
+            self._set_error("Scalar sweep returned an invalid result.")
+            self._render()
+            return
+        self._sweep_result_dir = result.sweep_dir
+        self.sweep_status_var.set(
+            f"Sweep: {result.disposition} · {len(result.members)} members · human acceptance: false"
+        )
+        receipt = self._read_json(result.receipt_path)
+        contact_relative = receipt.get("presentation", {}).get("contact_sheet_path")
+        if isinstance(contact_relative, str):
+            contact_path = result.sweep_dir / contact_relative
+            try:
+                with Image.open(contact_path) as opened:
+                    opened.load()
+                    preview = opened.convert("RGB")
+                preview.thumbnail((440, 330), Image.Resampling.LANCZOS)
+                self._sweep_contact_photo = ImageTk.PhotoImage(preview)
+                self.sweep_contact_label.configure(
+                    image=self._sweep_contact_photo,
+                    text="",
+                )
+            except Exception as exc:
+                self.sweep_contact_label.configure(image="", text="Contact sheet unavailable")
+                self._set_error(f"Could not preview the receipted contact sheet: {exc}")
+        self.session.status_text = (
+            f"Local scalar sweep {result.disposition}. Open the contact sheet and member proofs; "
+            "no human acceptance was recorded."
+        )
+        self._render()
+
+    def cancel_scalar_sweep(self) -> None:
+        if self._sweep_job_id is None or not self.runner.cancel(self._sweep_job_id):
+            self.session.status_text = "No active scalar sweep owns cancellable work."
+        else:
+            self.session.status_text = (
+                "Cancellation requested for the local sweep; completed member proofs remain durable."
+            )
+        self._render()
+
+    def open_sweep_folder(self) -> None:
+        if self._sweep_result_dir is None:
+            self._set_error("No completed or partial scalar sweep folder is available.")
+            self._render()
+            return
+        try:
+            os.startfile(str(self._sweep_result_dir))
+            self.session.status_text = f"Opened scalar sweep evidence: {self._sweep_result_dir}"
+        except Exception as exc:
+            self._set_error(f"Could not open scalar sweep folder: {exc}")
+        self._render()
+
+    def open_sweep_contact_sheet(self) -> None:
+        if self._sweep_result_dir is None:
+            self._set_error("No scalar sweep contact sheet is available.")
+            self._render()
+            return
+        path = self._sweep_result_dir / "presentation" / "contact-sheet.png"
+        try:
+            if not path.is_file():
+                raise FileNotFoundError(path)
+            os.startfile(str(path))
+            self.session.status_text = f"Opened derived scalar sweep contact sheet: {path}"
+        except Exception as exc:
+            self._set_error(f"Could not open scalar sweep contact sheet: {exc}")
         self._render()
 
     def prove_override(self) -> None:
@@ -1476,12 +1867,28 @@ class UserWorkflowApp:
     def reset_session(self) -> None:
         self.runner.cancel_all()
         self._busy_kinds.clear()
+        self._sweep_job_id = None
+        self._sweep_validation_binding = None
+        self._sweep_result_dir = None
+        self._sweep_contact_photo = None
+        self.sweep_status_var.set("Sweep: not validated")
+        self.sweep_binding_var.set("No validated scalar sweep binding.")
+        self._set_text(self.sweep_progress_text, "No local sweep has run.")
+        self.sweep_contact_label.configure(image="", text="No contact sheet")
         self.session.reset()
         self.source_path_var.set("")
         self._clear_finding_views(retain_override=False)
         self._render()
 
     def _clear_finding_views(self, retain_override: bool) -> None:
+        self._sweep_job_id = None
+        self._sweep_validation_binding = None
+        self._sweep_result_dir = None
+        self._sweep_contact_photo = None
+        self.sweep_status_var.set("Sweep: not validated")
+        self.sweep_binding_var.set("No validated scalar sweep binding.")
+        self._set_text(self.sweep_progress_text, "No local sweep has run.")
+        self.sweep_contact_label.configure(image="", text="No contact sheet")
         self._set_text(self.summary_text, "")
         self._set_text(self.packet_text, "")
         self._set_text(self.proof_text, "No proof has run. Paste a sparse state override to begin.")
@@ -1553,18 +1960,20 @@ class UserWorkflowApp:
         bundle_ready = self.session.bundle is not None
         proof_busy = "proof" in self._busy_kinds
         automated_busy = "automated_session" in self._busy_kinds
+        sweep_busy = bool({"sweep_validation", "scalar_sweep"} & self._busy_kinds)
+        workflow_busy = automated_busy or sweep_busy
         result = self.session.proof_result
         replay_proven = isinstance(result, StateOverrideProofResult) and result.status == "replay_proven"
         review_surface_seen = self.session.candidate_preview is not None or self._candidate_full_frame_opened
         undecided = replay_proven and self.session.review_decision is None and review_surface_seen
         self.open_finding_button.configure(
             state="disabled"
-            if "finding_import" in self._busy_kinds or automated_busy
+            if "finding_import" in self._busy_kinds or workflow_busy
             else "normal"
         )
         self.build_packet_button.configure(
             state="normal"
-            if finding_ready and "bundle" not in self._busy_kinds and not automated_busy
+            if finding_ready and "bundle" not in self._busy_kinds and not workflow_busy
             else "disabled"
         )
         self.copy_packet_button.configure(state="normal" if bundle_ready else "disabled")
@@ -1575,22 +1984,49 @@ class UserWorkflowApp:
             else "disabled"
         )
         override_ready = bundle_ready and bool(self.session.override_text.strip())
-        self.override_text.configure(state="disabled" if automated_busy else "normal")
+        self.override_text.configure(state="disabled" if workflow_busy else "normal")
         self.prove_button.configure(
-            state="normal" if override_ready and not proof_busy and not automated_busy else "disabled"
+            state="normal" if override_ready and not proof_busy and not workflow_busy else "disabled"
         )
         self.open_candidate_frame_button.configure(state="normal" if replay_proven else "disabled")
         self.accept_button.configure(text=_candidate_accept_action_label(result))
         self.accept_button.configure(
-            state="normal" if undecided and not proof_busy and not automated_busy else "disabled"
+            state="normal" if undecided and not proof_busy and not workflow_busy else "disabled"
         )
         self.revision_button.configure(
-            state="normal" if undecided and not proof_busy and not automated_busy else "disabled"
+            state="normal" if undecided and not proof_busy and not workflow_busy else "disabled"
         )
         self.launch_button.configure(
             state="normal"
-            if self.session.state == SessionState.LAUNCH_READY and not proof_busy and not automated_busy
+            if self.session.state == SessionState.LAUNCH_READY and not proof_busy and not workflow_busy
             else "disabled"
+        )
+        self.open_sweep_panel_button.configure(
+            state="normal" if bundle_ready and not automated_busy else "disabled"
+        )
+        current_sweep_binding = self._current_sweep_binding()
+        sweep_valid = (
+            current_sweep_binding is not None
+            and current_sweep_binding == self._sweep_validation_binding
+        )
+        self.sweep_plan_text.configure(state="disabled" if sweep_busy else "normal")
+        self.validate_sweep_button.configure(
+            state="normal" if bundle_ready and not self._busy_kinds else "disabled"
+        )
+        self.run_sweep_button.configure(
+            state="normal" if sweep_valid and not self._busy_kinds else "disabled"
+        )
+        self.cancel_sweep_button.configure(state="normal" if sweep_busy else "disabled")
+        self.open_sweep_folder_button.configure(
+            state="normal" if self._sweep_result_dir is not None else "disabled"
+        )
+        contact_sheet = (
+            self._sweep_result_dir / "presentation" / "contact-sheet.png"
+            if self._sweep_result_dir is not None
+            else None
+        )
+        self.open_contact_sheet_button.configure(
+            state="normal" if contact_sheet is not None and contact_sheet.is_file() else "disabled"
         )
         self.run_automated_button.configure(
             state="normal"
@@ -1622,6 +2058,8 @@ class UserWorkflowApp:
         self._closed = True
         if self._automated_job_id is not None:
             self.runner.cancel(self._automated_job_id)
+        if self._sweep_job_id is not None:
+            self.runner.cancel(self._sweep_job_id)
         if self._owns_runner:
             self.runner.shutdown(wait=False)
         self.root.destroy()

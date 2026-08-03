@@ -215,6 +215,14 @@ and either continue independently or stop according to the explicit policy.
 The aggregate receipt never records human acceptance. See
 [`docs/finding_enrichment_slice5_scalar_sweep_evidence.md`](docs/finding_enrichment_slice5_scalar_sweep_evidence.md).
 
+The same bounded service is available from **Local Scalar Sweep...** beside the
+State Override editor. The sweep window validates the exact current Packet V8,
+fixed override, and plan before enabling execution; streams compact per-member
+progress through the shared async owner; and renders a derived contact sheet
+from hash-verified proof-owned PNGs. The contact sheet and aggregate receipt are
+comparison evidence only and never record human acceptance. See the
+[Slice 6 manual gate](docs/finding_enrichment_slice6_manual_gate.md).
+
 ## Packet V8 and override authority
 
 Packet V8 is the seven-file authority handoff when a frame exists:

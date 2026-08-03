@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from PIL import Image
+
 import tests.test_state_override as state_override_fixture
 
 from cuda_fractal_state_tool.async_jobs import JobCancelledError
@@ -57,7 +59,7 @@ class ScalarSweepTests(unittest.TestCase):
             receipt = proof_dir / "receipt.json"
             receipt.write_text("{}\n", encoding="utf-8")
             display = proof_dir / "candidate-display.png"
-            display.write_bytes(b"png")
+            Image.new("RGB", (16, 10), (index * 30, 0, 0)).save(display)
             if after_proof is not None:
                 after_proof(index, job)
             return SimpleNamespace(
@@ -69,7 +71,11 @@ class ScalarSweepTests(unittest.TestCase):
                 engine_candidate_sha256="b" * 64,
                 candidate_frame_sha256="c" * 64,
                 candidate_display_path=display if status == "replay_proven" else None,
-                candidate_display_sha256="d" * 64 if status == "replay_proven" else None,
+                candidate_display_sha256=(
+                    hashlib.sha256(display.read_bytes()).hexdigest()
+                    if status == "replay_proven"
+                    else None
+                ),
             )
 
         def snapshot(_runtime):
@@ -166,6 +172,27 @@ class ScalarSweepTests(unittest.TestCase):
             self.assertTrue(result.receipt_path.is_file())
             self.assertEqual((result.sweep_dir / "fixed-override.json").read_bytes(), b"{}")
             self.assertTrue((result.sweep_dir / "presentation" / "index.md").is_file())
+
+    def test_progress_reports_validation_members_and_terminal_disposition(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            packet = self._packet(root)
+            events = []
+            self._service(["replay_proven"] * 3).execute(
+                packet_dir=packet,
+                fixed_override_text="{}",
+                plan_text=_plan(),
+                runtime_cmd_path=root / "runtime.cmd",
+                job=FakeJob(),
+                sweeps_root=root / "sweeps",
+                on_progress=events.append,
+            )
+            self.assertEqual(events[0]["event"], "PLAN_VALIDATED")
+            self.assertEqual(
+                [event["event"] for event in events].count("MEMBER_STARTED"), 3
+            )
+            self.assertEqual(events[-1]["event"], "SWEEP_COMPLETED")
+            self.assertEqual(events[-1]["disposition"], "COMPLETE")
 
     def test_strict_failure_stops_before_later_members(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

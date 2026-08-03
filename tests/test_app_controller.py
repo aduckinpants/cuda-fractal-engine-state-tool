@@ -47,6 +47,10 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("Cancel Automation", source)
         self.assertIn("Open Run Folder", source)
         self.assertIn("Sanitized live event stream", source)
+        self.assertIn("Local Scalar Sweep…", source)
+        self.assertIn("Run Local Sweep", source)
+        self.assertIn("Derived contact sheet (not acceptance)", source)
+        self.assertIn("human acceptance: false", source)
         self.assertNotIn("--packet-dir", source)
         self.assertNotIn("proposal_v1", source)
         self.assertNotIn("Repair Packet", source)
@@ -134,6 +138,27 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("MODEL_RESPONSE", line)
         self.assertIn("1,000/800/200/50", line)
         self.assertNotIn("must-not-render", line)
+
+    def test_scalar_sweep_progress_is_compact_and_non_accepting(self) -> None:
+        from cuda_fractal_state_tool.user_workflow_app import _format_scalar_sweep_progress
+
+        self.assertEqual(
+            _format_scalar_sweep_progress(
+                {"event": "MEMBER_STARTED", "index": 2, "value": 0.5}
+            ),
+            "MEMBER 2  value=0.5  RUNNING",
+        )
+        completed = _format_scalar_sweep_progress(
+            {
+                "event": "MEMBER_COMPLETED",
+                "index": 2,
+                "value": 0.5,
+                "status": "REPLAY_PROVEN",
+                "proof_id": "proof-2",
+            }
+        )
+        self.assertIn("REPLAY_PROVEN", completed)
+        self.assertNotIn("ACCEPTED", completed)
 
     def test_proposal_era_modules_are_absent_from_active_package(self) -> None:
         package_dir = Path(inspect.getfile(app_entry)).parent

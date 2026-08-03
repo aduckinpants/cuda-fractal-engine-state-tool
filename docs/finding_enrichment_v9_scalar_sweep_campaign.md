@@ -360,13 +360,13 @@ Exit: deterministic local sweep artifacts and contact-sheet inputs exist.
 
 ### Slice 6 - Thin sweep UI and grouped presentation
 
-- Add optional sweep controls adjacent to the existing override editor without
+- [x] Add optional sweep controls adjacent to the existing override editor without
   rearranging the accepted two-column hierarchy.
-- Stream member state through the existing async owner.
-- Reuse proof-owned PNGs and one shared image-materialization owner for the
+- [x] Stream member state through the existing async owner.
+- [x] Reuse proof-owned PNGs and one shared image-materialization owner for the
   bounded contact sheet and optional adjacent differences.
-- Keep human acceptance distinct from local automation disposition.
-- Run screenshots, focused/full/real workflow, hostile review, commit, push,
+- [x] Keep human acceptance distinct from local automation disposition.
+- [x] Run screenshots, focused/full/real workflow, hostile review, commit, push,
   and clean tree.
 
 Exit: stop for user manual review. No paid battery or merge is authorized.
@@ -408,8 +408,8 @@ one image-materialization owner, regardless of CLI, automation, or UI route.
 
 ## Current phase
 
-Slices 0-5 are complete. The headless five-member vortex bracket is replay
-proven and preserves ordinary proof receipts plus an aggregate non-acceptance
-receipt. Slice 6, thin sweep UI and grouped presentation, is the next approved
-product boundary. It is the final preplanned implementation slice before the
-user manual-review gate.
+Slices 0-6 are complete. The headless and UI-driven five-member vortex brackets
+are replay proven and preserve ordinary proof receipts, a separately receipted
+contact sheet, and an aggregate non-acceptance receipt. All preplanned product
+implementation is exhausted. The next and only approved boundary is the user
+manual-review gate in `docs/finding_enrichment_slice6_manual_gate.md`.

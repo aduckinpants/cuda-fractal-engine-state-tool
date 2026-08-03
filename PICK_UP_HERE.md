@@ -116,10 +116,14 @@ Then verify:
 ## Exact continuation
 
 Slice 0 is committed at `625f950`; Slice 1 at `18f3761`; Slice 2 at `a27ae92`;
-Slice 3 at `1f6999a`; Slice 4 at `ab2529a`. Slice 5 headless Scalar Bracket
-Sweep V1 is the current branch-tip checkpoint. Resume at **Slice 6 — thin sweep
-UI and grouped presentation**. This is the final preplanned implementation
-slice before the user manual-review gate and requires no provider credential.
+Slice 3 at `1f6999a`; Slice 4 at `ab2529a`; and Slice 5 at `6ab4e97`. Slice 6,
+the thin sweep UI and grouped presentation, is implemented at the branch-tip
+checkpoint. All preplanned implementation slices are exhausted.
+
+Resume only at the user manual-review gate documented in
+`docs/finding_enrichment_slice6_manual_gate.md`. That review requires no
+provider credential. Record the user disposition before authorizing any new
+product mutation or merge.
 
 No paid provider call, model ablation, diagnostic-mosaic work, additional
 production provider, or engine mutation is authorized by the current state-tool
