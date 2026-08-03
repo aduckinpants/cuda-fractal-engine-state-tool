@@ -17,10 +17,12 @@ from cuda_fractal_state_tool.model_qualification import (
     RecordedResponsesTransport,
     RecordedTurn,
     create_qualification_run_store,
+    count_qualification_author_input,
     load_qualification_case,
     run_qualification_case,
 )
 from cuda_fractal_state_tool.pricing_policy import load_pricing_policy
+from cuda_fractal_state_tool.openai_transport import TransportInputCountResult
 
 from tests.test_automated_session import (
     VALID_OVERRIDE_RESPONSE,
@@ -153,6 +155,75 @@ class QualificationHarnessTests(unittest.TestCase):
                     == case.model_profile.sha256
                     for event in responses
                 )
+            )
+
+    def test_count_only_route_uses_controller_context_and_never_sends_a_turn(self) -> None:
+        class CountOnlyTransport:
+            def __init__(self) -> None:
+                self.count_calls = []
+                self.send_calls = 0
+
+            def count_turn_input(self, **kwargs):
+                self.count_calls.append(kwargs)
+                store = kwargs["run_store"]
+                request = store.write_evidence_json(
+                    "transport/count-author-0001/request.json",
+                    {"count_only": True},
+                )
+                count = store.write_evidence_json(
+                    "transport/count-author-0001/input-token-count.json",
+                    {"input_tokens": 200},
+                )
+                return TransportInputCountResult(
+                    input_tokens=200,
+                    requested_model=kwargs["model"],
+                    reasoning_effort=kwargs["reasoning_effort"],
+                    model_profile_sha256=kwargs["model_profile_sha256"],
+                    maximum_output_tokens=kwargs["max_output_tokens"],
+                    prompt_cache_policy=kwargs["prompt_cache_policy"].value,
+                    request_evidence_path=request,
+                    count_evidence_path=count,
+                )
+
+            def send_turn(self, **kwargs):
+                self.send_calls += 1
+                raise AssertionError("Count-only qualification must not generate a response")
+
+            def close_owned_files(self, **kwargs):
+                kwargs["run_store"].write_evidence_json(
+                    "transport/provider-file-cleanup.json",
+                    {"cleanup_complete": True, "remaining_provider_file_ids": []},
+                )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            initial = _bundle(root, "packet-base", "finding-base", "base")
+            services = ServiceHarness(root, initial, [])
+            case = self._case(root, initial)
+            store = create_qualification_run_store(
+                workspace_root=root / "workspace",
+                run_id="qualification-count-only",
+                case=case,
+            )
+            transport = CountOnlyTransport()
+            count, receipt = count_qualification_author_input(
+                case=case,
+                bundle=initial,
+                transport=transport,
+                run_store=store,
+                services=services.services(),
+                pricing_policy=load_pricing_policy(),
+            )
+            self.assertEqual(count.transport_count.input_tokens, 200)
+            self.assertTrue(receipt.within_case_budget)
+            self.assertEqual(transport.send_calls, 0)
+            self.assertEqual(len(transport.count_calls), 1)
+            self.assertEqual(
+                transport.count_calls[0]["model_profile_sha256"],
+                case.model_profile.sha256,
+            )
+            self.assertFalse(
+                any(event["event_type"] == "model_response" for event in store.read_events())
             )
 
     def test_case_rejects_stale_packet_binding_and_campaign_overrun(self) -> None:

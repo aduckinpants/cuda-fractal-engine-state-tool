@@ -40,6 +40,7 @@ from .openai_transport import (
     PromptCachePolicy,
     ProviderTransportError,
     TransportCancelled,
+    TransportInputCountResult,
     TransportTurnResult,
     TransportResource,
 )
@@ -150,6 +151,13 @@ class AutomatedSessionResult:
     model_gate_proposal: ModelGateProposal | None
     last_proof: StateOverrideProofResult | None
     last_derived_bundle: AgentBundle | None
+
+
+@dataclass(frozen=True)
+class InitialAuthorCountResult:
+    transport_count: TransportInputCountResult
+    estimated_maximum_cost_usd: Decimal
+    budget_exhaustion_reason: str | None
 
 
 def extract_sparse_override(response_text: str) -> str:
@@ -683,6 +691,73 @@ class AutomatedSessionController:
                 "Author only against its attached state and schemas."
             )
         return f"{handoff}\n\n{AUTHOR_ROUND_PROMPT}"
+
+    def count_initial_author_input(self) -> InitialAuthorCountResult:
+        """Count the exact first author request and stop before response generation."""
+        if (
+            self.state is not ProtocolState.OBSERVE
+            or self.usage != BudgetUsage()
+            or self.previous_response_id is not None
+        ):
+            raise RuntimeError("Initial author count requires a pristine controller session")
+        self._record(
+            "qualification_count_started",
+            {
+                "initial_packet": self.current_packet.to_dict(),
+                "model_profile": self.model_profile.identity_dict(),
+                "generation_authorized": False,
+            },
+        )
+        try:
+            resources = self._disclosure_resources(round_number=1, phase="author")
+            count = self.transport.count_turn_input(
+                instructions=AUTOMATED_SESSION_INSTRUCTIONS,
+                prompt=self._author_round_prompt(1),
+                packet_dir=self.current_bundle.packet_dir,
+                run_store=self.run_store,
+                turn_id="count-author-0001",
+                cancelled=self.cancelled,
+                model=self.requested_model,
+                reasoning_effort=self.reasoning_effort,
+                model_profile_sha256=self.model_profile.sha256,
+                max_output_tokens=self.budgets.maximum_output_tokens_per_response,
+                prompt_cache_policy=self.prompt_cache_policy,
+                additional_resources=resources,
+            )
+            estimate = estimate_maximum_call_cost(
+                self.pricing_policy,
+                model_name=self.requested_model,
+                maximum_input_tokens=count.input_tokens,
+                maximum_output_tokens=count.maximum_output_tokens,
+                prompt_cache_policy=count.prompt_cache_policy,
+            )
+            reason = budget_exhaustion_reason(
+                self.budgets,
+                BudgetUsage(),
+                next_input_tokens=count.input_tokens,
+                next_output_tokens=count.maximum_output_tokens,
+                next_calculated_cost_usd=estimate.cost_usd,
+            )
+            self._record(
+                "qualification_count_completed",
+                {
+                    "input_tokens": count.input_tokens,
+                    "maximum_output_tokens": count.maximum_output_tokens,
+                    "estimated_maximum_cost": estimate.to_dict(),
+                    "budget_exhaustion_reason": reason,
+                    "generation_dispatched": False,
+                },
+            )
+            return InitialAuthorCountResult(
+                transport_count=count,
+                estimated_maximum_cost_usd=estimate.cost_usd,
+                budget_exhaustion_reason=reason,
+            )
+        finally:
+            self.transport.close_owned_files(
+                run_store=self.run_store,
+                reason="QUALIFICATION_COUNT_ONLY_COMPLETE",
+            )
 
     def _request_valid_override(
         self,
