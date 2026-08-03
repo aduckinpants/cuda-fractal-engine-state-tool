@@ -8,7 +8,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cuda_fractal_state_tool.automated_protocol import ControllerDisposition, SessionBudgets
-from cuda_fractal_state_tool.enrichment_disclosure import DisclosureProfile
+from cuda_fractal_state_tool.automated_session import AutomatedRouteServices
+from cuda_fractal_state_tool.enrichment_disclosure import (
+    DisclosureProfile,
+    EnrichmentDisclosure,
+)
 from cuda_fractal_state_tool.model_profile import ModelProfileV1
 from cuda_fractal_state_tool.model_qualification import (
     AUTOMATIC_GATE_IDS,
@@ -18,6 +22,7 @@ from cuda_fractal_state_tool.model_qualification import (
     RecordedTurn,
     create_qualification_run_store,
     count_qualification_author_input,
+    evaluate_automatic_gates,
     load_qualification_case,
     run_qualification_case,
 )
@@ -110,6 +115,7 @@ class QualificationHarnessTests(unittest.TestCase):
                 run_id="qualification-offline",
                 case=case,
             )
+            policy = load_pricing_policy()
             transport = RecordedResponsesTransport(
                 (
                     RecordedTurn(
@@ -134,7 +140,7 @@ class QualificationHarnessTests(unittest.TestCase):
                 transport=transport,
                 run_store=store,
                 services=services.services(),
-                pricing_policy=load_pricing_policy(),
+                pricing_policy=policy,
             )
 
             self.assertEqual(result.disposition, ControllerDisposition.SESSION_PASSED)
@@ -156,6 +162,144 @@ class QualificationHarnessTests(unittest.TestCase):
                     for event in responses
                 )
             )
+            comparison_path = (
+                store.run_dir
+                / "rounds"
+                / "round-01"
+                / "context"
+                / "round-review-comparison.json"
+            )
+            comparison_path.write_bytes(comparison_path.read_bytes() + b" ")
+            tampered_receipt = evaluate_automatic_gates(
+                case=case,
+                result=result,
+                run_store=store,
+                pricing_policy=policy,
+            )
+            immutable_gate = next(
+                gate for gate in tampered_receipt.gates if gate.gate_id == "immutable_evidence"
+            )
+            self.assertFalse(immutable_gate.passed)
+
+    def test_assisted_disclosure_gate_binds_review_to_derived_packet_analysis(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            initial = _bundle(root, "packet-base", "finding-base", "base")
+            derived = _bundle(root, "packet-derived", "finding-derived", "derived")
+            harness = ServiceHarness(root, initial, [derived])
+            base_services = harness.services()
+            analysis_by_packet = {
+                initial.packet_id: "analysis-initial",
+                derived.packet_id: "analysis-derived",
+            }
+
+            def disclosure(packet_dir, profile):
+                bundle = initial if packet_dir == initial.packet_dir else derived
+                analysis_id = analysis_by_packet[bundle.packet_id]
+                manifest = {
+                    "disclosure_manifest_version": 1,
+                    "profile": profile.value,
+                    "packet_id": bundle.packet_id,
+                    "packet_manifest_sha256": bundle.manifest_sha256,
+                    "finding_id": bundle.finding_id,
+                    "analysis_id": analysis_id,
+                    "resources": [],
+                    "disclosure_id": f"disclosure-{bundle.packet_id}",
+                }
+                payload = (json.dumps(manifest, sort_keys=True) + "\n").encode("utf-8")
+                return EnrichmentDisclosure(
+                    disclosure_id=manifest["disclosure_id"],
+                    profile=profile,
+                    packet_id=bundle.packet_id,
+                    packet_manifest_sha256=bundle.manifest_sha256,
+                    finding_id=bundle.finding_id,
+                    analysis_id=analysis_id,
+                    manifest=manifest,
+                    manifest_bytes=payload,
+                    resources=(),
+                )
+
+            services = AutomatedRouteServices(
+                proof=base_services.proof,
+                promote=base_services.promote,
+                build_bundle=base_services.build_bundle,
+                validate=base_services.validate,
+                disclosure=disclosure,
+            )
+            blind_case = self._case(root, initial)
+            case = QualificationCaseV1(
+                **{
+                    **blind_case.__dict__,
+                    "disclosure_profile": DisclosureProfile.ASSISTED,
+                    "expected_analysis_id": "analysis-initial",
+                }
+            )
+            store = create_qualification_run_store(
+                workspace_root=root / "workspace",
+                run_id="qualification-assisted",
+                case=case,
+            )
+            transport = RecordedResponsesTransport(
+                (
+                    RecordedTurn(
+                        output_text=VALID_OVERRIDE_RESPONSE,
+                        input_tokens=100,
+                        output_tokens=20,
+                        resolved_model="gpt-5.6-luna",
+                        response_id="recorded-author",
+                    ),
+                    RecordedTurn(
+                        output_text="Result matched.\nGATE_DECISION: SESSION_PASS\n",
+                        input_tokens=120,
+                        output_tokens=15,
+                        resolved_model="gpt-5.6-luna",
+                        response_id="recorded-review",
+                    ),
+                )
+            )
+            policy = load_pricing_policy()
+            result, receipt = run_qualification_case(
+                case=case,
+                bundle=initial,
+                transport=transport,
+                run_store=store,
+                services=services,
+                pricing_policy=policy,
+            )
+            self.assertTrue(receipt.passed)
+            disclosures = [
+                event["payload"]
+                for event in store.read_events()
+                if event["event_type"] == "enrichment_disclosure_prepared"
+            ]
+            self.assertEqual(
+                [(item["phase"], item["packet_id"], item["analysis_id"]) for item in disclosures],
+                [
+                    ("author", initial.packet_id, "analysis-initial"),
+                    ("review", derived.packet_id, "analysis-derived"),
+                ],
+            )
+
+            review_manifest = (
+                store.run_dir
+                / "rounds"
+                / "round-01"
+                / "context"
+                / "review-enrichment-disclosure.json"
+            )
+            tampered = json.loads(review_manifest.read_text(encoding="utf-8"))
+            tampered["packet_id"] = initial.packet_id
+            review_manifest.write_text(json.dumps(tampered) + "\n", encoding="utf-8")
+            tampered_receipt = evaluate_automatic_gates(
+                case=case,
+                result=result,
+                run_store=store,
+                pricing_policy=policy,
+            )
+            disclosure_gate = next(
+                gate for gate in tampered_receipt.gates if gate.gate_id == "disclosure_binding"
+            )
+            self.assertFalse(disclosure_gate.passed)
 
     def test_count_only_route_uses_controller_context_and_never_sends_a_turn(self) -> None:
         class CountOnlyTransport:

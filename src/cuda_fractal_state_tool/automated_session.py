@@ -9,7 +9,14 @@ from typing import Callable, Protocol
 
 from .agent_bundle import AgentBundle, build_agent_bundle
 from .async_jobs import JobCancelledError, JobContext
-from .automated_context import build_round_review_ledger, ledger_transport_resource
+from .automated_context import (
+    base_frame_transport_resource,
+    build_round_review_comparison,
+    build_round_review_ledger,
+    comparison_transport_resource,
+    ledger_transport_resource,
+    load_packet_web_frame,
+)
 from .automated_protocol import (
     BudgetUsage,
     ControllerDisposition,
@@ -77,7 +84,8 @@ Do not propose a controller gate in this response.
 """
 
 REVIEW_AND_GATE_PROMPT = """The attached Packet V8 is the replay-proven derived finding. This is a fresh provider context.
-The attached controller round-review ledger carries the exact prior author decision, locked prediction, sparse override, and proof identities needed for comparison. It is not state authority.
+Its `web-agent-frame.png` is the result image. The separately attached `review-base-web-agent-frame.png` is the exact preceding Packet V8 image.
+The attached controller round-review comparison records decoded-pixel statistics for that exact transported base/result pair. The controller round-review ledger carries the exact prior author decision, locked prediction, sparse override, and proof identities. These controller records are comparison evidence, not state authority.
 In one concise response:
 
 1. Compare the result with the locked prediction and identify what changed, what did not, and whether the experiment was informative.
@@ -634,6 +642,9 @@ class AutomatedSessionController:
                 "effective_profile": profile.value,
                 "disclosure_id": disclosure.disclosure_id,
                 "analysis_id": disclosure.analysis_id,
+                "packet_id": disclosure.packet_id,
+                "packet_manifest_sha256": disclosure.packet_manifest_sha256,
+                "finding_id": disclosure.finding_id,
                 "resource_count": len(resources),
             },
         )
@@ -925,6 +936,31 @@ class AutomatedSessionController:
                     f"rounds/round-{round_number:02d}/context/round-review-ledger.json",
                     ledger.payload,
                 )
+                base_frame = load_packet_web_frame(preceding_bundle)
+                result_frame = load_packet_web_frame(derived_bundle)
+                base_frame_path = self.run_store.write_evidence_bytes(
+                    f"rounds/round-{round_number:02d}/context/review-base-web-agent-frame.png",
+                    base_frame.payload,
+                )
+                result_frame_path = self.run_store.write_evidence_bytes(
+                    f"rounds/round-{round_number:02d}/context/review-result-web-agent-frame.png",
+                    result_frame.payload,
+                )
+                comparison = build_round_review_comparison(
+                    round_number=round_number,
+                    author_packet=preceding_binding,
+                    derived_packet=derived_binding,
+                    base_frame=base_frame,
+                    result_frame=result_frame,
+                    base_frame_path=base_frame_path,
+                    result_frame_path=result_frame_path,
+                    materialization=materialization,
+                    proof=proof,
+                )
+                comparison_path = self.run_store.write_evidence_bytes(
+                    f"rounds/round-{round_number:02d}/context/round-review-comparison.json",
+                    comparison.payload,
+                )
                 self.previous_response_id = None
                 self._record(
                     "review_conversation_started",
@@ -932,11 +968,16 @@ class AutomatedSessionController:
                         "round_number": round_number,
                         "provider_chain_reset": True,
                         "review_ledger_sha256": ledger.sha256,
+                        "review_comparison_sha256": comparison.sha256,
+                        "base_web_frame_sha256": base_frame.sha256,
+                        "result_web_frame_sha256": result_frame.sha256,
                     },
                 )
                 self._raise_if_no_dollar_budget()
                 review_resources = (
                     ledger_transport_resource(ledger_path, ledger),
+                    comparison_transport_resource(comparison_path, comparison),
+                    base_frame_transport_resource(base_frame_path, base_frame),
                     *self._disclosure_resources(round_number=round_number, phase="review"),
                 )
                 gate_response = self._ask_with_resources(
