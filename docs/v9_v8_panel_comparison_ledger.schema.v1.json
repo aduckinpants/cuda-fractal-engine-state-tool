@@ -64,7 +64,14 @@
         "properties": {
           "claim_or_decision": { "type": "string", "minLength": 1 },
           "support_class": {
-            "enum": ["packet_v8_only", "enrichment_only", "packet_v8_and_enrichment"]
+            "enum": [
+              "packet_v8_only",
+              "enrichment_only",
+              "controller_comparison_only",
+              "packet_v8_and_enrichment",
+              "packet_v8_and_controller_comparison",
+              "all_three"
+            ]
           },
           "exact_refs": {
             "type": "array",

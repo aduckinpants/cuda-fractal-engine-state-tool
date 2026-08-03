@@ -1,6 +1,6 @@
 {
   "budgets": {
-    "maximum_calculated_cost_usd": "0.10",
+    "maximum_calculated_cost_usd": "0.0886872",
     "maximum_correction_output_tokens_per_response": 4000,
     "maximum_cumulative_input_tokens": 400000,
     "maximum_cumulative_output_tokens": 12000,
@@ -49,5 +49,5 @@
   "qualification_case_version": 1,
   "role": "hard_calibrator",
   "rubric_version": "v9-economic-qualification-rubric.v1",
-  "sha256": "4ecddf7109ecedb23fc5573e7b7aa9f33ac13ebc6222a145f05a19a187f8b2f2"
+  "sha256": "7c83fa206468ec14b44bc02b4775700526219bfd89832063242b7852cdaf7d72"
 }

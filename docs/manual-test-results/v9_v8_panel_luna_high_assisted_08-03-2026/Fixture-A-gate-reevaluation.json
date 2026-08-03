@@ -1,0 +1,64 @@
+{
+  "reevaluation_version": 1,
+  "fixture_id": "A",
+  "run_id": "v9-v8-a-luna-high-live-a4d47dc8-e300-4323-93db-01359e7e84d7",
+  "case_sha256": "7c83fa206468ec14b44bc02b4775700526219bfd89832063242b7852cdaf7d72",
+  "original_automatic_gate_receipt_sha256": "0f96b9a3001aa7ee51bd83ff0b079301ea04b689210dbe20a96ff7bb432d9a0c",
+  "original_receipt_preserved": true,
+  "reason": "The original evaluator required SESSION_PASSED even though Qualification Case V1 permits exactly one proven round. A legal ROUND_ADVANCE or ROUND_REVISE after that proven round necessarily terminates as BUDGET_EXHAUSTED and is a bounded qualification stop, not a controller failure.",
+  "automatic_gates_passed": true,
+  "gates": [
+    {
+      "gate_id": "terminal_controller",
+      "passed": true,
+      "detail": "bounded_round_limit_after_ROUND_ADVANCE"
+    },
+    {
+      "gate_id": "packet_binding",
+      "passed": true,
+      "detail": "ea1f8e62-a8ff-4b3d-ae0c-ee019e4314d5"
+    },
+    {
+      "gate_id": "model_profile",
+      "passed": true,
+      "detail": "dbf174b6e03c074b26588e606e6ddb4a27eb5d36bcbb70184863116e39e268b7"
+    },
+    {
+      "gate_id": "resolved_model_family",
+      "passed": true,
+      "detail": "gpt-5.6-luna,gpt-5.6-luna"
+    },
+    {
+      "gate_id": "explicit_no_cache",
+      "passed": true,
+      "detail": "responses=2"
+    },
+    {
+      "gate_id": "disclosure_binding",
+      "passed": true,
+      "detail": "profile=assisted;analysis=7b0a7eeba2ad7102c9f3b9f82cf57fa31808d5943f28fefb2127f4c446d82fa4"
+    },
+    {
+      "gate_id": "replay_proof",
+      "passed": true,
+      "detail": "proven_rounds=1"
+    },
+    {
+      "gate_id": "cost_ceiling",
+      "passed": true,
+      "detail": "0.0752966"
+    },
+    {
+      "gate_id": "immutable_evidence",
+      "passed": true,
+      "detail": "transport=True;cleanup=True;review_binding=True;ledger=True;comparison=True"
+    },
+    {
+      "gate_id": "no_fabricated_human_acceptance",
+      "passed": true,
+      "detail": "human acceptance remains independently owned"
+    }
+  ],
+  "human_acceptance_recorded": false,
+  "human_rubric": "pending_independent_review"
+}

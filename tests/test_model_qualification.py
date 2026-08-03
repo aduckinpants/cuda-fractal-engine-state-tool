@@ -301,6 +301,50 @@ class QualificationHarnessTests(unittest.TestCase):
             )
             self.assertFalse(disclosure_gate.passed)
 
+    def test_legal_round_gate_at_one_round_limit_is_a_terminal_controller_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            initial = _bundle(root, "packet-base", "finding-base", "base")
+            derived = _bundle(root, "packet-derived", "finding-derived", "derived")
+            services = ServiceHarness(root, initial, [derived])
+            case = self._case(root, initial)
+            store = create_qualification_run_store(
+                workspace_root=root / "workspace",
+                run_id="qualification-round-limit",
+                case=case,
+            )
+            transport = RecordedResponsesTransport(
+                (
+                    RecordedTurn(
+                        output_text=VALID_OVERRIDE_RESPONSE,
+                        input_tokens=100,
+                        output_tokens=20,
+                        resolved_model="gpt-5.6-luna",
+                        response_id="recorded-author",
+                    ),
+                    RecordedTurn(
+                        output_text="Informative result.\nGATE_DECISION: ROUND_ADVANCE\n",
+                        input_tokens=120,
+                        output_tokens=15,
+                        resolved_model="gpt-5.6-luna",
+                        response_id="recorded-review",
+                    ),
+                )
+            )
+            result, receipt = run_qualification_case(
+                case=case,
+                bundle=initial,
+                transport=transport,
+                run_store=store,
+                services=services.services(),
+                pricing_policy=load_pricing_policy(),
+            )
+            self.assertEqual(result.disposition, ControllerDisposition.BUDGET_EXHAUSTED)
+            terminal = next(gate for gate in receipt.gates if gate.gate_id == "terminal_controller")
+            self.assertTrue(terminal.passed)
+            self.assertEqual(terminal.detail, "bounded_round_limit_after_ROUND_ADVANCE")
+            self.assertTrue(receipt.passed)
+
     def test_count_only_route_uses_controller_context_and_never_sends_a_turn(self) -> None:
         class CountOnlyTransport:
             def __init__(self) -> None:

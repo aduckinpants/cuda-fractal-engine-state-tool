@@ -12,6 +12,7 @@ from .agent_bundle import AgentBundle, load_existing_agent_bundle
 from .automated_protocol import (
     AGENT_SESSION_PROTOCOL_SCHEMA,
     ControllerDisposition,
+    ModelGateProposal,
     SessionBudgets,
 )
 from .automated_run_store import AutomatedRunStore
@@ -687,11 +688,25 @@ def evaluate_automatic_gates(
         and review_ledger_matches
         and review_comparison_matches
     )
+    bounded_round_limit = (
+        result.disposition is ControllerDisposition.BUDGET_EXHAUSTED
+        and result.proven_rounds == case.budgets.maximum_proven_rounds
+        and result.model_gate_proposal
+        in {ModelGateProposal.ROUND_ADVANCE, ModelGateProposal.ROUND_REVISE}
+    )
+    terminal_controller_passed = (
+        result.disposition is ControllerDisposition.SESSION_PASSED or bounded_round_limit
+    )
+    terminal_detail = (
+        f"bounded_round_limit_after_{result.model_gate_proposal.value}"
+        if bounded_round_limit and result.model_gate_proposal is not None
+        else result.disposition.value
+    )
     gates = (
         AutomaticGateResult(
             "terminal_controller",
-            result.disposition is ControllerDisposition.SESSION_PASSED,
-            result.disposition.value,
+            terminal_controller_passed,
+            terminal_detail,
         ),
         AutomaticGateResult("packet_binding", initial_matches, case.packet_id),
         AutomaticGateResult("model_profile", request_matches and reasoning_matches, case.model_profile.sha256),
