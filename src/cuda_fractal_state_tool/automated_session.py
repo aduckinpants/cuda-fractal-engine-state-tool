@@ -33,6 +33,7 @@ from .enrichment_disclosure import (
 )
 from .openai_transport import (
     DEFAULT_MODEL,
+    DEFAULT_REASONING_EFFORT,
     AmbiguousRemoteCompletion,
     DispatchAuthorizationRejected,
     PacketV8ResponsesTransport,
@@ -42,6 +43,7 @@ from .openai_transport import (
     TransportTurnResult,
     TransportResource,
 )
+from .model_profile import ModelProfileV1
 from .pricing_policy import (
     PROVIDER_BILLING_DISCLAIMER,
     PricingPolicy,
@@ -250,7 +252,9 @@ class AutomatedSessionController:
         services: AutomatedRouteServices,
         budgets: SessionBudgets = SessionBudgets(),
         pricing_policy: PricingPolicy | None = None,
-        requested_model: str = DEFAULT_MODEL,
+        requested_model: str | None = None,
+        reasoning_effort: str | None = None,
+        model_profile: ModelProfileV1 | None = None,
         disclosure_profile: DisclosureProfile = DisclosureProfile.BLIND,
         prompt_cache_policy: PromptCachePolicy = PromptCachePolicy.EXPLICIT_NO_CACHE,
         cancelled: Callable[[], bool] = lambda: False,
@@ -263,10 +267,28 @@ class AutomatedSessionController:
         self.services = services
         self.budgets = budgets
         self.pricing_policy = pricing_policy or load_pricing_policy()
-        self.requested_model = requested_model
         self.disclosure_profile = DisclosureProfile(disclosure_profile)
-        self.prompt_cache_policy = PromptCachePolicy(prompt_cache_policy)
-        self.pricing_policy.model(requested_model)
+        if model_profile is None:
+            model_profile = ModelProfileV1(
+                model=requested_model or DEFAULT_MODEL,
+                reasoning_effort=reasoning_effort or DEFAULT_REASONING_EFFORT,
+                pricing_tier=self.pricing_policy.service_tier,
+                prompt_cache_policy=prompt_cache_policy,
+            )
+        else:
+            if requested_model is not None and requested_model != model_profile.model:
+                raise ValueError("Requested model disagrees with the supplied model profile")
+            if reasoning_effort is not None and reasoning_effort != model_profile.reasoning_effort:
+                raise ValueError("Reasoning effort disagrees with the supplied model profile")
+            if PromptCachePolicy(prompt_cache_policy) is not PromptCachePolicy(
+                model_profile.prompt_cache_policy
+            ):
+                raise ValueError("Prompt-cache policy disagrees with the supplied model profile")
+        model_profile.validate(self.pricing_policy)
+        self.model_profile = model_profile
+        self.requested_model = model_profile.model
+        self.reasoning_effort = model_profile.reasoning_effort
+        self.prompt_cache_policy = PromptCachePolicy(model_profile.prompt_cache_policy)
         self.cancelled = cancelled
         self.auto_promote = auto_promote
         self.current_bundle = initial_bundle
@@ -321,6 +343,7 @@ class AutomatedSessionController:
             ),
             "last_counted_input_tokens": self._last_counted_input_tokens,
             "pricing_policy": self.pricing_policy.identity_dict(),
+            "model_profile": self.model_profile.identity_dict(),
             "prompt_cache_policy": self.prompt_cache_policy.value,
             "disclosure_profile": self.disclosure_profile.value,
             "cumulative_provider_latency_seconds": self._cumulative_latency_seconds,
@@ -414,6 +437,7 @@ class AutomatedSessionController:
                 "estimate": estimate.to_dict(),
                 "pricing_policy": self.pricing_policy.identity_dict(),
                 "prompt_cache_policy": self.prompt_cache_policy.value,
+                "model_profile": self.model_profile.identity_dict(),
                 "maximum_output_tokens": selected_output_tokens,
                 "remaining_calculated_cost_usd_before_dispatch": decimal_text(
                     self.budgets.maximum_calculated_cost_usd
@@ -441,6 +465,8 @@ class AutomatedSessionController:
             cancelled=self.cancelled,
             max_output_tokens=selected_output_tokens,
             model=self.requested_model,
+            reasoning_effort=self.reasoning_effort,
+            model_profile_sha256=self.model_profile.sha256,
             prompt_cache_policy=self.prompt_cache_policy,
             authorize_dispatch=authorize_dispatch,
             additional_resources=additional_resources,
@@ -453,6 +479,11 @@ class AutomatedSessionController:
             cache_write_tokens=result.cache_write_tokens,
             output_tokens=result.output_tokens,
         )
+        if (
+            result.model_profile_sha256 is not None
+            and result.model_profile_sha256 != self.model_profile.sha256
+        ):
+            raise RuntimeError("Transport response evidence disagrees with the active model profile")
         self.previous_response_id = result.response_id
         self._last_requested_model = result.requested_model
         self._last_resolved_model = result.model
@@ -478,6 +509,8 @@ class AutomatedSessionController:
                 "response_id": result.response_id,
                 "requested_model": result.requested_model,
                 "resolved_model": result.model,
+                "reasoning_effort": result.reasoning_effort,
+                "model_profile": self.model_profile.identity_dict(),
                 "input_tokens": result.input_tokens,
                 "pre_dispatch_counted_input_tokens": self._last_counted_input_tokens,
                 "input_token_count_delta": (

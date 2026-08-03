@@ -139,6 +139,8 @@ class TransportTurnResult:
     resources: tuple[TransportResource, ...]
     unavailable_optional_attachments: tuple[str, ...]
     requested_model: str = ""
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT
+    model_profile_sha256: str | None = None
     cached_input_tokens: int = 0
     cache_write_tokens: int = 0
     prompt_cache_policy: str = PromptCachePolicy.EXPLICIT_NO_CACHE.value
@@ -156,6 +158,7 @@ class TransportInputCountResult:
     input_tokens: int
     requested_model: str
     reasoning_effort: str
+    model_profile_sha256: str | None
     maximum_output_tokens: int
     prompt_cache_policy: str
     request_evidence_path: Path | None
@@ -433,6 +436,7 @@ class PacketV8ResponsesTransport:
         cancelled: Callable[[], bool] = lambda: False,
         model: str = DEFAULT_MODEL,
         reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+        model_profile_sha256: str | None = None,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
         timeout_seconds: float = DEFAULT_RESPONSE_TIMEOUT_SECONDS,
         prompt_cache_policy: PromptCachePolicy = PromptCachePolicy.EXPLICIT_NO_CACHE,
@@ -456,6 +460,7 @@ class PacketV8ResponsesTransport:
                 cancelled=cancelled,
                 model=model,
                 reasoning_effort=reasoning_effort,
+                model_profile_sha256=model_profile_sha256,
                 max_output_tokens=max_output_tokens,
                 timeout_seconds=timeout_seconds,
                 prompt_cache_policy=prompt_cache_policy,
@@ -476,6 +481,7 @@ class PacketV8ResponsesTransport:
             input_tokens=counted[0],
             requested_model=model,
             reasoning_effort=reasoning_effort,
+            model_profile_sha256=model_profile_sha256,
             maximum_output_tokens=max_output_tokens,
             prompt_cache_policy=PromptCachePolicy(prompt_cache_policy).value,
             request_evidence_path=request_path,
@@ -494,6 +500,7 @@ class PacketV8ResponsesTransport:
         cancelled: Callable[[], bool] = lambda: False,
         model: str = DEFAULT_MODEL,
         reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+        model_profile_sha256: str | None = None,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
         timeout_seconds: float = DEFAULT_RESPONSE_TIMEOUT_SECONDS,
         prompt_cache_policy: PromptCachePolicy = PromptCachePolicy.EXPLICIT_NO_CACHE,
@@ -503,6 +510,11 @@ class PacketV8ResponsesTransport:
         if not instructions.strip() or not prompt.strip():
             raise ValueError("Automated response instructions and prompt are required")
         prompt_cache_policy = PromptCachePolicy(prompt_cache_policy)
+        if model_profile_sha256 is not None and (
+            len(model_profile_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in model_profile_sha256)
+        ):
+            raise ValueError("Model-profile identity must be a lowercase SHA-256")
         if packet_dir is None and previous_response_id is None:
             raise ValueError("The first automated turn requires a Packet V8 authority bundle")
         if cancelled():
@@ -588,6 +600,7 @@ class PacketV8ResponsesTransport:
                 request["previous_response_id"] = previous_response_id
             request_evidence = {
                 "request": request,
+                "model_profile_sha256": model_profile_sha256,
                 "packet_manifest_sha256": prepared.manifest_sha256 if prepared else None,
                 "resources": [resource.to_evidence() for resource in resources],
                 "unavailable_optional_attachments": list(
@@ -616,6 +629,10 @@ class PacketV8ResponsesTransport:
                     {
                         "input_tokens": counted_input_tokens,
                         "phase": "before_generation_dispatch",
+                        "requested_model": model,
+                        "reasoning_effort": reasoning_effort,
+                        "model_profile_sha256": model_profile_sha256,
+                        "prompt_cache_policy": prompt_cache_policy.value,
                     },
                 )
             if authorize_dispatch is not None:
@@ -682,6 +699,8 @@ class PacketV8ResponsesTransport:
                     prepared.unavailable_optional_attachments if prepared else ()
                 ),
                 requested_model=model,
+                reasoning_effort=reasoning_effort,
+                model_profile_sha256=model_profile_sha256,
                 cached_input_tokens=cached_input_tokens,
                 cache_write_tokens=cache_write_tokens,
                 prompt_cache_policy=prompt_cache_policy.value,
@@ -697,6 +716,8 @@ class PacketV8ResponsesTransport:
                             "response_id": result.response_id,
                             "requested_model": result.requested_model,
                             "resolved_model": result.model,
+                            "reasoning_effort": result.reasoning_effort,
+                            "model_profile_sha256": result.model_profile_sha256,
                             "input_tokens": result.input_tokens,
                             "cached_input_tokens": result.cached_input_tokens,
                             "cache_write_tokens": result.cache_write_tokens,

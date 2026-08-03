@@ -30,6 +30,7 @@ from .automated_session import (
 )
 from .openai_credentials import resolve_openai_api_key, set_openai_api_key as store_openai_api_key
 from .openai_transport import OpenAISDKProvider, PacketV8ResponsesTransport, PromptCachePolicy
+from .model_profile import ModelProfileV1
 from .preview_service import PreviewService
 from .pricing_policy import load_pricing_policy
 from .runtime_surface import DEFAULT_RUNTIME_CMD
@@ -109,6 +110,7 @@ def _format_automated_event(event: dict) -> str:
     elif event_type == "MODEL_RESPONSE":
         detail = (
             f"model={payload.get('requested_model', '?')}→{payload.get('resolved_model', '?')} "
+            f"effort={payload.get('reasoning_effort', '?')} "
             f"tokens={payload.get('input_tokens', 0):,}/"
             f"{payload.get('cached_input_tokens', 0):,}/"
             f"{payload.get('uncached_input_tokens', 0):,}/"
@@ -216,6 +218,8 @@ class UserWorkflowApp:
         self.changed_paths_var = tk.StringVar(value="No override changes have been proven.")
         self.auto_promote_var = tk.BooleanVar(value=True)
         self.automated_run_budget_usd_var = tk.StringVar(value="0.00")
+        self.automated_model_var = tk.StringVar(value="gpt-5.6")
+        self.automated_reasoning_effort_var = tk.StringVar(value="high")
         self.automated_disclosure_profile_var = tk.StringVar(
             value=DisclosureProfile.ASSISTED.value
         )
@@ -466,6 +470,26 @@ class UserWorkflowApp:
             width=12,
         )
         self.automated_disclosure_profile.grid(row=0, column=7)
+        ttk.Label(controls, text="Model:").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.automated_model_profile = ttk.Combobox(
+            controls,
+            textvariable=self.automated_model_var,
+            values=("gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra"),
+            state="readonly",
+            width=18,
+        )
+        self.automated_model_profile.grid(row=1, column=1, sticky="w", pady=(6, 0))
+        ttk.Label(controls, text="Reasoning:").grid(
+            row=1, column=2, sticky="e", padx=(10, 4), pady=(6, 0)
+        )
+        self.automated_reasoning_profile = ttk.Combobox(
+            controls,
+            textvariable=self.automated_reasoning_effort_var,
+            values=("high", "medium"),
+            state="readonly",
+            width=9,
+        )
+        self.automated_reasoning_profile.grid(row=1, column=3, sticky="w", pady=(6, 0))
         self.auto_promote_check = ttk.Checkbutton(
             automation,
             text="Auto-promote replay-proven candidates (never human acceptance)",
@@ -1038,6 +1062,17 @@ class UserWorkflowApp:
             self._set_error(f"Pricing policy could not be loaded: {exc}")
             self._render()
             return
+        try:
+            model_profile = ModelProfileV1(
+                model=self.automated_model_var.get().strip(),
+                reasoning_effort=self.automated_reasoning_effort_var.get().strip(),
+                pricing_tier=pricing_policy.service_tier,
+            )
+            model_profile.validate(pricing_policy)
+        except ValueError as exc:
+            self._set_error(f"Model profile is invalid: {exc}")
+            self._render()
+            return
         run_id = f"v8-auto-{uuid.uuid4()}"
         try:
             store = AutomatedRunStore.create(
@@ -1045,8 +1080,7 @@ class UserWorkflowApp:
                 run_id=run_id,
                 protocol_snapshot={
                     "schema": AGENT_SESSION_PROTOCOL_SCHEMA,
-                    "model": "gpt-5.6",
-                    "reasoning_effort": "high",
+                    "model_profile": model_profile.identity_dict(),
                     "budgets": budgets.to_dict(),
                     "pricing_policy": pricing_policy.identity_dict(),
                     "prompt_cache_policy": PromptCachePolicy.EXPLICIT_NO_CACHE.value,
@@ -1096,6 +1130,7 @@ class UserWorkflowApp:
                 services=services,
                 budgets=budgets,
                 pricing_policy=pricing_policy,
+                model_profile=model_profile,
                 cancelled=lambda: context.cancelled,
                 auto_promote=auto_promote,
                 disclosure_profile=disclosure_profile,
@@ -2044,6 +2079,12 @@ class UserWorkflowApp:
             state="disabled" if automated_busy else "normal"
         )
         self.automated_disclosure_profile.configure(
+            state="disabled" if automated_busy else "readonly"
+        )
+        self.automated_model_profile.configure(
+            state="disabled" if automated_busy else "readonly"
+        )
+        self.automated_reasoning_profile.configure(
             state="disabled" if automated_busy else "readonly"
         )
         credential_summary = "credential available" if self._credential_available else "credential not configured"

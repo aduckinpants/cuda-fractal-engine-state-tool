@@ -228,6 +228,8 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertIsNone(transport.calls[0]["previous_response_id"])
             self.assertIsNone(transport.calls[1]["previous_response_id"])
             self.assertEqual(transport.calls[0]["max_output_tokens"], 8_000)
+            self.assertEqual(transport.calls[0]["reasoning_effort"], "high")
+            self.assertRegex(str(transport.calls[0]["model_profile_sha256"]), r"^[0-9a-f]{64}$")
             self.assertEqual(transport.calls[1]["max_output_tokens"], 4_000)
             self.assertEqual(
                 transport.calls[0]["prompt_cache_policy"].value,

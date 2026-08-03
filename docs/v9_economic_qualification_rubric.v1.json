@@ -1,0 +1,42 @@
+{
+  "rubric_version": "v9-economic-qualification-rubric.v1",
+  "automatic_gates": [
+    "terminal_controller",
+    "packet_binding",
+    "model_profile",
+    "resolved_model_family",
+    "explicit_no_cache",
+    "disclosure_binding",
+    "replay_proof",
+    "cost_ceiling",
+    "immutable_evidence",
+    "no_fabricated_human_acceptance"
+  ],
+  "human_items": [
+    "evidence_hierarchy_and_mathematical_restraint",
+    "executable_and_observable_experiment_selection",
+    "exactly_one_coherent_state",
+    "falsifiable_prediction_and_honest_uncertainty",
+    "camera_and_feature_continuity",
+    "narrative_and_json_alignment",
+    "result_review_against_locked_prediction",
+    "legal_and_useful_controller_gate",
+    "concise_output_without_omitted_evidence"
+  ],
+  "human_values": [
+    "PASS",
+    "PARTIAL",
+    "FAIL"
+  ],
+  "acceptance_rule": {
+    "all_automatic_gates": "PASS",
+    "human_failures_allowed": 0,
+    "partial_requires_explicit_nonblocking_acceptance": true,
+    "target_cost_reduction_percent_vs_historical_sol": 70
+  },
+  "ownership": {
+    "automatic_gates": "qualification_harness",
+    "human_rubric": "independent_user_review",
+    "human_acceptance_may_be_recorded_by_automation": false
+  }
+}
