@@ -151,6 +151,24 @@ and reports model enrichment as unavailable until an exact engine receipt is
 bound. Slice 1 evidence is recorded in
 [`docs/finding_enrichment_slice1_evidence.md`](docs/finding_enrichment_slice1_evidence.md).
 
+Pass the exact published executable to request model enrichment:
+
+```powershell
+py -3.14 -m cuda_fractal_state_tool.finding_enrichment_cli `
+  --workspace-root D:\salt-fractal\cuda-fractal-engine-state-tool `
+  --packet-dir <exact-packet-v8-directory> `
+  --runtime-executable D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.exe `
+  --runtime-compatibility development
+```
+
+`development` records runtime drift and attempts the current authority;
+`strict` records the warning and stops before invocation. The first production
+provider is limited to the engine-declared zero-warp
+`laurent_polynomial_escape_time.v1` model. It derives bounded mathematical
+features, verifies selected points through `fractal.sample`, and creates a
+separately receipted annotation derivative. Evidence is recorded in
+[`docs/finding_enrichment_slice2_evidence.md`](docs/finding_enrichment_slice2_evidence.md).
+
 ## Packet V8 and override authority
 
 Packet V8 is the seven-file authority handoff when a frame exists:

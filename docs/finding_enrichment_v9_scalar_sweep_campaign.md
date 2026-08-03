@@ -308,15 +308,15 @@ Exit: common enrichment works without any mathematical provider.
 
 ### Slice 2 - Polynomial-over-power provider and annotation
 
-- Load and validate the engine active-model receipt from exact state/runtime.
-- Implement bounded deterministic polynomial operations and numerical roots.
-- Derive poles, critical points/values, fixed points, multipliers, and residuals.
-- Use canonical `fractal.sample` for bounded selected-coordinate outcomes.
-- Project through exact bundled viewport facts; do not copy engine camera math.
-- Generate presentation-neutral annotations and one registered annotated PNG.
-- Prove the Rational Escape fixture, unavailable selector, zero-warp rule, cache
+- [x] Load and validate the engine active-model receipt from exact state/runtime.
+- [x] Implement bounded deterministic polynomial operations and numerical roots.
+- [x] Derive poles, critical points/values, fixed points, multipliers, and residuals.
+- [x] Use canonical `fractal.sample` for bounded selected-coordinate outcomes.
+- [x] Project through exact bundled viewport facts; do not copy engine camera math.
+- [x] Generate presentation-neutral annotations and one registered annotated PNG.
+- [x] Prove the Rational Escape fixture, unavailable selector, zero-warp rule, cache
   invalidation, deterministic regeneration, and synthetic provider slot.
-- Run focused/full/real workflow, hostile review, commit, and clean tree.
+- [x] Run focused/full/real workflow, hostile review, commit, and clean tree.
 
 Exit: user can inspect exact facts and annotation. No mosaic or Packet V9
 transport change is included.
@@ -407,7 +407,7 @@ one image-materialization owner, regardless of CLI, automation, or UI route.
 
 ## Current phase
 
-Slice 1 common enrichment is complete and ready for its clean checkpoint.
-Slice 2 production model enrichment and separately receipted annotation are the
-next approved product boundary. All remaining work is covered by the
+Slice 2 production model enrichment and separately receipted annotation are
+complete and ready for a clean checkpoint. Slice 3 dollar dispatch gating is
+the next approved product boundary. All remaining work is covered by the
 preplanned slices above through the next manual-review gate.

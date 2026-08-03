@@ -5,6 +5,7 @@ import json
 import math
 import os
 import shutil
+import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,14 @@ from .agent_bundle import load_existing_agent_bundle
 from .authority_container import parse_authority_container
 from .fractal_viewport_facts import validate_viewport_facts_bytes
 from .json_utils import loads_no_duplicates
+from .polynomial_model_provider import (
+    ANNOTATION_BUILDER_VERSION,
+    ANNOTATION_RENDERER_VERSION,
+    ActiveModelRuntimeClient,
+    PolynomialOverPowerEscapeProvider,
+    build_annotation_set,
+    render_annotations,
+)
 
 
 ANALYSIS_SCHEMA_VERSION = 1
@@ -204,9 +213,16 @@ class FindingEnrichmentService:
     ) -> None:
         self.workspace_root = workspace_root.resolve()
         self.common_provider = common_provider or CommonFindingProvider()
-        self.model_registry = model_registry or ProviderRegistry()
+        self.model_registry = model_registry or ProviderRegistry((PolynomialOverPowerEscapeProvider(),))
 
-    def analyze(self, packet_dir: Path) -> FindingEnrichmentResult:
+    def analyze(
+        self,
+        packet_dir: Path,
+        *,
+        runtime_executable: Path | None = None,
+        runtime_compatibility_mode: str | None = None,
+        runtime_timeout_seconds: float = 30.0,
+    ) -> FindingEnrichmentResult:
         packet_dir = packet_dir.resolve()
         bundle = load_existing_agent_bundle(packet_dir)
         if bundle.packet_version != 8:
@@ -262,6 +278,35 @@ class FindingEnrichmentService:
             "web_frame_sha256": web_frame_sha256,
             "web_frame_status": web_frame.get("status") if isinstance(web_frame, dict) else "unavailable",
         }
+        active_model_capture = None
+        model_provider = None
+        active_model_sha256 = None
+        runtime_compatibility = None
+        if runtime_executable is not None:
+            packet_runtime_identity = manifest.get("runtime_identity")
+            if not isinstance(packet_runtime_identity, dict):
+                raise ValueError("Packet V8 manifest has no runtime identity")
+            active_model_capture = ActiveModelRuntimeClient(
+                runtime_executable,
+                timeout_seconds=runtime_timeout_seconds,
+            ).describe(
+                state_path=packet_dir / "state.json",
+                expected_selector=bundle.selected_fractal_type,
+                packet_runtime_identity=packet_runtime_identity,
+                compatibility_mode=runtime_compatibility_mode,
+            )
+            active_model_sha256 = _sha256(active_model_capture.receipt_bytes)
+            runtime_compatibility = active_model_capture.runtime_compatibility
+            provider_receipt = active_model_capture.receipt.get("provider")
+            model_receipt = active_model_capture.receipt.get("model")
+            if (
+                isinstance(provider_receipt, dict)
+                and provider_receipt.get("status") == "available"
+                and isinstance(model_receipt, dict)
+                and isinstance(model_receipt.get("model_id"), str)
+            ):
+                model_provider = self.model_registry.resolve(model_receipt["model_id"])
+
         binding_seed = {
             "analysis_schema_version": ANALYSIS_SCHEMA_VERSION,
             "finding_id": bundle.finding_id,
@@ -278,28 +323,75 @@ class FindingEnrichmentService:
                 "provider_id": self.common_provider.provider_id,
                 "provider_version": self.common_provider.provider_version,
             },
-            "active_model_receipt_sha256": None,
-            "model_provider": None,
-            "semantic_options": {},
+            "active_model_receipt_sha256": active_model_sha256,
+            "active_model_runtime_executable_sha256": (
+                active_model_capture.runtime_executable_sha256 if active_model_capture else None
+            ),
+            "runtime_compatibility": runtime_compatibility,
+            "model_provider": (
+                {
+                    "provider_id": model_provider.provider_id,
+                    "provider_version": model_provider.provider_version,
+                }
+                if model_provider is not None
+                else None
+            ),
+            "semantic_options": (
+                {
+                    "annotation_builder_version": ANNOTATION_BUILDER_VERSION,
+                    "annotation_renderer_version": ANNOTATION_RENDERER_VERSION,
+                }
+                if model_provider is not None
+                else {}
+            ),
         }
         analysis_id = _sha256(_json_bytes(binding_seed))
         binding = {
             **binding_seed,
             "analysis_id": analysis_id,
         }
-        provider_result = {
-            "schema_version": ANALYSIS_SCHEMA_VERSION,
-            "status": "unavailable",
-            "reason": "active_model_receipt_not_supplied",
-            "provider_id": None,
-            "provider_version": None,
-            "model_id": None,
-            "epistemic_status": "exact_packet_fact",
-        }
+        analysis_dir = self.workspace_root / "findings" / bundle.finding_id / "analyses" / analysis_id
+        if active_model_capture is not None and analysis_dir.exists():
+            self._validate_receipted_existing(
+                analysis_dir,
+                analysis_id=analysis_id,
+                expected_binding=_json_bytes(binding),
+                expected_active_model=active_model_capture.receipt_bytes,
+            )
+            return FindingEnrichmentResult(analysis_id, analysis_dir.resolve(), True)
+        provider_result: dict[str, Any]
+        model_artifacts: dict[str, bytes] = {}
+        if active_model_capture is None:
+            provider_result = self._unavailable_provider_result("active_model_receipt_not_supplied")
+        else:
+            model_artifacts["active-model-receipt.json"] = active_model_capture.receipt_bytes
+            provider_receipt = active_model_capture.receipt["provider"]
+            if provider_receipt["status"] == "unavailable":
+                provider_result = self._unavailable_provider_result(
+                    str(provider_receipt["unavailable_reason"]),
+                    model_id=None,
+                )
+            elif model_provider is None:
+                provider_result = self._unavailable_provider_result(
+                    "no_registered_provider_for_engine_model",
+                    model_id=active_model_capture.receipt["model"].get("model_id"),
+                )
+            else:
+                provider_result, model_artifacts = self._build_model_artifacts(
+                    packet_dir=packet_dir,
+                    manifest=manifest,
+                    viewport=viewport,
+                    provider=model_provider,
+                    active_model=active_model_capture,
+                    analysis_id=analysis_id,
+                    initial_artifacts=model_artifacts,
+                    runtime_timeout_seconds=runtime_timeout_seconds,
+                )
         artifacts = {
             "binding.json": _json_bytes(binding),
             "common-facts.json": _json_bytes(common_facts),
             "provider-result.json": _json_bytes(provider_result),
+            **model_artifacts,
         }
         receipt = {
             "schema_version": ANALYSIS_SCHEMA_VERSION,
@@ -310,7 +402,6 @@ class FindingEnrichmentService:
         }
         artifacts["receipt.json"] = _json_bytes(receipt)
 
-        analysis_dir = self.workspace_root / "findings" / bundle.finding_id / "analyses" / analysis_id
         if analysis_dir.exists():
             self._validate_existing(analysis_dir, artifacts)
             return FindingEnrichmentResult(analysis_id, analysis_dir.resolve(), True)
@@ -328,6 +419,143 @@ class FindingEnrichmentService:
             if stage.exists():
                 shutil.rmtree(stage)
         return FindingEnrichmentResult(analysis_id, analysis_dir.resolve(), False)
+
+    @staticmethod
+    def _validate_receipted_existing(
+        analysis_dir: Path,
+        *,
+        analysis_id: str,
+        expected_binding: bytes,
+        expected_active_model: bytes,
+    ) -> None:
+        receipt_path = analysis_dir / "receipt.json"
+        if not receipt_path.is_file():
+            raise ValueError("Existing model analysis has no immutable receipt")
+        receipt = _load_object(receipt_path.read_bytes(), "Existing model analysis receipt")
+        if receipt.get("analysis_id") != analysis_id or receipt.get("status") != "complete":
+            raise ValueError("Existing model analysis receipt identity or status changed")
+        recorded = receipt.get("artifact_sha256")
+        if not isinstance(recorded, dict) or any(
+            not isinstance(name, str) or not isinstance(digest, str)
+            for name, digest in recorded.items()
+        ):
+            raise ValueError("Existing model analysis receipt has invalid artifact hashes")
+        actual_files = {path.name for path in analysis_dir.iterdir() if path.is_file()}
+        if actual_files != set(recorded) | {"receipt.json"}:
+            raise ValueError("Existing model analysis artifact set changed after publication")
+        for name, digest in recorded.items():
+            if _sha256((analysis_dir / name).read_bytes()) != digest:
+                raise ValueError(f"Existing model analysis artifact changed after publication: {name}")
+        if (analysis_dir / "binding.json").read_bytes() != expected_binding:
+            raise ValueError("Existing model analysis binding changed after publication")
+        if (analysis_dir / "active-model-receipt.json").read_bytes() != expected_active_model:
+            raise ValueError("Existing model analysis active-model receipt changed after publication")
+
+    @staticmethod
+    def _unavailable_provider_result(reason: str, *, model_id: str | None = None) -> dict[str, Any]:
+        return {
+            "schema_version": ANALYSIS_SCHEMA_VERSION,
+            "status": "unavailable",
+            "reason": reason,
+            "provider_id": None,
+            "provider_version": None,
+            "model_id": model_id,
+            "epistemic_status": "exact_packet_fact",
+        }
+
+    def _build_model_artifacts(
+        self,
+        *,
+        packet_dir: Path,
+        manifest: dict[str, Any],
+        viewport: dict[str, Any],
+        provider: Any,
+        active_model: Any,
+        analysis_id: str,
+        initial_artifacts: dict[str, bytes],
+        runtime_timeout_seconds: float,
+    ) -> tuple[dict[str, Any], dict[str, bytes]]:
+        provider_result = provider.derive(active_model.receipt)
+        annotation_set = build_annotation_set(provider_result, viewport)
+        annotations = annotation_set["annotations"]
+        points = tuple(complex(item["point"]["real"], item["point"]["imag"]) for item in annotations)
+        client = ActiveModelRuntimeClient(
+            Path(active_model.command[0]),
+            timeout_seconds=runtime_timeout_seconds,
+        )
+        sample_capture = client.sample(
+            state_path=packet_dir / "state.json",
+            points=points,
+            request_id=f"finding-enrichment-{analysis_id[:24]}",
+            active_model=active_model,
+        )
+        evaluations = []
+        for annotation, sample in zip(annotations, sample_capture.response["samples"], strict=True):
+            evaluations.append(
+                {
+                    "annotation_id": annotation["annotation_id"],
+                    "point": annotation["point"],
+                    "sample": sample,
+                    "epistemic_status": "engine_authoritative_evaluation",
+                }
+            )
+        engine_evaluation = {
+            "schema_version": 1,
+            "evaluation_surface": "fractal.sample",
+            "active_model_receipt_sha256": _sha256(active_model.receipt_bytes),
+            "runtime_executable_sha256": active_model.runtime_executable_sha256,
+            "request_sha256": _sha256(sample_capture.request_bytes),
+            "response_sha256": _sha256(sample_capture.response_bytes),
+            "command": list(sample_capture.command),
+            "request": sample_capture.request,
+            "response": sample_capture.response,
+            "feature_evaluations": evaluations,
+        }
+        artifacts = {
+            **initial_artifacts,
+            "engine-evaluation.json": _json_bytes(engine_evaluation),
+            "annotation-set.json": _json_bytes(annotation_set),
+        }
+        web_frame_path = packet_dir / "web-agent-frame.png"
+        if web_frame_path.is_file():
+            render = viewport["render"]
+            analyses_root = self.workspace_root / "findings" / manifest["finding_id"] / "analyses"
+            analyses_root.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix="annotation-render-", dir=analyses_root) as temp_dir:
+                output_path = Path(temp_dir) / "annotated-web-frame.png"
+                render_receipt = render_annotations(
+                    web_frame_path,
+                    output_path,
+                    annotation_set,
+                    source_viewport_width=render["width"],
+                    source_viewport_height=render["height"],
+                )
+                artifacts["annotated-web-frame.png"] = output_path.read_bytes()
+        else:
+            render_receipt = {
+                "schema_version": 1,
+                "status": "unavailable",
+                "reason": "packet_has_no_web_discussion_frame",
+            }
+        artifacts["annotation-render-receipt.json"] = _json_bytes(render_receipt)
+        summary_lines = [
+            "# Finding Enrichment Summary",
+            "",
+            f"- Provider: `{provider.provider_id}` version `{provider.provider_version}`",
+            f"- Model: `{provider_result['model_id']}`",
+            f"- Critical points: `{len(provider_result['features']['critical_points'])}`",
+            f"- Fixed points: `{len(provider_result['features']['fixed_points'])}`",
+            f"- Structural singular points: `{len(provider_result['features']['structural_singular_points'])}`",
+            f"- Canonical engine evaluations: `{len(evaluations)}`",
+            f"- Contained annotations: `{sum(item['viewport']['contained'] is True for item in annotations)}`",
+            "",
+            "Derived equations and numerical roots are analysis evidence. Canonical `fractal.sample`",
+            "records are engine evaluation evidence. Neither establishes that an annotated feature caused",
+            "the visible image structure.",
+            "",
+        ]
+        artifacts["summary.md"] = "\n".join(summary_lines).encode("utf-8")
+        return provider_result, artifacts
 
     @staticmethod
     def _validate_existing(analysis_dir: Path, artifacts: dict[str, bytes]) -> None:

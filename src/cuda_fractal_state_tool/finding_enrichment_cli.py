@@ -14,9 +14,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument("--workspace-root", type=Path, required=True)
     parser.add_argument("--packet-dir", type=Path, required=True)
+    parser.add_argument("--runtime-executable", type=Path)
+    parser.add_argument("--runtime-compatibility", choices=("development", "strict"))
+    parser.add_argument("--runtime-timeout-seconds", type=float, default=30.0)
     args = parser.parse_args(argv)
     try:
-        result = FindingEnrichmentService(workspace_root=args.workspace_root).analyze(args.packet_dir)
+        result = FindingEnrichmentService(workspace_root=args.workspace_root).analyze(
+            args.packet_dir,
+            runtime_executable=args.runtime_executable,
+            runtime_compatibility_mode=args.runtime_compatibility,
+            runtime_timeout_seconds=args.runtime_timeout_seconds,
+        )
         print(
             json.dumps(
                 {
