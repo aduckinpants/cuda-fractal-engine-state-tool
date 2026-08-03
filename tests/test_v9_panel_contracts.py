@@ -20,7 +20,7 @@ class V9PanelContractTests(unittest.TestCase):
         fixtures = panel["fixtures"]
         self.assertEqual([item["fixture_id"] for item in fixtures], list("ABCDEFG"))
         self.assertEqual(panel["execution_policy"]["first_fixture"], "A")
-        self.assertEqual(panel["execution_policy"]["authorized_fixtures"], ["A", "B", "C"])
+        self.assertEqual(panel["execution_policy"]["authorized_fixtures"], list("ABCDEFG"))
         self.assertFalse(panel["execution_policy"]["full_panel_automation_authorized"])
         self.assertFalse(panel["execution_policy"]["bracketed_questions_authorized"])
         self.assertEqual(
@@ -206,6 +206,67 @@ class V9PanelContractTests(unittest.TestCase):
             self.assertEqual(ledger["cost"]["actual_calculated_usd"], values["actual"])
             self.assertEqual(ledger["workflow_result"]["proof_status"], "replay_proven")
             self.assertEqual(ledger["workflow_result"]["model_gate"], "ROUND_ADVANCE")
+            self.assertEqual(ledger["human_disposition"], "pending")
+
+    def test_fixtures_d_through_g_cases_reopen_against_exact_authority(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        panel = json.loads(
+            (root / "docs" / "v9_v8_panel_qualification.v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        expected = {
+            "D": ("2414489f4fe0eee1a7e0a1ede78b0b0551c37e62fe1941aaaa113746931d4f35", "0.088836"),
+            "E": ("942cc72cd918f51c4a32752ff389b0a6b364689a9ff0fab71d6b54dfa0367ecd", "0.087936"),
+            "F": ("9c7bdf4da7bdc84ad85ce6bdd3e1dc526f377c03201a4ec233f827ef4fb06847", "0.0883194"),
+            "G": ("384cf69ff0d1bdb01219581c856b750cece44701192d34799704c0a003f4fd49", "0.0884228"),
+        }
+        prepared = {item["fixture_id"]: item for item in panel["prepared_next_cases"]}
+        fixtures = {item["fixture_id"]: item for item in panel["fixtures"]}
+        for fixture_id, (case_sha256, ceiling) in expected.items():
+            item = prepared[fixture_id]
+            self.assertEqual(item["case_sha256"], case_sha256)
+            self.assertEqual(item["maximum_cell_cost_usd"], ceiling)
+            case_path = root / item["case_path"]
+            payload = json.loads(case_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["sha256"], case_sha256)
+            self.assertEqual(payload["budgets"]["maximum_calculated_cost_usd"], ceiling)
+            packet_dir = Path(fixtures[fixture_id]["packet_dir"])
+            if packet_dir.is_dir():
+                case = load_qualification_case(
+                    case_path,
+                    packet_dir=packet_dir,
+                    pricing_policy=load_pricing_policy(),
+                )
+                self.assertEqual(case.sha256, case_sha256)
+
+    def test_fixtures_d_through_f_result_ledgers_preserve_pass_and_failure(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        result_root = (
+            root
+            / "docs"
+            / "manual-test-results"
+            / "v9_v8_panel_luna_high_assisted_08-03-2026"
+        )
+        expected = {
+            "D": ("0.0758272", "replay_proven", "ROUND_ADVANCE", "BUDGET_EXHAUSTED"),
+            "E": ("0.0733474", "replay_proven", "ROUND_ADVANCE", "BUDGET_EXHAUSTED"),
+            "F": ("0.0373346", "rejected", "not_reached", "PROOF_FAILED"),
+        }
+        for fixture_id, values in expected.items():
+            ledger = json.loads(
+                (result_root / f"Fixture-{fixture_id}-comparison-ledger.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            actual_cost, proof_status, model_gate, controller_disposition = values
+            self.assertEqual(ledger["cost"]["actual_calculated_usd"], actual_cost)
+            self.assertEqual(ledger["workflow_result"]["proof_status"], proof_status)
+            self.assertEqual(ledger["workflow_result"]["model_gate"], model_gate)
+            self.assertEqual(
+                ledger["workflow_result"]["controller_disposition"],
+                controller_disposition,
+            )
             self.assertEqual(ledger["human_disposition"], "pending")
 
 

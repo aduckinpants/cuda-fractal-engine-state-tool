@@ -1,0 +1,95 @@
+{
+  "ledger_version": 1,
+  "fixture_id": "E",
+  "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-E-fractal_agent_workflow_session_transcript.md",
+  "qualification_case_sha256": "942cc72cd918f51c4a32752ff389b0a6b364689a9ff0fab71d6b54dfa0367ecd",
+  "run_id": "v9-v8-e-luna-high-live-34842dea-89b5-475d-ab70-7f1e93f7e2c3",
+  "cost": {
+    "count_only_maximum_usd": "0.087936",
+    "actual_calculated_usd": "0.0733474"
+  },
+  "workflow_result": {
+    "override_effect": "AUTHORIZED_CHANGE",
+    "proof_status": "replay_proven",
+    "model_gate": "ROUND_ADVANCE",
+    "controller_disposition": "BUDGET_EXHAUSTED"
+  },
+  "historical_comparison": {
+    "experiment_selection": {
+      "historical": "Investigated the visible root-basin organization while preserving automatic-iteration caveats.",
+      "current": "Swapped the categorical root palette and matching grading while retaining source and shape.",
+      "assessment": "different"
+    },
+    "prediction": {
+      "historical": "Kept the geometric interpretation provisional under automatic iteration.",
+      "current": "Predicted color redistribution with fixed basin geometry, which the exact comparison supported.",
+      "assessment": "different"
+    },
+    "camera": {
+      "historical": "Preserved the captured view while discussing basin evidence.",
+      "current": "Preserved the exact high-zoom viewport for a color-only comparison.",
+      "assessment": "comparable"
+    },
+    "observability": {
+      "historical": "Used the active categorical basin view but retained the iteration caveat.",
+      "current": "Directly compared two supported categorical palette lineages with a large RGB difference.",
+      "assessment": "different"
+    },
+    "override_quality": {
+      "historical": "Returned a valid state-authorable experiment under the full packet contract.",
+      "current": "Returned a complete contract-valid fixed-topology pipeline with three effective changed paths.",
+      "assessment": "comparable"
+    },
+    "result_review": {
+      "historical": "Avoided turning the observed categorical regions into unsupported exact causal claims.",
+      "current": "Separated palette contribution from fixed geometry and did not claim human acceptance.",
+      "assessment": "comparable"
+    }
+  },
+  "enrichment_use": [
+    {
+      "claim_or_decision": "The color-only edit retained the exact high-zoom viewport and existing subject.",
+      "support_class": "packet_v8_and_enrichment",
+      "exact_refs": [
+        "packet 81d0d8d2-fd6a-41e4-ac05-2c32ff3ed703",
+        "analysis 5983508bf4eae3bf5e4ba95a9ad4a52a039bdefd4d601309c0702a715cda65e3/common-facts.json sha256 15e138e616408ffe5cb4bab018ed36a1c870045cb754ed71450bf3b47d1988fb"
+      ],
+      "assessment": "Common facts supplied a concise viewport statement while Packet V8 retained state authority."
+    },
+    {
+      "claim_or_decision": "No active-model provider comparison was available for explaino_mult.",
+      "support_class": "enrichment_only",
+      "exact_refs": [
+        "analysis 5983508bf4eae3bf5e4ba95a9ad4a52a039bdefd4d601309c0702a715cda65e3/provider-result.json sha256 4b648e955b30d58a6da72926b0840681e97b523b205915e523850fe470599135"
+      ],
+      "assessment": "The unavailable receipt prevented unsupported provider claims."
+    },
+    {
+      "claim_or_decision": "The palette and grading functions were authorable only as a complete captured pipeline replacement.",
+      "support_class": "packet_v8_only",
+      "exact_refs": [
+        "packet 81d0d8d2-fd6a-41e4-ac05-2c32ff3ed703",
+        "author decision sha256 35f5fdb0d6937df66e05fb7ccb04b80c748df9a510c22c337158e401b71b60cc"
+      ],
+      "assessment": "Packet V8 supplied topology, compatibility, current functions, and override rules."
+    },
+    {
+      "claim_or_decision": "Palette and tone changed while basin placement and exact framing remained fixed.",
+      "support_class": "packet_v8_and_controller_comparison",
+      "exact_refs": [
+        "derived packet 1a5ef37b-6bc0-4483-9b3f-8cef99657d5c manifest 6745a0b6f01f4fba71b79e1e67648e858fc8ba7eb975af87d16f73d1ed82148e",
+        "round-review-comparison.json sha256 2d8ef06540276fa1f7e96e5aa1bf4c184a6f805d7fe959a614965edeb6d444c2"
+      ],
+      "assessment": "The refreshed packet and exact comparison support a bounded presentation claim."
+    },
+    {
+      "claim_or_decision": "Mean absolute RGBA differences were [19.168741989135743, 50.990164566040036, 109.8864761352539, 0.0].",
+      "support_class": "controller_comparison_only",
+      "exact_refs": [
+        "round-review-comparison.json sha256 2d8ef06540276fa1f7e96e5aa1bf4c184a6f805d7fe959a614965edeb6d444c2"
+      ],
+      "assessment": "This is controller-owned comparison evidence."
+    }
+  ],
+  "human_disposition": "pending"
+}

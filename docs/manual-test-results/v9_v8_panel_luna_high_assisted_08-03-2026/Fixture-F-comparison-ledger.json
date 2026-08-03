@@ -1,0 +1,87 @@
+{
+  "ledger_version": 1,
+  "fixture_id": "F",
+  "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-F-fractal_web_session_transcript.md",
+  "qualification_case_sha256": "9c7bdf4da7bdc84ad85ce6bdd3e1dc526f377c03201a4ec233f827ef4fb06847",
+  "run_id": "v9-v8-f-luna-high-live-4d246de2-c6fc-4741-a9f9-d4e58aa93056",
+  "cost": {
+    "count_only_maximum_usd": "0.0883194",
+    "actual_calculated_usd": "0.0373346"
+  },
+  "workflow_result": {
+    "override_effect": "AUTHORIZED_CHANGE",
+    "proof_status": "rejected",
+    "model_gate": "not_reached",
+    "controller_disposition": "PROOF_FAILED"
+  },
+  "historical_comparison": {
+    "experiment_selection": {
+      "historical": "Produced a valid workflow attempt against the red iteration-collapse fixture.",
+      "current": "Increased active palette band emphasis from 1.5 to 1.8.",
+      "assessment": "different"
+    },
+    "prediction": {
+      "historical": "Could not reach a completed proof because the fixed timeout expired.",
+      "current": "Predicted stronger color separation, but no candidate frame existed to evaluate it.",
+      "assessment": "different"
+    },
+    "camera": {
+      "historical": "Preserved the camera for a color-focused attempt.",
+      "current": "Preserved the exact camera for a color-only edit.",
+      "assessment": "comparable"
+    },
+    "observability": {
+      "historical": "The intended result was blocked by the fixed timeout.",
+      "current": "The active rendered path was identified correctly, but runtime draft readback failed before observation.",
+      "assessment": "different"
+    },
+    "override_quality": {
+      "historical": "Reached a valid workflow attempt under the earlier packet contract.",
+      "current": "Returned one contract-valid changed leaf in the complete pipeline, then met a stricter engine-authority rejection.",
+      "assessment": "comparable"
+    },
+    "result_review": {
+      "historical": "No completed result review was available after timeout.",
+      "current": "No model review was dispatched after proof rejection; an independent exact-base control isolated the failure.",
+      "assessment": "better"
+    }
+  },
+  "enrichment_use": [
+    {
+      "claim_or_decision": "The edit was color-only and retained the exact captured viewport.",
+      "support_class": "packet_v8_and_enrichment",
+      "exact_refs": [
+        "packet 6fb115b4-8e90-46c9-ad23-8dd11da383c5",
+        "analysis 0a4c508b2cc2b19c82e26ddf20b0c2cced8151a27a0306b2e97b82f033a294d2/common-facts.json sha256 5f2bc7f6a1fea39221a2d06c72f565aa49209c20a73922757a3c4509a1151156"
+      ],
+      "assessment": "The common facts compressed viewport evidence; Packet V8 remained state authority."
+    },
+    {
+      "claim_or_decision": "No active-model provider comparison was available for explaino_balance_void.",
+      "support_class": "enrichment_only",
+      "exact_refs": [
+        "analysis 0a4c508b2cc2b19c82e26ddf20b0c2cced8151a27a0306b2e97b82f033a294d2/provider-result.json sha256 4b648e955b30d58a6da72926b0840681e97b523b205915e523850fe470599135"
+      ],
+      "assessment": "Unavailable enrichment constrained provider claims and did not authorize the change."
+    },
+    {
+      "claim_or_decision": "palette.band_emphasis was accepted by the copied Packet V8 authoring and UI-Salt authorities.",
+      "support_class": "packet_v8_only",
+      "exact_refs": [
+        "packet 6fb115b4-8e90-46c9-ad23-8dd11da383c5",
+        "override text sha256 a02fe6b51bf03f672efd730b7f956f027a34f236412959485ecf7473fc1a008c"
+      ],
+      "assessment": "Contract validation passed; engine materialization remained final behavioral authority and rejected the candidate."
+    },
+    {
+      "claim_or_decision": "The candidate failed before rendering because current runtime draft readback was unavailable.",
+      "support_class": "packet_v8_and_controller_comparison",
+      "exact_refs": [
+        "rejected proof f4721969-1aba-4912-b8eb-addc4f24cfa7 receipt sha256 5f95ead343923e82acaaa572c7dea853c57cb19538dfcbd64d9c3dc371ec3329",
+        "exact-base control df123ce6-8edf-49e5-968e-d144468981fa receipt sha256 f38e71782f426bad1471d7174bf7e8aa7f80acfd0bdccd6107b76cdef17a648f"
+      ],
+      "assessment": "The paired receipts distinguish a valid expensive base replay from candidate-specific loaded-draft rejection."
+    }
+  ],
+  "human_disposition": "pending"
+}
