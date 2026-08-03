@@ -1,0 +1,95 @@
+{
+  "ledger_version": 1,
+  "fixture_id": "D",
+  "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-D-fractal_agentic_workflow_session_transcript.md",
+  "qualification_case_sha256": "2414489f4fe0eee1a7e0a1ede78b0b0551c37e62fe1941aaaa113746931d4f35",
+  "run_id": "v9-v8-d-luna-high-live-6bf863f8-780f-4eaa-ac43-2f7b4fdad182",
+  "cost": {
+    "count_only_maximum_usd": "0.088836",
+    "actual_calculated_usd": "0.0758272"
+  },
+  "workflow_result": {
+    "override_effect": "AUTHORIZED_CHANGE",
+    "proof_status": "replay_proven",
+    "model_gate": "ROUND_ADVANCE",
+    "controller_disposition": "BUDGET_EXHAUSTED"
+  },
+  "historical_comparison": {
+    "experiment_selection": {
+      "historical": "Increased band count and reduced softness inside the active pipeline.",
+      "current": "Increased one active root-proximity source blend from approximately 0.27901 to 1.0.",
+      "assessment": "different"
+    },
+    "prediction": {
+      "historical": "Expected crisper iteration-band contours and then distinguished persistent geometry from re-phased color detail.",
+      "current": "Expected stronger root-field color contribution while explicitly allowing a broad chromatic response.",
+      "assessment": "comparable"
+    },
+    "camera": {
+      "historical": "Preserved the exact camera for a color-only comparison.",
+      "current": "Preserved the exact high-zoom camera and exact viewport bounds.",
+      "assessment": "comparable"
+    },
+    "observability": {
+      "historical": "Changed active banding controls and observed crispness and phase changes.",
+      "current": "Changed an active root-field source weight and produced a large measurable RGB response.",
+      "assessment": "comparable"
+    },
+    "override_quality": {
+      "historical": "Returned a complete fixed-topology pipeline with two scalar changes.",
+      "current": "Returned a complete fixed-topology pipeline with one effective scalar change.",
+      "assessment": "comparable"
+    },
+    "result_review": {
+      "historical": "Separated persistent geometry from iteration-sensitive decoration.",
+      "current": "Accepted the large color effect without upgrading it into proof of contour causality.",
+      "assessment": "comparable"
+    }
+  },
+  "enrichment_use": [
+    {
+      "claim_or_decision": "The exact high-zoom viewport could be retained for a color-only intervention.",
+      "support_class": "packet_v8_and_enrichment",
+      "exact_refs": [
+        "packet 73d407bd-618d-4c49-9505-c0fe2a21087d",
+        "analysis fcacaa38fc0376978317ba481a7e551427b00d031b616f52e1d1753aabb8ffed/common-facts.json sha256 1db83abaad095de9d2284b84993bde0212f8fd36449c1eada417ba87b91da7cb"
+      ],
+      "assessment": "Common facts compressed the exact bounds; Packet V8 remained camera authority."
+    },
+    {
+      "claim_or_decision": "No active-model provider comparison was available for explaino_mult.",
+      "support_class": "enrichment_only",
+      "exact_refs": [
+        "analysis fcacaa38fc0376978317ba481a7e551427b00d031b616f52e1d1753aabb8ffed/provider-result.json sha256 4b648e955b30d58a6da72926b0840681e97b523b205915e523850fe470599135"
+      ],
+      "assessment": "The unavailable receipt constrained capability claims."
+    },
+    {
+      "claim_or_decision": "The second source-row blend was authorable only through the complete captured pipeline.",
+      "support_class": "packet_v8_only",
+      "exact_refs": [
+        "packet 73d407bd-618d-4c49-9505-c0fe2a21087d",
+        "author decision sha256 8fa4526a2a7dfb5fcc48b12efa0ae87c5326fa335a8388c5f85aa1ed8001d9cf"
+      ],
+      "assessment": "Packet V8 supplied topology, contract, current value, and authoring fence."
+    },
+    {
+      "claim_or_decision": "The exact derivatives changed globally while the fixed camera and dynamics were retained.",
+      "support_class": "packet_v8_and_controller_comparison",
+      "exact_refs": [
+        "derived packet 11d5b3c2-2aaf-4152-857e-bd2dde5d4827 manifest 9fe8ea8471f90e3e9bfd94925ff0ecef0c06498e83ab409ffb466110eabc1e6c",
+        "round-review-comparison.json sha256 d79378a3b0502284e982b531bea96799e8f7e6818cc037c1811e8ffd5e9f6ae3"
+      ],
+      "assessment": "The refreshed packet supplied result authority and the controller bound the exact image pair."
+    },
+    {
+      "claim_or_decision": "Mean absolute RGBA differences were [115.79210243225097, 94.76755294799804, 97.1068214416504, 0.0].",
+      "support_class": "controller_comparison_only",
+      "exact_refs": [
+        "round-review-comparison.json sha256 d79378a3b0502284e982b531bea96799e8f7e6818cc037c1811e8ffd5e9f6ae3"
+      ],
+      "assessment": "This is controller-owned image evidence, not mathematical authority."
+    }
+  ],
+  "human_disposition": "pending"
+}

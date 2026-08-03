@@ -75,3 +75,55 @@ Across A, B, and C, actual calculated cost was `$0.2264874`, averaging `$0.07549
 For B and C the deterministic common-facts enrichment mostly compressed camera facts already present in Packet V8. The provider result was truthfully unavailable and helped prevent fabricated provider claims. The clearest new value came from controller-owned exact image comparison: it made prediction magnitude misses and successful fixed-geometry color changes explicit and quantitative.
 
 Formal human dispositions for all three cells remain `pending`. No Fixture D dispatch or full-panel automation is authorized by these results.
+
+## Fixtures D through F
+
+The user accepted the expected experiment-selection variance and authorized the
+remaining V8 panel. Exact count-only preflights passed for D through G. Paid
+dispatch then proceeded sequentially under the existing stop-on-defect rule.
+
+### Fixture D
+
+- Experiment: active `root_proximity` source blend approximately `0.27901 -> 1.0`.
+- Proof: replay proven.
+- Review: large global chromatic response; no unsupported claim that a specific contour was caused by the root field.
+- Gate: `ROUND_ADVANCE` followed by the exact one-round limit.
+- Cost: `$0.0758272` under `$0.0888360`.
+- Historical relation: different color control with comparable high-zoom camera discipline.
+
+### Fixture E
+
+- Experiment: `joy_root_palette + tone_map_finish -> root_classic_palette + basin_default`.
+- Proof: replay proven.
+- Review: strong RGB redistribution with basin placement and camera fixed.
+- Gate: `ROUND_ADVANCE` followed by the exact one-round limit.
+- Cost: `$0.0733474` under `$0.0879360`.
+- Historical relation: strong palette-isolation test, but not a retest of the historical automatic-iteration interpretation pressure.
+
+### Fixture F stop condition
+
+- Experiment: `palette.band_emphasis 1.5 -> 1.8`.
+- Packet validation: accepted one authorized changed path.
+- Engine proof: rejected before rendering because the current runtime could not provide authoritative loaded-draft readback.
+- Cost: `$0.0373346` under `$0.0883194`.
+- Model review: not dispatched.
+
+The current runtime and Packet V8 carry identical UI-schema and UI-Salt contract
+hashes but different executable hashes. A no-API `{}` control against the same
+packet completed in approximately 441 seconds and replay-proved with identical
+decoded pixels. This proves the adaptive timeout repair and isolates the failure
+to loaded Color Pipeline draft application for the chosen edit rather than base
+state replay.
+
+Under the approved sequential policy, Fixture G was not paid-dispatched.
+
+### Cost checkpoint
+
+Across completed paid cells A through E, calculated cost is `$0.3756620`, an
+average of `$0.0751324` per complete author/proof/review cell. Including the
+failed F author turn, total panel spend represented by these receipts is
+`$0.4129966`.
+
+Formal human dispositions remain `pending`. The panel is paused on the Fixture F
+engine-authority limitation; it is not valid to claim a full A–G pass or to spend
+the G cell before that stop condition is reviewed.
