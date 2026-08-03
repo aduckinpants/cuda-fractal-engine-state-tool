@@ -125,13 +125,15 @@ exists, even when a session stops before final qualification.
 The bounded paid-run outcome and exact receipts are summarized in
 [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md).
 
-Future V9 work is intentionally paused at a documentation boundary. Cost
-remediation precedes any larger automated battery; the first later local
-experiment is a one-axis scalar bracket that expands into ordinary independently
-proven sparse overrides. The restart plan and exact pickup point are recorded in
-[`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
-and [`PICK_UP_HERE.md`](PICK_UP_HERE.md). No V9 implementation is present on
-this checkpoint.
+The approved finding-enrichment and V9 campaign is active on
+`codex/finding-enrichment-v9-sweep`. Deterministic common/model enrichment is
+implemented before final V9 context shaping so model turns do not repeatedly
+rediscover engine-declared mathematics. Cost remediation still precedes any
+paid battery, and the bounded one-axis scalar bracket remains a later local
+route over ordinary independently proven sparse overrides. The current
+execution contract is
+[`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md);
+[`PICK_UP_HERE.md`](PICK_UP_HERE.md) records the exact restart point.
 
 ## Packet V8 and override authority
 

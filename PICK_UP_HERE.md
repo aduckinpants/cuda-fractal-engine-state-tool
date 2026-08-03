@@ -1,22 +1,34 @@
-# Pick Up Here — V9 Cost and Scalar Sweep
+# Pick Up Here — Finding Enrichment, V9 Cost, and Scalar Sweep
 
-## Pause state
+## Active campaign state
 
-The Packet V8 automated-route POC is merged on:
+The state-tool campaign branch starts from clean merged main:
 
 ```text
-main@12ebd9659439ad28d00458a0346e1ff5314c4fff
+main@28a6da4f6949ef01e6ea7b45a9affab0e32ee735
 ```
 
-The next work is documented but intentionally not started. The user is pausing
-before travel rather than leaving cost or sweep implementation half complete.
+The engine E0-E2 prerequisites are merged and published:
+
+```text
+engine master: deca3d93fac92ad93742e8d47714f91329808ead
+fractal_ui.exe sha256:
+501002f174068641b9a6105e56c277e6a4080bc9dbeb5e672282e77562b96f56
+```
+
+The active state-tool branch is:
+
+```text
+codex/finding-enrichment-v9-sweep
+```
 
 Read first:
 
-1. [`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
-2. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
-3. [`docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md`](docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md)
-4. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
+1. [`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md)
+2. [`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
+3. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
+4. [`docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md`](docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md)
+5. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
 
 ## Why cost is first
 
@@ -97,7 +109,9 @@ Then verify:
 
 ## Exact continuation
 
-Resume at **Slice 0 — Re-entry and contract refresh** in the V9 plan.
+Slice 0 is the planning checkpoint. After it is cleanly committed, resume at
+**Slice 1 — Common enrichment foundation** in the consolidated campaign plan.
 
-No engine work, paid provider call, scalar-sweep implementation, model
-ablation, or broader Packet V9 mutation is authorized during the pause.
+No paid provider call, model ablation, diagnostic-mosaic work, additional
+production provider, or engine mutation is authorized by the current state-tool
+campaign.
