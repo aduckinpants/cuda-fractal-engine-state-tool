@@ -4,13 +4,14 @@
   "source_result_notebook": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Result-Notebook.md",
   "source_results_summary": "docs/packet_v8_seven_fixture_manual_results.md",
   "execution_policy": {
-    "dispatch_mode": "one_cell_then_stop_for_review",
+    "dispatch_mode": "approved_cells_sequential_stop_on_defect",
     "first_fixture": "A",
     "first_profile": "luna_high_assisted",
     "count_only_required": true,
     "separate_paid_authorization_required": true,
     "full_panel_automation_authorized": false,
-    "bracketed_questions_authorized": false
+    "bracketed_questions_authorized": false,
+    "authorized_fixtures": ["A", "B", "C"]
   },
   "prepared_first_case": {
     "case_path": "docs/v9_v8_fixture_a_luna_high_assisted_case.v1.json",
@@ -18,6 +19,20 @@
     "count_only_receipt": "docs/v9_v8_fixture_a_luna_high_count_only.md",
     "maximum_cell_cost_usd": "0.0886872"
   },
+  "prepared_next_cases": [
+    {
+      "fixture_id": "B",
+      "case_path": "docs/v9_v8_fixture_b_luna_high_assisted_case.v1.json",
+      "case_sha256": "8744a3cc7c7308e8bb5a9078803ca9827f78aaee9f150cb1a0c18d1996487379",
+      "maximum_cell_cost_usd": "0.0897892"
+    },
+    {
+      "fixture_id": "C",
+      "case_path": "docs/v9_v8_fixture_c_luna_high_assisted_case.v1.json",
+      "case_sha256": "f0da6ce081b145419f2f0000fa5e9408656ae41a3602bebb6285c4977756db96",
+      "maximum_cell_cost_usd": "0.0891732"
+    }
+  ],
   "fixtures": [
     {
       "fixture_id": "A",

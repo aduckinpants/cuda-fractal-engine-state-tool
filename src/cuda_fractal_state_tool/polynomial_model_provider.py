@@ -154,9 +154,10 @@ def validate_active_model_receipt(
         raise ValueError("Active-model receipt state hash disagrees with the exact Packet V8 state")
     if binding.get("runtime_executable_sha256") != expected_runtime_sha256:
         raise ValueError("Active-model receipt runtime hash disagrees with the invoked executable")
-    if receipt.get("selected_fractal_type") != expected_selector or receipt.get(
-        "resolved_runtime_fractal_type"
-    ) != expected_selector:
+    resolved_selector = receipt.get("resolved_runtime_fractal_type")
+    if receipt.get("selected_fractal_type") != expected_selector or not isinstance(
+        resolved_selector, str
+    ) or not resolved_selector:
         raise ValueError("Active-model receipt selector disagrees with Packet V8")
     provider = _object(receipt.get("provider"), "Active-model provider")
     status = provider.get("status")
@@ -168,6 +169,8 @@ def validate_active_model_receipt(
         if receipt.get("model") is not None:
             raise ValueError("Unavailable active-model receipt unexpectedly contains a model")
         return receipt
+    if resolved_selector != expected_selector:
+        raise ValueError("Available active-model receipt resolved selector disagrees with Packet V8")
     if provider.get("provider_id") != PROVIDER_ID or provider.get("provider_version") != PROVIDER_VERSION:
         raise ValueError("Active-model receipt names an unsupported provider identity")
     numeric = _object(receipt.get("numeric_authority"), "Active-model numeric authority")

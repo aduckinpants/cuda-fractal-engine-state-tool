@@ -20,6 +20,7 @@ class V9PanelContractTests(unittest.TestCase):
         fixtures = panel["fixtures"]
         self.assertEqual([item["fixture_id"] for item in fixtures], list("ABCDEFG"))
         self.assertEqual(panel["execution_policy"]["first_fixture"], "A")
+        self.assertEqual(panel["execution_policy"]["authorized_fixtures"], ["A", "B", "C"])
         self.assertFalse(panel["execution_policy"]["full_panel_automation_authorized"])
         self.assertFalse(panel["execution_policy"]["bracketed_questions_authorized"])
         self.assertEqual(
@@ -149,6 +150,63 @@ class V9PanelContractTests(unittest.TestCase):
                 "detail": "bounded_round_limit_after_ROUND_ADVANCE",
             },
         )
+
+    def test_fixtures_b_and_c_cases_and_result_ledgers_are_exactly_bound(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        panel = json.loads(
+            (root / "docs" / "v9_v8_panel_qualification.v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        expected = {
+            "B": {
+                "case": "docs/v9_v8_fixture_b_luna_high_assisted_case.v1.json",
+                "sha256": "8744a3cc7c7308e8bb5a9078803ca9827f78aaee9f150cb1a0c18d1996487379",
+                "ceiling": "0.0897892",
+                "actual": "0.0758634",
+                "packet": Path(panel["fixtures"][1]["packet_dir"]),
+            },
+            "C": {
+                "case": "docs/v9_v8_fixture_c_luna_high_assisted_case.v1.json",
+                "sha256": "f0da6ce081b145419f2f0000fa5e9408656ae41a3602bebb6285c4977756db96",
+                "ceiling": "0.0891732",
+                "actual": "0.0753274",
+                "packet": Path(panel["fixtures"][2]["packet_dir"]),
+            },
+        }
+        prepared = {item["fixture_id"]: item for item in panel["prepared_next_cases"]}
+        result_root = (
+            root
+            / "docs"
+            / "manual-test-results"
+            / "v9_v8_panel_luna_high_assisted_08-03-2026"
+        )
+        for fixture_id, values in expected.items():
+            self.assertEqual(prepared[fixture_id]["case_sha256"], values["sha256"])
+            self.assertEqual(prepared[fixture_id]["maximum_cell_cost_usd"], values["ceiling"])
+            case_payload = json.loads((root / values["case"]).read_text(encoding="utf-8"))
+            self.assertEqual(case_payload["sha256"], values["sha256"])
+            self.assertEqual(
+                case_payload["budgets"]["maximum_calculated_cost_usd"],
+                values["ceiling"],
+            )
+            if values["packet"].is_dir():
+                case = load_qualification_case(
+                    root / values["case"],
+                    packet_dir=values["packet"],
+                    pricing_policy=load_pricing_policy(),
+                )
+                self.assertEqual(case.sha256, values["sha256"])
+            ledger = json.loads(
+                (result_root / f"Fixture-{fixture_id}-comparison-ledger.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(ledger["qualification_case_sha256"], values["sha256"])
+            self.assertEqual(ledger["cost"]["actual_calculated_usd"], values["actual"])
+            self.assertEqual(ledger["workflow_result"]["proof_status"], "replay_proven")
+            self.assertEqual(ledger["workflow_result"]["model_gate"], "ROUND_ADVANCE")
+            self.assertEqual(ledger["human_disposition"], "pending")
 
 
 if __name__ == "__main__":

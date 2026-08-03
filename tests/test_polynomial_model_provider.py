@@ -159,6 +159,46 @@ class PolynomialModelProviderTests(unittest.TestCase):
         self.assertEqual(validated["provider"]["status"], "unavailable")
         self.assertIsNone(validated["model"])
 
+    def test_unavailable_receipt_may_report_a_normalized_runtime_selector(self) -> None:
+        receipt = _receipt()
+        receipt["selected_fractal_type"] = "explaino_all"
+        receipt["resolved_runtime_fractal_type"] = "explaino"
+        receipt["provider"] = {
+            "status": "unavailable",
+            "provider_id": None,
+            "provider_version": None,
+            "unavailable_reason": "unsupported_fractal_type",
+        }
+        receipt["model"] = None
+        validated = validate_active_model_receipt(
+            json.dumps(receipt).encode("utf-8"),
+            expected_state_sha256=hashlib.sha256(STATE_BYTES).hexdigest(),
+            expected_runtime_sha256=RUNTIME_SHA256,
+            expected_selector="explaino_all",
+        )
+        self.assertEqual(validated["selected_fractal_type"], "explaino_all")
+        self.assertEqual(validated["resolved_runtime_fractal_type"], "explaino")
+
+        receipt["selected_fractal_type"] = "explaino_fold"
+        with self.assertRaisesRegex(ValueError, "selector disagrees"):
+            validate_active_model_receipt(
+                json.dumps(receipt).encode("utf-8"),
+                expected_state_sha256=hashlib.sha256(STATE_BYTES).hexdigest(),
+                expected_runtime_sha256=RUNTIME_SHA256,
+                expected_selector="explaino_all",
+            )
+
+    def test_available_receipt_requires_exact_resolved_selector(self) -> None:
+        receipt = _receipt()
+        receipt["resolved_runtime_fractal_type"] = "explaino"
+        with self.assertRaisesRegex(ValueError, "resolved selector"):
+            validate_active_model_receipt(
+                json.dumps(receipt).encode("utf-8"),
+                expected_state_sha256=hashlib.sha256(STATE_BYTES).hexdigest(),
+                expected_runtime_sha256=RUNTIME_SHA256,
+                expected_selector="explaino_rational_escape",
+            )
+
     def test_provider_derives_critical_and_fixed_points_with_small_residuals(self) -> None:
         result = PolynomialOverPowerEscapeProvider().derive(_receipt())
         critical = result["features"]["critical_points"]
