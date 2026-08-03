@@ -1,0 +1,95 @@
+{
+  "ledger_version": 1,
+  "fixture_id": "C",
+  "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-C-fractal_session_transcript.md",
+  "qualification_case_sha256": "f0da6ce081b145419f2f0000fa5e9408656ae41a3602bebb6285c4977756db96",
+  "run_id": "v9-v8-c-luna-high-live-2e0f050e-6fbd-40f7-8730-e335f1636904",
+  "cost": {
+    "count_only_maximum_usd": "0.0891732",
+    "actual_calculated_usd": "0.0753274"
+  },
+  "workflow_result": {
+    "override_effect": "AUTHORIZED_CHANGE",
+    "proof_status": "replay_proven",
+    "model_gate": "ROUND_ADVANCE",
+    "controller_disposition": "BUDGET_EXHAUSTED"
+  },
+  "historical_comparison": {
+    "experiment_selection": {
+      "historical": "Changed explaino_damping from 1.0 to 0.8 as a high-zoom fixed-window dynamics comparison.",
+      "current": "Reduced grade.glow from approximately 1.36464 to 0.25 as a color-only fixed-window comparison.",
+      "assessment": "different"
+    },
+    "prediction": {
+      "historical": "Predicted redistributed transient contours, but the rendered observation channel collapsed to a nearly uniform field.",
+      "current": "Predicted weaker halos with fixed geometry, which the exact comparison supported.",
+      "assessment": "better"
+    },
+    "camera": {
+      "historical": "Retained a high-zoom window while acknowledging dynamics-driven split, merge, movement, or disappearance.",
+      "current": "Retained the exact high-zoom window under a color-only edit with no predicted subject displacement.",
+      "assessment": "different"
+    },
+    "observability": {
+      "historical": "The chosen dynamics edit defeated the narrow active color window and left only weak global iteration evidence.",
+      "current": "Directly targeted active final grading and retained a discriminating frame.",
+      "assessment": "better"
+    },
+    "override_quality": {
+      "historical": "Returned one authorized dynamics leaf.",
+      "current": "Returned one complete contract-ordered pipeline with one effective scalar mutation.",
+      "assessment": "comparable"
+    },
+    "result_review": {
+      "historical": "Correctly classified the near-uniform result as observation-channel failure rather than inventing a dynamical conclusion.",
+      "current": "Correctly confirmed a bounded grading effect without claiming geometry or human acceptance.",
+      "assessment": "comparable"
+    }
+  },
+  "enrichment_use": [
+    {
+      "claim_or_decision": "The color-only edit preserved the exact high-zoom viewport and contained the existing subject.",
+      "support_class": "packet_v8_and_enrichment",
+      "exact_refs": [
+        "packet 06dc4aef-7a5e-4c62-9eab-76b7ddcb6eed",
+        "analysis 00c6500153501d13d958214548df23d4a6858cb9c0d7bee90f6b06b9d3c21779/common-facts.json sha256 15a642ac4167e264fad22a583b954f66ddac50defb5346a252ef527004244403"
+      ],
+      "assessment": "The common facts supported concise exact bounds but did not replace Packet V8 camera authority."
+    },
+    {
+      "claim_or_decision": "No active-model provider comparison was available for explaino_all.",
+      "support_class": "enrichment_only",
+      "exact_refs": [
+        "analysis 00c6500153501d13d958214548df23d4a6858cb9c0d7bee90f6b06b9d3c21779/provider-result.json sha256 4b648e955b30d58a6da72926b0840681e97b523b205915e523850fe470599135"
+      ],
+      "assessment": "The unavailable result constrained capability claims and was not broadened into model evidence."
+    },
+    {
+      "claim_or_decision": "grade.glow was authorable only through the complete captured fixed-topology pipeline.",
+      "support_class": "packet_v8_only",
+      "exact_refs": [
+        "packet 06dc4aef-7a5e-4c62-9eab-76b7ddcb6eed",
+        "author decision sha256 640a09ce53a715bff89a08f6f591118a691820d6ac72772aa606bc1ca534edc9"
+      ],
+      "assessment": "Packet V8 supplied the captured topology, deployed contract, current value, and override fence."
+    },
+    {
+      "claim_or_decision": "Halo emphasis decreased while geometry, placement, and framing stayed fixed.",
+      "support_class": "packet_v8_and_controller_comparison",
+      "exact_refs": [
+        "derived packet 6b191cee-2412-493e-a050-c1c701b6663f manifest 36e878e732bfb7195fd52a272e9b81eec2ed4e36a9202175229e2ffe872c0cb6",
+        "round-review-comparison.json sha256 2f1d25b80f2a36f655182fb46cf332ce0658c30d1dc66d5bd44327d49648afec"
+      ],
+      "assessment": "The refreshed packet supplied result authority and the comparison bound the exact before/after derivatives."
+    },
+    {
+      "claim_or_decision": "The exact derivatives differ by mean absolute RGBA values [15.408495330810547, 10.749123001098633, 2.6965919494628907, 0.0].",
+      "support_class": "controller_comparison_only",
+      "exact_refs": [
+        "round-review-comparison.json sha256 2f1d25b80f2a36f655182fb46cf332ce0658c30d1dc66d5bd44327d49648afec"
+      ],
+      "assessment": "This is controller-owned comparison evidence, not engine-state or mathematical authority."
+    }
+  ],
+  "human_disposition": "pending"
+}

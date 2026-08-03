@@ -1,0 +1,95 @@
+{
+  "ledger_version": 1,
+  "fixture_id": "B",
+  "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-B-fractal_web_session_transcript.md",
+  "qualification_case_sha256": "8744a3cc7c7308e8bb5a9078803ca9827f78aaee9f150cb1a0c18d1996487379",
+  "run_id": "v9-v8-b-luna-high-live-2b92ffab-2182-4234-846a-b51c2b780f7d",
+  "cost": {
+    "count_only_maximum_usd": "0.0897892",
+    "actual_calculated_usd": "0.0758634"
+  },
+  "workflow_result": {
+    "override_effect": "AUTHORIZED_CHANGE",
+    "proof_status": "replay_proven",
+    "model_gate": "ROUND_ADVANCE",
+    "controller_disposition": "BUDGET_EXHAUSTED"
+  },
+  "historical_comparison": {
+    "experiment_selection": {
+      "historical": "Disabled only root_proximity blend weight as a color-only negative control.",
+      "current": "Activated ripple_amplitude at 0.15 as a single dynamics perturbation.",
+      "assessment": "different"
+    },
+    "prediction": {
+      "historical": "Predicted selective rosette weakening but observed broader periodic redistribution.",
+      "current": "Predicted fine corrugation and local displacement but observed much stronger global reorganization.",
+      "assessment": "comparable"
+    },
+    "camera": {
+      "historical": "Preserved the exact camera for a color-only comparison.",
+      "current": "Preserved the exact camera as an explicit fixed-window dynamics comparison without claiming feature tracking.",
+      "assessment": "comparable"
+    },
+    "observability": {
+      "historical": "Tested a named source contribution through the active layered pipeline.",
+      "current": "Tested a dynamics control indirectly through the complete active rendered source stack.",
+      "assessment": "different"
+    },
+    "override_quality": {
+      "historical": "Returned one complete pipeline replacement with one effective scalar change.",
+      "current": "Returned one minimal authorized dynamics leaf and no camera or pipeline changes.",
+      "assessment": "comparable"
+    },
+    "result_review": {
+      "historical": "Correctly identified a global phase response and revised an overly local prediction.",
+      "current": "Correctly identified a stronger global response and preserved causal uncertainty.",
+      "assessment": "comparable"
+    }
+  },
+  "enrichment_use": [
+    {
+      "claim_or_decision": "The exact fixed viewport bounds were suitable for a same-window comparison without a feature-continuation claim.",
+      "support_class": "packet_v8_and_enrichment",
+      "exact_refs": [
+        "packet bb430c93-1747-490d-92a0-59f998fe451c",
+        "analysis 3e0ce82af48deb2d114680323ec1caa8145115bebf604114a9b408f403812a42/common-facts.json sha256 b0e4d3debd0f95ea7fa2fb8fa369d5b1cea67a4de0be3c975400d7a78ae7df12"
+      ],
+      "assessment": "Common enrichment restated exact camera facts already carried by Packet V8 and supported concise containment language."
+    },
+    {
+      "claim_or_decision": "No active-model provider comparison was available for explaino_all.",
+      "support_class": "enrichment_only",
+      "exact_refs": [
+        "analysis 3e0ce82af48deb2d114680323ec1caa8145115bebf604114a9b408f403812a42/provider-result.json sha256 4b648e955b30d58a6da72926b0840681e97b523b205915e523850fe470599135"
+      ],
+      "assessment": "The unavailable result constrained capability claims and was not treated as mathematical authority."
+    },
+    {
+      "claim_or_decision": "ripple_amplitude was an authorized observable dynamics leaf with a documented neutral base value.",
+      "support_class": "packet_v8_only",
+      "exact_refs": [
+        "packet bb430c93-1747-490d-92a0-59f998fe451c",
+        "author decision sha256 088fa3e5d521f6a352ca47813a6071e5a9a17461b8c54dd2c014f4ff3a3a9d55"
+      ],
+      "assessment": "Packet V8 supplied authorability, current value, range, and rendered observation channel."
+    },
+    {
+      "claim_or_decision": "The result was global and much stronger than the locked local-corrugation prediction.",
+      "support_class": "packet_v8_and_controller_comparison",
+      "exact_refs": [
+        "derived packet f14d8e53-33ae-457f-9a9f-140a13ff478d manifest e2e3999465f5c57b718ed28dbb7b5c622e6003e1f0556684d92085997e4f03c3",
+        "round-review-comparison.json sha256 8086be847340c0596f7f2b49bab503d31b532cc9bebd8bf8fc00d3583c521605"
+      ],
+      "assessment": "The refreshed packet supplied result authority and the exact comparison made the magnitude miss explicit."
+    },
+    {
+      "claim_or_decision": "The exact derivatives differ by mean absolute RGBA values [72.69327392578126, 81.27309608459473, 68.49835090637207, 0.0].",
+      "support_class": "controller_comparison_only",
+      "exact_refs": [
+        "round-review-comparison.json sha256 8086be847340c0596f7f2b49bab503d31b532cc9bebd8bf8fc00d3583c521605"
+      ],
+      "assessment": "This is controller-owned comparison evidence, not a general mathematical claim."
+    }
+  ],
+  "human_disposition": "pending"
+}
