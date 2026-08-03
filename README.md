@@ -135,6 +135,22 @@ execution contract is
 [`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md);
 [`PICK_UP_HERE.md`](PICK_UP_HERE.md) records the exact restart point.
 
+Common Packet V8 enrichment can also be exercised headlessly without invoking
+the runtime model provider:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+py -3.14 -m cuda_fractal_state_tool.finding_enrichment_cli `
+  --workspace-root D:\salt-fractal\cuda-fractal-engine-state-tool `
+  --packet-dir <exact-packet-v8-directory>
+```
+
+This route validates the immutable packet through the same loader used by the
+workflow, writes exact common facts under the finding's `analyses` directory,
+and reports model enrichment as unavailable until an exact engine receipt is
+bound. Slice 1 evidence is recorded in
+[`docs/finding_enrichment_slice1_evidence.md`](docs/finding_enrichment_slice1_evidence.md).
+
 ## Packet V8 and override authority
 
 Packet V8 is the seven-file authority handoff when a frame exists:

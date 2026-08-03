@@ -292,17 +292,17 @@ bifurcation, or other cause.
 - [x] Verify merged engine `master@deca3d93` and published runtime hash.
 - [x] Verify the Rational Escape active-model receipt against the exact fixture.
 - [x] Create `codex/finding-enrichment-v9-sweep`.
-- [ ] Check in this consolidated campaign plan and baseline receipt.
+- [x] Check in this consolidated campaign plan and baseline receipt.
 
 Exit: one clean planning checkpoint; no product behavior changed.
 
 ### Slice 1 - Common enrichment foundation
 
-- Define immutable schemas, identities, storage, atomic writes, and statuses.
-- Implement common facts from exact Packet V8 authorities only.
-- Implement the static provider registry with explicit unavailable behavior.
-- Add focused tests first, then full suite and real unrelated-selector proof.
-- Hostile-review identity drift, packet mutation, fallback, and provenance.
+- [x] Define immutable schemas, identities, storage, atomic writes, and statuses.
+- [x] Implement common facts from exact Packet V8 authorities only.
+- [x] Implement the static provider registry with explicit unavailable behavior.
+- [x] Add focused tests first, then full suite and real unrelated-selector proof.
+- [x] Hostile-review identity drift, packet mutation, fallback, and provenance.
 
 Exit: common enrichment works without any mathematical provider.
 
@@ -407,6 +407,7 @@ one image-materialization owner, regardless of CLI, automation, or UI route.
 
 ## Current phase
 
-Slice 0 planning checkpoint is in progress. Slice 1 is the next product
-mutation after that clean checkpoint. All remaining work is covered by the
+Slice 1 common enrichment is complete and ready for its clean checkpoint.
+Slice 2 production model enrichment and separately receipted annotation are the
+next approved product boundary. All remaining work is covered by the
 preplanned slices above through the next manual-review gate.
