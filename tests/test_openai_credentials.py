@@ -5,6 +5,7 @@ import unittest
 from cuda_fractal_state_tool.openai_credentials import (
     OPENAI_CREDENTIAL_TARGET,
     OPENAI_CREDENTIAL_USERNAME,
+    OPENAI_LEGACY_CREDENTIAL_USERNAME,
     delete_openai_api_key,
     resolve_openai_api_key,
     set_openai_api_key,
@@ -12,21 +13,29 @@ from cuda_fractal_state_tool.openai_credentials import (
 
 
 class FakeCredentialStore:
-    def __init__(self, value: str | None = None) -> None:
-        self.value = value
+    def __init__(
+        self,
+        value: str | None = None,
+        *,
+        legacy_value: str | None = None,
+    ) -> None:
+        self.values = {
+            OPENAI_CREDENTIAL_USERNAME: value,
+            OPENAI_LEGACY_CREDENTIAL_USERNAME: legacy_value,
+        }
         self.calls: list[tuple[str, ...]] = []
 
     def get_password(self, service: str, username: str) -> str | None:
         self.calls.append(("get", service, username))
-        return self.value
+        return self.values.get(username)
 
     def set_password(self, service: str, username: str, password: str) -> None:
         self.calls.append(("set", service, username, password))
-        self.value = password
+        self.values[username] = password
 
     def delete_password(self, service: str, username: str) -> None:
         self.calls.append(("delete", service, username))
-        self.value = None
+        self.values[username] = None
 
 
 class OpenAICredentialTests(unittest.TestCase):
@@ -45,8 +54,29 @@ class OpenAICredentialTests(unittest.TestCase):
         credential = resolve_openai_api_key(environment={}, store=store)
         self.assertEqual(credential.value, "stored-key")
         self.assertEqual(credential.source, "windows_credential_manager")
-        store.value = None
+        store.values[OPENAI_CREDENTIAL_USERNAME] = None
         self.assertIsNone(resolve_openai_api_key(environment={}, store=store))
+
+    def test_legacy_windows_username_is_read_only_fallback(self) -> None:
+        store = FakeCredentialStore(legacy_value=" legacy-key ")
+        credential = resolve_openai_api_key(environment={}, store=store)
+        self.assertEqual(credential.value, "legacy-key")
+        self.assertEqual(
+            credential.source,
+            "windows_credential_manager:legacy_username",
+        )
+        self.assertEqual(
+            store.calls,
+            [
+                ("get", OPENAI_CREDENTIAL_TARGET, OPENAI_CREDENTIAL_USERNAME),
+                ("get", OPENAI_CREDENTIAL_TARGET, OPENAI_LEGACY_CREDENTIAL_USERNAME),
+            ],
+        )
+
+        store = FakeCredentialStore("primary-key", legacy_value="legacy-key")
+        credential = resolve_openai_api_key(environment={}, store=store)
+        self.assertEqual(credential.value, "primary-key")
+        self.assertEqual(credential.source, "windows_credential_manager")
 
     def test_set_and_delete_use_exact_target_without_exposing_value(self) -> None:
         store = FakeCredentialStore()
@@ -57,8 +87,15 @@ class OpenAICredentialTests(unittest.TestCase):
         )
         delete_openai_api_key(store=store)
         self.assertEqual(
-            store.calls[-1],
-            ("delete", OPENAI_CREDENTIAL_TARGET, OPENAI_CREDENTIAL_USERNAME),
+            store.calls[-2:],
+            [
+                ("delete", OPENAI_CREDENTIAL_TARGET, OPENAI_CREDENTIAL_USERNAME),
+                (
+                    "delete",
+                    OPENAI_CREDENTIAL_TARGET,
+                    OPENAI_LEGACY_CREDENTIAL_USERNAME,
+                ),
+            ],
         )
 
     def test_set_rejects_empty_or_multiline_values(self) -> None:

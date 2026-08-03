@@ -22,6 +22,7 @@ from .automated_session import (
     AutomatedRouteServices,
     AutomatedSessionController,
     AutomatedSessionResult,
+    InitialAuthorCountResult,
 )
 from .enrichment_disclosure import DisclosureProfile
 from .model_profile import ModelProfileV1
@@ -395,6 +396,39 @@ class QualificationReceipt:
         }
 
 
+@dataclass(frozen=True)
+class QualificationCountReceipt:
+    case_sha256: str
+    input_tokens: int
+    maximum_output_tokens: int
+    estimated_maximum_cost_usd: Decimal
+    within_case_budget: bool
+    budget_exhaustion_reason: str | None
+    request_evidence_path: Path | None
+    count_evidence_path: Path | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "qualification_count_receipt_version": 1,
+            "case_sha256": self.case_sha256,
+            "input_tokens": self.input_tokens,
+            "maximum_output_tokens": self.maximum_output_tokens,
+            "estimated_maximum_cost_usd": decimal_text(
+                self.estimated_maximum_cost_usd
+            ),
+            "within_case_budget": self.within_case_budget,
+            "budget_exhaustion_reason": self.budget_exhaustion_reason,
+            "request_evidence_path": (
+                str(self.request_evidence_path) if self.request_evidence_path else None
+            ),
+            "count_evidence_path": (
+                str(self.count_evidence_path) if self.count_evidence_path else None
+            ),
+            "generation_dispatched": False,
+            "provider_billing_authority": "provider billing remains authoritative",
+        }
+
+
 def _contains_true_human_acceptance(value: Any) -> bool:
     if isinstance(value, dict):
         return any(
@@ -588,6 +622,45 @@ def create_qualification_run_store(
     )
     store.write_evidence_json("qualification/case.json", case.identity_dict())
     return store
+
+
+def count_qualification_author_input(
+    *,
+    case: QualificationCaseV1,
+    bundle: AgentBundle,
+    transport: Any,
+    run_store: AutomatedRunStore,
+    services: AutomatedRouteServices,
+    pricing_policy: PricingPolicy,
+) -> tuple[InitialAuthorCountResult, QualificationCountReceipt]:
+    case.validate_bundle(bundle)
+    case.model_profile.validate(pricing_policy)
+    if pricing_policy.sha256 != case.pricing_policy_sha256:
+        raise ValueError("Qualification case pricing authority changed")
+    controller = AutomatedSessionController(
+        transport=transport,
+        run_store=run_store,
+        initial_bundle=bundle,
+        services=services,
+        budgets=case.budgets,
+        pricing_policy=pricing_policy,
+        model_profile=case.model_profile,
+        disclosure_profile=case.disclosure_profile,
+        auto_promote=True,
+    )
+    result = controller.count_initial_author_input()
+    receipt = QualificationCountReceipt(
+        case_sha256=case.sha256,
+        input_tokens=result.transport_count.input_tokens,
+        maximum_output_tokens=result.transport_count.maximum_output_tokens,
+        estimated_maximum_cost_usd=result.estimated_maximum_cost_usd,
+        within_case_budget=result.budget_exhaustion_reason is None,
+        budget_exhaustion_reason=result.budget_exhaustion_reason,
+        request_evidence_path=result.transport_count.request_evidence_path,
+        count_evidence_path=result.transport_count.count_evidence_path,
+    )
+    run_store.write_evidence_json("qualification/count-only-receipt.json", receipt.to_dict())
+    return result, receipt
 
 
 def run_qualification_case(

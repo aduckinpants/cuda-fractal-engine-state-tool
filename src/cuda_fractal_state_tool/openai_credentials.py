@@ -7,6 +7,7 @@ from typing import Mapping, Protocol
 
 OPENAI_CREDENTIAL_TARGET = "openai/api_key"
 OPENAI_CREDENTIAL_USERNAME = "api_key"
+OPENAI_LEGACY_CREDENTIAL_USERNAME = "OPENAI_API_KEY"
 
 
 class CredentialStore(Protocol):
@@ -40,12 +41,22 @@ def resolve_openai_api_key(
     environment_value = values.get("OPENAI_API_KEY", "").strip()
     if environment_value:
         return OpenAICredential(environment_value, "environment:OPENAI_API_KEY")
-    credential_value = (store or _default_store()).get_password(
+    credential_store = store or _default_store()
+    credential_value = credential_store.get_password(
         OPENAI_CREDENTIAL_TARGET,
         OPENAI_CREDENTIAL_USERNAME,
     )
     if credential_value and credential_value.strip():
         return OpenAICredential(credential_value.strip(), "windows_credential_manager")
+    legacy_value = credential_store.get_password(
+        OPENAI_CREDENTIAL_TARGET,
+        OPENAI_LEGACY_CREDENTIAL_USERNAME,
+    )
+    if legacy_value and legacy_value.strip():
+        return OpenAICredential(
+            legacy_value.strip(),
+            "windows_credential_manager:legacy_username",
+        )
     return None
 
 
@@ -64,9 +75,13 @@ def set_openai_api_key(value: str, *, store: CredentialStore | None = None) -> N
 
 def delete_openai_api_key(*, store: CredentialStore | None = None) -> None:
     target = store or _default_store()
-    try:
-        target.delete_password(OPENAI_CREDENTIAL_TARGET, OPENAI_CREDENTIAL_USERNAME)
-    except Exception as exc:
-        # keyring backends use backend-specific exceptions for an absent credential.
-        if exc.__class__.__name__ not in {"PasswordDeleteError", "CredentialNotFoundError"}:
-            raise
+    for username in (OPENAI_CREDENTIAL_USERNAME, OPENAI_LEGACY_CREDENTIAL_USERNAME):
+        try:
+            target.delete_password(OPENAI_CREDENTIAL_TARGET, username)
+        except Exception as exc:
+            # keyring backends use backend-specific exceptions for an absent credential.
+            if exc.__class__.__name__ not in {
+                "PasswordDeleteError",
+                "CredentialNotFoundError",
+            }:
+                raise

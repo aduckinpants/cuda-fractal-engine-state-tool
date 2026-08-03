@@ -2,8 +2,8 @@
 
 Date: 2026-08-03
 
-Status: implementation checkpoint; provider input counting and generation remain
-unauthorized
+Status: Slices 0 through 3 complete; one provider input count was authorized and
+completed without generation; response generation remains unauthorized
 
 ## Locked authority
 
@@ -161,8 +161,21 @@ campaign ceiling: $8.00
 ```
 
 The case was reopened against the exact immutable packet and current pricing
-policy. Its deterministic identity matched. No provider file upload, input
-count, or generation occurred.
+policy. Its deterministic identity matched. Slice 3 subsequently uploaded the
+exact manifest-declared packet and assisted disclosure resources for one
+provider input-token count. No response generation occurred. The provider
+returned 176,676 input tokens for the author request, below the 200,000-token
+per-response gate. With the 8,000-token output ceiling, its conservative
+maximum is `$0.0449352`.
+
+The second review request cannot be counted exactly until an author response,
+replay-proven candidate, and refreshed packet exist. Its existing 200,000-input
+and 4,000-output hard limits cap it at `$0.0448` under the tracked Luna
+short-context rates. Therefore the full one-round cell remains bounded by
+`$0.0897352`, leaving `$0.0102648` below the `$0.10` cell ceiling.
+
+The durable count receipt is summarized in
+`docs/v9_luna_high_count_only_preflight.md`.
 
 ## Hostile review
 
@@ -180,11 +193,23 @@ count, or generation occurred.
 - The hard gates never convert model `SESSION_PASS` into human acceptance.
 - Historical Sol behavior is not mislabeled as exact current-architecture cost
   evidence.
+- The count-only lifecycle has a dedicated immutable qualification receipt; it
+  is not a completed automated model session and does not claim a terminal
+  model disposition.
+- Credential resolution discovered an older Windows Credential Manager username
+  still used by the proven local setup. The resolver now checks the current
+  username first and the legacy username second; writes remain on the current
+  username, while explicit deletion covers both. No secret migration or
+  evidence exposure occurs.
 
 ## Closure
 
-Slices 0 through 2 are implemented. Exact fixtures, rubric, profile plumbing,
-offline controller witness, automatic gates, and the Luna/high case manifest
-are prepared. The next approved plan boundary is Slice 3, but it remains
-blocked on a separate explicit authorization for one count-only Luna/high
-preflight. No provider call has been made in this checkpoint.
+Slices 0 through 3 are implemented. Exact fixtures, rubric, profile plumbing,
+offline controller witness, automatic gates, the Luna/high case manifest, and
+the count-only preflight are complete. Provider files were cleaned, no response
+generation was dispatched, and the exact bounded cell remains below `$0.10`.
+
+The next planned boundary is Slice 4: one paid Luna/high hard-calibrator cell
+using the exact case. It remains blocked on separate explicit authorization for
+response generation. No generation authority is implied by the `$8` campaign
+ceiling or by the completed count-only call.
