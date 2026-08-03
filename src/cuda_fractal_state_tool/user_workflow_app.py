@@ -6,6 +6,7 @@ import os
 import queue
 import time
 import uuid
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -29,6 +30,7 @@ from .automated_session import (
 from .openai_credentials import resolve_openai_api_key, set_openai_api_key as store_openai_api_key
 from .openai_transport import OpenAISDKProvider, PacketV8ResponsesTransport
 from .preview_service import PreviewService
+from .pricing_policy import load_pricing_policy
 from .runtime_surface import DEFAULT_RUNTIME_CMD
 from .runtime_compatibility import resolve_runtime_compatibility_mode
 from .state_override_proof import (
@@ -79,13 +81,20 @@ def _candidate_preview_pixel_note(
 
 
 def _automated_budget_text(projection: dict) -> str:
+    pricing = projection.get("pricing_policy")
+    pricing_id = pricing.get("policy_id", "unbound") if isinstance(pricing, dict) else "unbound"
     return (
         f"Rounds {projection.get('proven_rounds', 0)}/2 · "
         f"Responses {projection.get('model_responses', 0)}/6 · "
         f"Tokens total/cached/uncached/out {projection.get('cumulative_input_tokens', 0):,}/"
         f"{projection.get('cumulative_cached_input_tokens', 0):,}/"
         f"{projection.get('cumulative_uncached_input_tokens', 0):,}/"
-        f"{projection.get('cumulative_output_tokens', 0):,}"
+        f"{projection.get('cumulative_output_tokens', 0):,} · "
+        f"Cache writes {projection.get('cumulative_cache_write_tokens', 0):,} · "
+        f"Calculated USD {projection.get('cumulative_calculated_cost_usd', '0')}/"
+        f"{projection.get('maximum_calculated_cost_usd', '0')} · "
+        f"Next max {projection.get('last_estimated_call_cost_usd', '0')} · "
+        f"Pricing {pricing_id}"
     )
 
 
@@ -102,7 +111,15 @@ def _format_automated_event(event: dict) -> str:
             f"{payload.get('cached_input_tokens', 0):,}/"
             f"{payload.get('uncached_input_tokens', 0):,}/"
             f"{payload.get('output_tokens', 0):,} "
+            f"cache_write={payload.get('cache_write_tokens', 0):,} "
+            f"cost=${payload.get('calculated_call_cost', {}).get('cost_usd', '0')} "
             f"latency={payload.get('latency_seconds', 0):.1f}s"
+        )
+    elif event_type in {"PROVIDER_DISPATCH_ESTIMATED", "PROVIDER_DISPATCH_REJECTED"}:
+        estimate = payload.get("estimate") if isinstance(payload.get("estimate"), dict) else {}
+        detail = (
+            f"max=${estimate.get('cost_usd', '?')} tier={estimate.get('context_tier', '?')} "
+            f"reason={payload.get('reason', 'allowed')}"
         )
     elif event_type == "OVERRIDE_VALIDATED":
         detail = (
@@ -175,11 +192,15 @@ class UserWorkflowApp:
         self.candidate_preview_status_var = tk.StringVar(value="No candidate frame yet.")
         self.changed_paths_var = tk.StringVar(value="No override changes have been proven.")
         self.auto_promote_var = tk.BooleanVar(value=True)
+        self.automated_run_budget_usd_var = tk.StringVar(value="0.00")
         self.automated_credential_var = tk.StringVar(value="Credential: not checked")
         self.automated_state_var = tk.StringVar(value="Protocol: idle")
         self.automated_authority_var = tk.StringVar(value="Authority: no active automated run")
         self.automated_budget_var = tk.StringVar(
-            value="Rounds 0/2 · Responses 0/6 · Tokens total/cached/uncached/out 0/0/0/0"
+            value=(
+                "Rounds 0/2 · Responses 0/6 · Tokens total/cached/uncached/out 0/0/0/0 · "
+                "Cache writes 0 · Calculated USD 0/0 · Next max 0"
+            )
         )
         self.automated_disposition_var = tk.StringVar(value="Disposition: not started")
         self.automated_summary_var = tk.StringVar(
@@ -402,6 +423,11 @@ class UserWorkflowApp:
             controls, text="Open Run Folder", command=self.open_automated_results
         )
         self.open_automated_results_button.grid(row=0, column=3, padx=(5, 0))
+        ttk.Label(controls, text="Run budget USD:").grid(row=0, column=4, padx=(14, 4))
+        self.automated_run_budget_entry = ttk.Entry(
+            controls, textvariable=self.automated_run_budget_usd_var, width=9
+        )
+        self.automated_run_budget_entry.grid(row=0, column=5)
         self.auto_promote_check = ttk.Checkbutton(
             automation,
             text="Auto-promote replay-proven candidates (never human acceptance)",
@@ -830,7 +856,23 @@ class UserWorkflowApp:
             self._render()
             return
         workspace_root = Path(self.workspace_root_var.get().strip()).resolve()
-        budgets = SessionBudgets()
+        try:
+            run_budget_usd = Decimal(self.automated_run_budget_usd_var.get().strip())
+        except (InvalidOperation, ValueError):
+            self._set_error("Run budget USD must be a finite non-negative decimal.")
+            self._render()
+            return
+        if not run_budget_usd.is_finite() or run_budget_usd < 0:
+            self._set_error("Run budget USD must be a finite non-negative decimal.")
+            self._render()
+            return
+        budgets = SessionBudgets(maximum_calculated_cost_usd=run_budget_usd)
+        try:
+            pricing_policy = load_pricing_policy()
+        except Exception as exc:
+            self._set_error(f"Pricing policy could not be loaded: {exc}")
+            self._render()
+            return
         run_id = f"v8-auto-{uuid.uuid4()}"
         try:
             store = AutomatedRunStore.create(
@@ -841,6 +883,7 @@ class UserWorkflowApp:
                     "model": "gpt-5.6",
                     "reasoning_effort": "high",
                     "budgets": budgets.to_dict(),
+                    "pricing_policy": pricing_policy.identity_dict(),
                     "auto_promote": bool(self.auto_promote_var.get()),
                     "credential_source": credential.source,
                 },
@@ -885,6 +928,7 @@ class UserWorkflowApp:
                 initial_bundle=bundle,
                 services=services,
                 budgets=budgets,
+                pricing_policy=pricing_policy,
                 cancelled=lambda: context.cancelled,
                 auto_promote=auto_promote,
             ).run()
@@ -948,6 +992,9 @@ class UserWorkflowApp:
                 f"{result.usage.cumulative_cached_input_tokens:,}/"
                 f"{result.usage.cumulative_uncached_input_tokens:,}/"
                 f"{result.usage.cumulative_output_tokens:,}"
+                f" · Cache writes {result.usage.cumulative_cache_write_tokens:,}"
+                f" · Calculated USD {result.usage.cumulative_calculated_cost_usd}/"
+                f"{self.automated_run_budget_usd_var.get().strip()}"
             )
             self.session.status_text = result.message
         else:
@@ -1533,6 +1580,9 @@ class UserWorkflowApp:
         )
         self.set_api_key_button.configure(state="disabled" if automated_busy else "normal")
         self.auto_promote_check.configure(state="disabled" if automated_busy else "normal")
+        self.automated_run_budget_entry.configure(
+            state="disabled" if automated_busy else "normal"
+        )
         credential_summary = "credential available" if self._credential_available else "credential not configured"
         disposition_summary = self.automated_disposition_var.get().removeprefix("Disposition: ")
         self.automated_summary_var.set(

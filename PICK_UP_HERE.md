@@ -27,10 +27,11 @@ Read first:
 1. [`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md)
 2. [`docs/finding_enrichment_slice1_evidence.md`](docs/finding_enrichment_slice1_evidence.md)
 3. [`docs/finding_enrichment_slice2_evidence.md`](docs/finding_enrichment_slice2_evidence.md)
-4. [`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
-5. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
-6. [`docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md`](docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md)
-7. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
+4. [`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md)
+5. [`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
+6. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
+7. [`docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md`](docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md)
+8. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
 
 ## Why cost is first
 
@@ -111,10 +112,10 @@ Then verify:
 
 ## Exact continuation
 
-Slice 0 is committed at `625f950`; Slice 1 is committed at `18f3761`. Slice 2
-model enrichment is implemented, qualified by 163 passing tests and the real
-Rational Escape runtime witness, and ready for its clean checkpoint. Resume at
-**Slice 3 — V9 dollar gate** after confirming the Slice 2 checkpoint.
+Slice 0 is committed at `625f950`; Slice 1 at `18f3761`; Slice 2 at `a27ae92`.
+Slice 3 exact-count dollar gating is implemented with mocked provider evidence
+only and is ready for its clean checkpoint. Resume at **Slice 4 — context
+partition and enrichment disclosure** after confirming the Slice 3 checkpoint.
 
 No paid provider call, model ablation, diagnostic-mosaic work, additional
 production provider, or engine mutation is authorized by the current state-tool

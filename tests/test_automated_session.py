@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import tempfile
 import unittest
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -53,6 +54,9 @@ class FakeTransport:
         self.calls.append(kwargs)
         if not self.responses:
             raise AssertionError("Fake transport response script exhausted")
+        authorize = kwargs.get("authorize_dispatch")
+        if authorize is not None:
+            authorize(100)
         number = len(self.calls)
         return TransportTurnResult(
             response_id=f"resp-{number}",
@@ -65,6 +69,7 @@ class FakeTransport:
             unavailable_optional_attachments=(),
             requested_model="gpt-5.6",
             cached_input_tokens=40,
+            cache_write_tokens=10,
             latency_seconds=1.25,
         )
 
@@ -232,7 +237,46 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(responses[0]["payload"]["cached_input_tokens"], 40)
             self.assertEqual(responses[0]["payload"]["uncached_input_tokens"], 60)
             self.assertEqual(result.usage.cumulative_cached_input_tokens, 80)
+            self.assertEqual(result.usage.cumulative_cache_write_tokens, 20)
             self.assertEqual(result.usage.cumulative_uncached_input_tokens, 120)
+            self.assertGreater(result.usage.cumulative_calculated_cost_usd, Decimal("0"))
+            estimates = [
+                event for event in events if event["event_type"] == "provider_dispatch_estimated"
+            ]
+            self.assertEqual(len(estimates), 2)
+            self.assertEqual(
+                Decimal(estimates[0]["payload"]["estimate"]["cost_usd"]),
+                Decimal("0.720625"),
+            )
+            self.assertEqual(
+                responses[0]["payload"]["calculated_call_cost"]["cache_write_tokens"], 10
+            )
+
+    def test_dollar_gate_rejects_before_transport_dispatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            initial = _bundle(root, "packet-base", "finding-base", "base")
+            transport = FakeTransport([VALID_OVERRIDE_RESPONSE])
+            store = self._store(root, initial)
+            result = AutomatedSessionController(
+                transport=transport,
+                run_store=store,
+                initial_bundle=initial,
+                services=ServiceHarness(root, initial, []).services(),
+                budgets=SessionBudgets(maximum_calculated_cost_usd=Decimal("0.42")),
+            ).run()
+            self.assertEqual(result.disposition, ControllerDisposition.BUDGET_EXHAUSTED)
+            self.assertEqual(len(transport.calls), 1)
+            self.assertEqual(len(transport.responses), 1)
+            self.assertEqual(result.usage.model_responses, 0)
+            rejected = [
+                event for event in store.read_events() if event["event_type"] == "provider_dispatch_rejected"
+            ]
+            self.assertEqual(rejected[-1]["payload"]["reason"], "maximum_calculated_cost_usd")
+            self.assertEqual(
+                Decimal(rejected[-1]["payload"]["estimate"]["cost_usd"]),
+                Decimal("0.720625"),
+            )
 
     def test_round_revise_rebinds_second_override_to_preceding_packet(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -479,7 +523,7 @@ class AutomatedSessionTests(unittest.TestCase):
                 ),
             ).run()
             self.assertEqual(result.disposition, ControllerDisposition.BUDGET_EXHAUSTED)
-            self.assertEqual(result.usage.model_responses, 1)
+            self.assertEqual(result.usage.model_responses, 0)
             self.assertEqual(services.promotions, 0)
 
     def test_parsers_require_one_json_block_and_one_gate_line(self) -> None:

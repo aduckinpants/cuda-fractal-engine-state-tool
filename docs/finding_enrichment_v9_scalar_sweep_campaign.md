@@ -323,12 +323,12 @@ transport change is included.
 
 ### Slice 3 - V9 dollar gate
 
-- Add versioned pricing-policy input and conservative estimate.
-- Gate remaining dollars in addition to existing tokens/responses/rounds.
-- Record estimate, actual usage-derived calculation, pricing identity, and
+- [x] Add versioned pricing-policy input and conservative estimate.
+- [x] Gate remaining dollars in addition to existing tokens/responses/rounds.
+- [x] Record estimate, actual usage-derived calculation, pricing identity, and
   billing disclaimer.
-- Expose the calculation in run evidence and thin UI status.
-- Use mocked usage only; make no paid call.
+- [x] Expose the calculation in run evidence and thin UI status.
+- [x] Use mocked usage only; make no paid call.
 
 Exit: no provider dispatch can exceed its explicit run-dollar budget.
 
@@ -407,7 +407,7 @@ one image-materialization owner, regardless of CLI, automation, or UI route.
 
 ## Current phase
 
-Slice 2 production model enrichment and separately receipted annotation are
-complete and ready for a clean checkpoint. Slice 3 dollar dispatch gating is
-the next approved product boundary. All remaining work is covered by the
-preplanned slices above through the next manual-review gate.
+Slices 0-3 are complete. Exact input counting and the conservative USD gate are
+ready for a clean checkpoint. Slice 4 context partition and enrichment
+disclosure is the next approved product boundary. All remaining work is covered
+by the preplanned slices above through the next manual-review gate.

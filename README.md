@@ -99,6 +99,9 @@ The POC is intentionally bounded:
 - two primary responses per round (combined authoring, then combined review/gate);
 - at most six model responses including one correction turn per round;
 - cumulative total/cached/uncached input and output token usage shown in the panel;
+- separate cache-write usage and usage-derived USD calculation;
+- exact provider input-token counting before generation dispatch;
+- a user-entered run-dollar ceiling, initialized to `0.00`;
 - one correction turn for malformed, unauthorized, or unintended `{}` output;
 - exact `ROUND_ADVANCE` and `ROUND_REVISE` current-packet rebinding;
 - explicit terminal controller disposition and durable result folder.
@@ -108,6 +111,16 @@ key is available. `Set OpenAI API Key...` stores a key in Windows Credential
 Manager at target `openai/api_key`. An `OPENAI_API_KEY` environment value takes
 precedence. Secret values are never written to app evidence, packets, receipts,
 logs, or Git.
+
+Before `responses.create`, the route asks the provider to count the exact
+constructed request, prices that count conservatively with maximum output, and
+rejects generation when the result exceeds the remaining explicit run budget.
+Rejected-turn uploads are cleaned up. The tracked V1 standard pricing policy is
+versioned and hashed; override it with
+`CUDA_FRACTAL_OPENAI_PRICING_POLICY=<exact-json-path>`. Pricing is a local gate,
+not a provider invoice. Cache reads and cache writes are retained separately in
+receipts. See
+[`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md).
 
 `Auto-promote replay-proven candidates` means automation may create a derived
 finding from the exact engine state and proof-owned PNG, then refresh Packet V8
@@ -128,8 +141,9 @@ The bounded paid-run outcome and exact receipts are summarized in
 The approved finding-enrichment and V9 campaign is active on
 `codex/finding-enrichment-v9-sweep`. Deterministic common/model enrichment is
 implemented before final V9 context shaping so model turns do not repeatedly
-rediscover engine-declared mathematics. Cost remediation still precedes any
-paid battery, and the bounded one-axis scalar bracket remains a later local
+rediscover engine-declared mathematics. The exact-count dollar gate is now
+complete; context partition still precedes any paid battery, and the bounded
+one-axis scalar bracket remains a later local
 route over ordinary independently proven sparse overrides. The current
 execution contract is
 [`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md);

@@ -98,10 +98,17 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
                     "cumulative_cached_input_tokens": 100000,
                     "cumulative_uncached_input_tokens": 23456,
                     "cumulative_output_tokens": 7890,
+                    "cumulative_cache_write_tokens": 4567,
+                    "cumulative_calculated_cost_usd": "1.23",
+                    "maximum_calculated_cost_usd": "4.00",
+                    "last_estimated_call_cost_usd": "1.97",
+                    "pricing_policy": {"policy_id": "openai-standard-2026-08-03"},
                 }
             ),
             "Rounds 1/2 · Responses 2/6 · Tokens total/cached/uncached/out "
-            "123,456/100,000/23,456/7,890",
+            "123,456/100,000/23,456/7,890 · Cache writes 4,567 · "
+            "Calculated USD 1.23/4.00 · Next max 1.97 · "
+            "Pricing openai-standard-2026-08-03",
         )
 
     def test_automated_event_view_is_compact_and_field_allowlisted(self) -> None:
