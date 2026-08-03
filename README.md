@@ -151,16 +151,15 @@ exists, even when a session stops before final qualification.
 The bounded paid-run outcome and exact receipts are summarized in
 [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md).
 
-The approved finding-enrichment and V9 campaign is active on
-`codex/finding-enrichment-v9-sweep`. Deterministic common/model enrichment is
-implemented before final V9 context shaping so model turns do not repeatedly
-rediscover engine-declared mathematics. The exact-count dollar gate and fresh
-review-context partition are complete; no paid battery was run. The bounded
-one-axis scalar bracket is the current local
-route over ordinary independently proven sparse overrides. The current
-execution contract is
+The finding-enrichment and local scalar-sweep campaign is merged on `main` at
+`027a741`. Deterministic common/model enrichment prevents repeated discovery of
+engine-declared mathematics. The exact-count dollar gate and fresh review-
+context partition are complete; no paid model-ablation battery was run. The
+bounded one-axis scalar bracket is the current local route over ordinary
+independently proven sparse overrides. The completed execution contract is
 [`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md);
-[`PICK_UP_HERE.md`](PICK_UP_HERE.md) records the exact restart point.
+the proposed next campaign is
+[`docs/v9_economic_qualification_model_ladder_plan.md`](docs/v9_economic_qualification_model_ladder_plan.md).
 
 Common Packet V8 enrichment can also be exercised headlessly without invoking
 the runtime model provider:
