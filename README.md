@@ -102,6 +102,7 @@ The POC is intentionally bounded:
 - separate cache-write usage and usage-derived USD calculation;
 - exact provider input-token counting before generation dispatch;
 - a user-entered run-dollar ceiling, initialized to `0.00`;
+- one explicit context profile: `blind`, `assisted`, or `break_blind`;
 - one correction turn for malformed, unauthorized, or unintended `{}` output;
 - exact `ROUND_ADVANCE` and `ROUND_REVISE` current-packet rebinding;
 - explicit terminal controller disposition and durable result folder.
@@ -122,6 +123,18 @@ not a provider invoice. Cache reads and cache writes are retained separately in
 receipts. See
 [`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md).
 
+Every authoring round starts with only its current Packet V8 authority. Review
+starts in another fresh provider context with the replay-proven derived packet
+and a compact, exact controller ledger for the prior decision, override, and
+proof. It never retains the original packet through response continuation.
+Exact file resources may be reused only when role and SHA-256 match; Packet V8
+construction still owns their meaning and order. `blind` discloses no analysis,
+`assisted` discloses receipted enrichment for authoring and review, and
+`break_blind` keeps authoring blind before disclosing enrichment for review.
+Disclosure manifests select immutable outputs without changing analysis/cache
+identity. See
+[`docs/finding_enrichment_slice4_context_evidence.md`](docs/finding_enrichment_slice4_context_evidence.md).
+
 `Auto-promote replay-proven candidates` means automation may create a derived
 finding from the exact engine state and proof-owned PNG, then refresh Packet V8
 for the next round. That promotion records `human_acceptance: false`. Clearing
@@ -141,9 +154,9 @@ The bounded paid-run outcome and exact receipts are summarized in
 The approved finding-enrichment and V9 campaign is active on
 `codex/finding-enrichment-v9-sweep`. Deterministic common/model enrichment is
 implemented before final V9 context shaping so model turns do not repeatedly
-rediscover engine-declared mathematics. The exact-count dollar gate is now
-complete; context partition still precedes any paid battery, and the bounded
-one-axis scalar bracket remains a later local
+rediscover engine-declared mathematics. The exact-count dollar gate and fresh
+review-context partition are complete; no paid battery was run. The bounded
+one-axis scalar bracket is the current local
 route over ordinary independently proven sparse overrides. The current
 execution contract is
 [`docs/finding_enrichment_v9_scalar_sweep_campaign.md`](docs/finding_enrichment_v9_scalar_sweep_campaign.md);

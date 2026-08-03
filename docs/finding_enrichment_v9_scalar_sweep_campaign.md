@@ -334,14 +334,15 @@ Exit: no provider dispatch can exceed its explicit run-dollar budget.
 
 ### Slice 4 - Context partition and enrichment disclosure
 
-- Deduplicate exact role/hash-identical stable resources without creating a
+- [x] Deduplicate exact role/hash-identical stable resources without creating a
   second packet contract.
-- Build compact controller-owned authoring and review ledgers.
-- Start review in a fresh provider context.
-- Add manifest-driven `blind`, `assisted`, and `break_blind` disclosure over
+- [x] Build compact controller-owned review ledgers.
+- [x] Start review in a fresh provider context.
+- [x] Add manifest-driven `blind`, `assisted`, and `break_blind` disclosure over
   immutable analysis outputs.
-- Replay captured provider fixtures to measure request construction and size.
-- Prove no review request carries full original plus refreshed histories.
+- [x] Replay a captured provider fixture to measure request construction and
+  byte size without a provider call.
+- [x] Prove no review request carries full original plus refreshed histories.
 
 Exit: recorded fixture replay demonstrates the bounded context architecture;
 no model downgrade or paid request occurs.
@@ -407,7 +408,8 @@ one image-materialization owner, regardless of CLI, automation, or UI route.
 
 ## Current phase
 
-Slices 0-3 are complete. Exact input counting and the conservative USD gate are
-ready for a clean checkpoint. Slice 4 context partition and enrichment
-disclosure is the next approved product boundary. All remaining work is covered
-by the preplanned slices above through the next manual-review gate.
+Slices 0-4 are complete. Exact input counting, conservative USD gating, fresh
+review contexts, exact resource reuse, and disclosure-controlled enrichment are
+checkpointed. Slice 5, Headless Scalar Bracket Sweep V1, is the next approved
+product boundary. All remaining work is covered by the preplanned slices above
+through the next manual-review gate.

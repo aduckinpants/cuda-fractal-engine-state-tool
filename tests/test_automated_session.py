@@ -19,6 +19,7 @@ from cuda_fractal_state_tool.automated_session import (
     extract_sparse_override,
 )
 from cuda_fractal_state_tool.derived_finding import DerivedFindingPromotion
+from cuda_fractal_state_tool.enrichment_disclosure import DisclosureProfile
 from cuda_fractal_state_tool.finding_workspace import ImportResult
 from cuda_fractal_state_tool.openai_transport import (
     ProviderFailureKind,
@@ -225,8 +226,21 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(transport.calls[0]["packet_dir"], initial.packet_dir)
             self.assertEqual(transport.calls[1]["packet_dir"], derived.packet_dir)
             self.assertIsNone(transport.calls[0]["previous_response_id"])
-            self.assertEqual(transport.calls[1]["previous_response_id"], "resp-1")
+            self.assertIsNone(transport.calls[1]["previous_response_id"])
+            review_resources = transport.calls[1]["additional_resources"]
+            self.assertEqual(
+                [resource.role for resource in review_resources],
+                ["controller_round_review_ledger", "enrichment_disclosure_manifest"],
+            )
+            ledger = review_resources[0]
+            self.assertEqual(ledger.filename, "round-review-ledger.json")
+            self.assertTrue(ledger.local_path.is_file())
             events = store.read_events()
+            reviews = [
+                event for event in events if event["event_type"] == "review_conversation_started"
+            ]
+            self.assertEqual(len(reviews), 1)
+            self.assertTrue(reviews[0]["payload"]["provider_chain_reset"])
             gate = [event for event in events if event["event_type"] == "model_gate_proposal"][-1]
             disposition = [event for event in events if event["event_type"] == "session_disposition"][-1]
             self.assertEqual(gate["payload"]["model_gate_proposal"], "SESSION_PASS")
@@ -276,6 +290,50 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(
                 Decimal(rejected[-1]["payload"]["estimate"]["cost_usd"]),
                 Decimal("0.720625"),
+            )
+
+    def test_zero_dollar_budget_stops_before_context_or_provider_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            initial = _bundle(root, "packet-base", "finding-base", "base")
+            transport = FakeTransport([VALID_OVERRIDE_RESPONSE])
+            disclosure_calls = []
+            harness = ServiceHarness(root, initial, [])
+            services = AutomatedRouteServices(
+                proof=harness.proof,
+                promote=harness.promote,
+                build_bundle=harness.build_bundle,
+                validate=harness.validate,
+                disclosure=lambda *args: disclosure_calls.append(args),
+            )
+            result = AutomatedSessionController(
+                transport=transport,
+                run_store=self._store(root, initial),
+                initial_bundle=initial,
+                services=services,
+                budgets=SessionBudgets(maximum_calculated_cost_usd=Decimal("0")),
+                disclosure_profile="assisted",
+            ).run()
+            self.assertEqual(result.disposition, ControllerDisposition.BUDGET_EXHAUSTED)
+            self.assertEqual(transport.calls, [])
+            self.assertEqual(disclosure_calls, [])
+
+    def test_break_blind_discloses_only_during_fresh_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            initial = _bundle(root, "packet-base", "finding-base", "base")
+            controller = AutomatedSessionController(
+                transport=FakeTransport([]),
+                run_store=self._store(root, initial),
+                initial_bundle=initial,
+                services=ServiceHarness(root, initial, []).services(),
+                disclosure_profile="break_blind",
+            )
+            self.assertEqual(
+                controller._phase_disclosure_profile("author"), DisclosureProfile.BLIND
+            )
+            self.assertEqual(
+                controller._phase_disclosure_profile("review"), DisclosureProfile.BREAK_BLIND
             )
 
     def test_round_revise_rebinds_second_override_to_preceding_packet(self) -> None:

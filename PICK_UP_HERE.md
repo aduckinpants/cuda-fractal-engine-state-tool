@@ -28,10 +28,11 @@ Read first:
 2. [`docs/finding_enrichment_slice1_evidence.md`](docs/finding_enrichment_slice1_evidence.md)
 3. [`docs/finding_enrichment_slice2_evidence.md`](docs/finding_enrichment_slice2_evidence.md)
 4. [`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md)
-5. [`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
-6. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
-7. [`docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md`](docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md)
-8. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
+5. [`docs/finding_enrichment_slice4_context_evidence.md`](docs/finding_enrichment_slice4_context_evidence.md)
+6. [`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
+7. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
+8. [`docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md`](docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md)
+9. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
 
 ## Why cost is first
 
@@ -48,8 +49,9 @@ Each review call carried about two packet loads. The user reported only `$0.42`
 of remaining API credit at the pause boundary. Both pricing and credit are
 volatile; verify them before relying on those values.
 
-Do not start another paid automated run until the context architecture and
-dollar dispatch gate are implemented and reviewed.
+The exact-count dollar dispatch gate and fresh-review context architecture are
+implemented and reviewed. No paid qualification run was made; the UI still
+defaults to an explicit `$0.00` ceiling and stops before context/provider work.
 
 ## Locked next architecture
 
@@ -112,10 +114,10 @@ Then verify:
 
 ## Exact continuation
 
-Slice 0 is committed at `625f950`; Slice 1 at `18f3761`; Slice 2 at `a27ae92`.
-Slice 3 exact-count dollar gating is implemented with mocked provider evidence
-only and is ready for its clean checkpoint. Resume at **Slice 4 — context
-partition and enrichment disclosure** after confirming the Slice 3 checkpoint.
+Slice 0 is committed at `625f950`; Slice 1 at `18f3761`; Slice 2 at `a27ae92`;
+Slice 3 at `1f6999a`. Slice 4 context partition and disclosure is the current
+branch-tip checkpoint. Resume at **Slice 5 — Headless Scalar Bracket Sweep V1**.
+This is a local deterministic workflow and requires no provider credential.
 
 No paid provider call, model ablation, diagnostic-mosaic work, additional
 production provider, or engine mutation is authorized by the current state-tool

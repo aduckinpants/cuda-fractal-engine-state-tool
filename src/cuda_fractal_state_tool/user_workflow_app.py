@@ -22,6 +22,7 @@ from .agent_bundle import (
 from .async_jobs import AsyncJobRunner, JobOutcome, JobRequestIdentity, WorkerQueueFullError
 from .automated_protocol import AGENT_SESSION_PROTOCOL_SCHEMA, SessionBudgets
 from .automated_run_store import AutomatedRunStore
+from .enrichment_disclosure import DisclosureProfile
 from .automated_session import (
     AutomatedSessionController,
     AutomatedSessionResult,
@@ -193,6 +194,9 @@ class UserWorkflowApp:
         self.changed_paths_var = tk.StringVar(value="No override changes have been proven.")
         self.auto_promote_var = tk.BooleanVar(value=True)
         self.automated_run_budget_usd_var = tk.StringVar(value="0.00")
+        self.automated_disclosure_profile_var = tk.StringVar(
+            value=DisclosureProfile.ASSISTED.value
+        )
         self.automated_credential_var = tk.StringVar(value="Credential: not checked")
         self.automated_state_var = tk.StringVar(value="Protocol: idle")
         self.automated_authority_var = tk.StringVar(value="Authority: no active automated run")
@@ -428,6 +432,15 @@ class UserWorkflowApp:
             controls, textvariable=self.automated_run_budget_usd_var, width=9
         )
         self.automated_run_budget_entry.grid(row=0, column=5)
+        ttk.Label(controls, text="Context:").grid(row=0, column=6, padx=(14, 4))
+        self.automated_disclosure_profile = ttk.Combobox(
+            controls,
+            textvariable=self.automated_disclosure_profile_var,
+            values=tuple(profile.value for profile in DisclosureProfile),
+            state="readonly",
+            width=12,
+        )
+        self.automated_disclosure_profile.grid(row=0, column=7)
         self.auto_promote_check = ttk.Checkbutton(
             automation,
             text="Auto-promote replay-proven candidates (never human acceptance)",
@@ -868,6 +881,14 @@ class UserWorkflowApp:
             return
         budgets = SessionBudgets(maximum_calculated_cost_usd=run_budget_usd)
         try:
+            disclosure_profile = DisclosureProfile(
+                self.automated_disclosure_profile_var.get().strip()
+            )
+        except ValueError:
+            self._set_error("Context profile must be blind, assisted, or break_blind.")
+            self._render()
+            return
+        try:
             pricing_policy = load_pricing_policy()
         except Exception as exc:
             self._set_error(f"Pricing policy could not be loaded: {exc}")
@@ -885,6 +906,7 @@ class UserWorkflowApp:
                     "budgets": budgets.to_dict(),
                     "pricing_policy": pricing_policy.identity_dict(),
                     "auto_promote": bool(self.auto_promote_var.get()),
+                    "disclosure_profile": disclosure_profile.value,
                     "credential_source": credential.source,
                 },
                 initial_packet={
@@ -931,6 +953,7 @@ class UserWorkflowApp:
                 pricing_policy=pricing_policy,
                 cancelled=lambda: context.cancelled,
                 auto_promote=auto_promote,
+                disclosure_profile=disclosure_profile,
             ).run()
 
         self._automated_job_id = self._submit(
@@ -1582,6 +1605,9 @@ class UserWorkflowApp:
         self.auto_promote_check.configure(state="disabled" if automated_busy else "normal")
         self.automated_run_budget_entry.configure(
             state="disabled" if automated_busy else "normal"
+        )
+        self.automated_disclosure_profile.configure(
+            state="disabled" if automated_busy else "readonly"
         )
         credential_summary = "credential available" if self._credential_available else "credential not configured"
         disposition_summary = self.automated_disposition_var.get().removeprefix("Disposition: ")

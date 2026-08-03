@@ -263,6 +263,34 @@ class OpenAITransportTests(unittest.TestCase):
             )
             self.assertEqual(transport.owned_provider_file_ids, ())
 
+    def test_exact_role_and_hash_resources_reuse_one_owned_provider_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fixture = PacketFixture(root)
+            provider = FakeProvider()
+            transport = PacketV8ResponsesTransport(provider)
+            with patch(
+                "cuda_fractal_state_tool.openai_transport.load_agent_bundle_handoff",
+                return_value=fixture.handoff,
+            ):
+                first = transport.send_turn(
+                    instructions="Stable protocol instructions",
+                    prompt="First",
+                    packet_dir=fixture.packet_dir,
+                )
+                second = transport.send_turn(
+                    instructions="Stable protocol instructions",
+                    prompt="Second fresh context",
+                    packet_dir=fixture.packet_dir,
+                )
+            self.assertEqual(provider.uploaded, ["packet.md", "manifest.json", "state.json"])
+            self.assertTrue(all(not item.provider_reused for item in first.resources))
+            second_files = [item for item in second.resources if item.media_role == "file"]
+            self.assertTrue(all(item.provider_reused for item in second_files))
+            self.assertEqual(len(transport.owned_provider_file_ids), 3)
+            transport.close_owned_files()
+            self.assertEqual(len(provider.deleted), 3)
+
     def test_continuation_without_packet_sends_only_prompt_and_repeats_instructions(self) -> None:
         provider = FakeProvider()
         result = PacketV8ResponsesTransport(provider).send_turn(
