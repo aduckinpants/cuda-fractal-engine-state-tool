@@ -1,7 +1,7 @@
 # V9 Economic Qualification and Minimum-Acceptable Model Ladder
 
-Status: proposed; planning-only. Product mutation and provider use require the
-separate approvals defined below.
+Status: approved through zero-provider-call cost hardening. Provider count and
+generation remain behind the separate approvals defined below.
 
 Date: 2026-08-03
 
@@ -30,6 +30,12 @@ repository already provides the necessary prerequisites:
 - requested/resolved model and usage receipts;
 - a zero-dollar UI default;
 - deterministic local scalar sweeps requiring no model call.
+
+The pre-spend hardening evidence is tracked in
+`docs/v9_cost_hardening_evidence.md`. It locks explicit no-cache requests,
+8,000/4,000 stage output caps, a count-only transport seam, and an `$8.00`
+conservative campaign envelope. The user's larger willingness is not treated
+as a spending target or blanket dispatch authorization.
 
 This campaign does not reopen engine diagnostics, Packet design, enrichment
 providers, evidence tooling, or sweep semantics.
@@ -186,7 +192,8 @@ honestly rather than forcing the target.
   "profile_version": 1,
   "model": "gpt-5.6-luna",
   "reasoning_effort": "high",
-  "pricing_tier": "standard"
+  "pricing_tier": "standard",
+  "prompt_cache_policy": "explicit_no_cache"
 }
 ```
 
@@ -198,6 +205,10 @@ honestly rather than forcing the target.
   conflated;
 - profile identity enters run, count, request, and response receipts;
 - changing it invalidates pre-dispatch authorization;
+- qualification cells use request-wide explicit cache mode with no cache
+  breakpoint; any reported cache activity fails closed;
+- author output is capped at 8,000 tokens and review/correction output at
+  4,000 tokens;
 - Sol/high remains the operational default until qualification is accepted.
 
 ### Qualification case V1
@@ -224,6 +235,8 @@ human-rubric evidence. Historical run evidence is never rewritten.
 - Lock the rubric and case schema.
 - Inventory model, effort, pricing, UI, prompt, parser, and receipt surfaces;
   do not change prompts.
+- Preserve the historical token/cache audit and prove the explicit no-cache
+  request contract offline.
 - Run all rails, hostile review, commit, and clean tree.
 
 Exit: fixtures, rubric, pricing, and funding status are known. No provider call.
@@ -253,9 +266,10 @@ Exit: stop for authorization of a count-only live preflight. No generation.
 
 ### Slice 3 — Count-only preflight and funding gate
 
-After explicit authorization, upload only manifest resources, count exact input
-tokens, compute the conservative maximum cost, clean owned files if generation
-is not authorized, and stop for approval of that exact Luna/high ceiling.
+After explicit authorization, use the shared count-only transport seam to
+upload only manifest resources, count exact input tokens, compute the
+policy-aware maximum cost, clean owned files without generation, and stop for
+approval of that exact Luna/high ceiling.
 
 If count, cost, or funding fails, stop. Do not silently shrink context, change
 detail, lower effort, or substitute a model.
@@ -307,7 +321,8 @@ tier, actual-versus-estimated cost, and no progression beyond the approved cell.
 
 - engine or runtime changes;
 - Packet redesign or prompt rewrite before measured failure;
-- explicit caching changes before measured evidence;
+- cache-prefix or cache-breakpoint optimization before measured reusable-prefix
+  evidence;
 - one growing conversation across fixtures;
 - Pro, multi-agent, Batch, Flex, Fast, or explicit provider-tier changes;
 - more than one proven round per case;

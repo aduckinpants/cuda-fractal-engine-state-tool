@@ -107,12 +107,13 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
                     "maximum_calculated_cost_usd": "4.00",
                     "last_estimated_call_cost_usd": "1.97",
                     "pricing_policy": {"policy_id": "openai-standard-2026-08-03"},
+                    "prompt_cache_policy": "explicit_no_cache",
                 }
             ),
             "Rounds 1/2 · Responses 2/6 · Tokens total/cached/uncached/out "
             "123,456/100,000/23,456/7,890 · Cache writes 4,567 · "
             "Calculated USD 1.23/4.00 · Next max 1.97 · "
-            "Pricing openai-standard-2026-08-03",
+            "Pricing openai-standard-2026-08-03 · Cache explicit_no_cache",
         )
 
     def test_automated_event_view_is_compact_and_field_allowlisted(self) -> None:

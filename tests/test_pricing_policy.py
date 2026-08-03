@@ -44,6 +44,28 @@ class PricingPolicyTests(unittest.TestCase):
         self.assertEqual(long.context_tier, "long")
         self.assertEqual(long.cost_usd, Decimal("4.48"))
 
+    def test_explicit_no_cache_estimate_uses_ordinary_input_rate(self) -> None:
+        cost = estimate_maximum_call_cost(
+            load_pricing_policy(),
+            model_name="gpt-5.6",
+            maximum_input_tokens=200_000,
+            maximum_output_tokens=8_000,
+            prompt_cache_policy="explicit_no_cache",
+        )
+        self.assertEqual(cost.context_tier, "short")
+        self.assertEqual(cost.ordinary_input_tokens, 200_000)
+        self.assertEqual(cost.cache_write_tokens, 0)
+        self.assertEqual(cost.cost_usd, Decimal("1.24"))
+
+        with self.assertRaisesRegex(ValueError, "Unsupported prompt-cache"):
+            estimate_maximum_call_cost(
+                load_pricing_policy(),
+                model_name="gpt-5.6",
+                maximum_input_tokens=1,
+                maximum_output_tokens=1,
+                prompt_cache_policy="invented",
+            )
+
     def test_usage_cost_separates_cache_reads_writes_and_ordinary_input(self) -> None:
         cost = calculate_usage_cost(
             load_pricing_policy(),

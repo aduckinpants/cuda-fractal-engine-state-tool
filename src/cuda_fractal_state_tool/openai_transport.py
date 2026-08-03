@@ -17,8 +17,16 @@ from .json_utils import loads_strict_no_duplicates
 
 DEFAULT_MODEL = "gpt-5.6"
 DEFAULT_REASONING_EFFORT = "high"
-DEFAULT_MAX_OUTPUT_TOKENS = 24_000
+DEFAULT_MAX_OUTPUT_TOKENS = 8_000
 DEFAULT_RESPONSE_TIMEOUT_SECONDS = 600.0
+DEFAULT_IMAGE_DETAIL = "high"
+
+
+class PromptCachePolicy(str, Enum):
+    """Request-wide prompt-cache behavior supported by the automated route."""
+
+    EXPLICIT_NO_CACHE = "explicit_no_cache"
+    IMPLICIT = "implicit"
 
 
 class ProviderFailureKind(str, Enum):
@@ -133,6 +141,7 @@ class TransportTurnResult:
     requested_model: str = ""
     cached_input_tokens: int = 0
     cache_write_tokens: int = 0
+    prompt_cache_policy: str = PromptCachePolicy.EXPLICIT_NO_CACHE.value
     latency_seconds: float = 0.0
     request_evidence_path: Path | None = None
     response_evidence_path: Path | None = None
@@ -140,6 +149,17 @@ class TransportTurnResult:
     @property
     def uncached_input_tokens(self) -> int:
         return self.input_tokens - self.cached_input_tokens
+
+
+@dataclass(frozen=True)
+class TransportInputCountResult:
+    input_tokens: int
+    requested_model: str
+    reasoning_effort: str
+    maximum_output_tokens: int
+    prompt_cache_policy: str
+    request_evidence_path: Path | None
+    count_evidence_path: Path | None
 
 
 class OpenAISDKProvider:
@@ -402,6 +422,66 @@ class PacketV8ResponsesTransport:
                 }
         return failures
 
+    def count_turn_input(
+        self,
+        *,
+        instructions: str,
+        prompt: str,
+        packet_dir: Path,
+        run_store: AutomatedRunStore | None = None,
+        turn_id: str = "count-0001",
+        cancelled: Callable[[], bool] = lambda: False,
+        model: str = DEFAULT_MODEL,
+        reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+        max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+        timeout_seconds: float = DEFAULT_RESPONSE_TIMEOUT_SECONDS,
+        prompt_cache_policy: PromptCachePolicy = PromptCachePolicy.EXPLICIT_NO_CACHE,
+        additional_resources: tuple[TransportResource, ...] = (),
+    ) -> TransportInputCountResult:
+        """Prepare and count the exact request, then stop before generation dispatch."""
+
+        counted: list[int] = []
+
+        def stop_after_count(input_tokens: int) -> None:
+            counted.append(input_tokens)
+            raise DispatchAuthorizationRejected("Count-only preflight completed")
+
+        try:
+            self.send_turn(
+                instructions=instructions,
+                prompt=prompt,
+                packet_dir=packet_dir,
+                run_store=run_store,
+                turn_id=turn_id,
+                cancelled=cancelled,
+                model=model,
+                reasoning_effort=reasoning_effort,
+                max_output_tokens=max_output_tokens,
+                timeout_seconds=timeout_seconds,
+                prompt_cache_policy=prompt_cache_policy,
+                authorize_dispatch=stop_after_count,
+                additional_resources=additional_resources,
+            )
+        except DispatchAuthorizationRejected as exc:
+            if not counted or str(exc) != "Count-only preflight completed":
+                raise
+        if len(counted) != 1:
+            raise RuntimeError("Count-only preflight did not produce exactly one input-token count")
+        request_path = None
+        count_path = None
+        if run_store is not None:
+            request_path = run_store.run_dir / "transport" / turn_id / "request.json"
+            count_path = run_store.run_dir / "transport" / turn_id / "input-token-count.json"
+        return TransportInputCountResult(
+            input_tokens=counted[0],
+            requested_model=model,
+            reasoning_effort=reasoning_effort,
+            maximum_output_tokens=max_output_tokens,
+            prompt_cache_policy=PromptCachePolicy(prompt_cache_policy).value,
+            request_evidence_path=request_path,
+            count_evidence_path=count_path,
+        )
+
     def send_turn(
         self,
         *,
@@ -416,11 +496,13 @@ class PacketV8ResponsesTransport:
         reasoning_effort: str = DEFAULT_REASONING_EFFORT,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
         timeout_seconds: float = DEFAULT_RESPONSE_TIMEOUT_SECONDS,
+        prompt_cache_policy: PromptCachePolicy = PromptCachePolicy.EXPLICIT_NO_CACHE,
         authorize_dispatch: Callable[[int], None] | None = None,
         additional_resources: tuple[TransportResource, ...] = (),
     ) -> TransportTurnResult:
         if not instructions.strip() or not prompt.strip():
             raise ValueError("Automated response instructions and prompt are required")
+        prompt_cache_policy = PromptCachePolicy(prompt_cache_policy)
         if packet_dir is None and previous_response_id is None:
             raise ValueError("The first automated turn requires a Packet V8 authority bundle")
         if cancelled():
@@ -463,7 +545,11 @@ class PacketV8ResponsesTransport:
                     raise TransportCancelled("Automated turn was cancelled before API dispatch")
                 if resource.media_role == "vision":
                     request_content.append(
-                        {"type": "input_image", "detail": "high", "image_url": _image_data_url(resource)}
+                        {
+                            "type": "input_image",
+                            "detail": DEFAULT_IMAGE_DETAIL,
+                            "image_url": _image_data_url(resource),
+                        }
                     )
                     continue
                 provider_identity = (resource.role, resource.sha256)
@@ -496,6 +582,8 @@ class PacketV8ResponsesTransport:
                 "instructions": instructions,
                 "input": [{"role": "user", "content": request_content}],
             }
+            if prompt_cache_policy is PromptCachePolicy.EXPLICIT_NO_CACHE:
+                request["prompt_cache_options"] = {"mode": "explicit"}
             if previous_response_id is not None:
                 request["previous_response_id"] = previous_response_id
             request_evidence = {
@@ -574,6 +662,14 @@ class PacketV8ResponsesTransport:
                     ProviderFailureKind.MALFORMED_RESPONSE,
                     "Provider response contains invalid token usage",
                 )
+            if (
+                prompt_cache_policy is PromptCachePolicy.EXPLICIT_NO_CACHE
+                and (cached_input_tokens != 0 or cache_write_tokens != 0)
+            ):
+                raise ProviderTransportError(
+                    ProviderFailureKind.MALFORMED_RESPONSE,
+                    "Provider reported prompt-cache activity for an explicit no-cache request",
+                )
             result = TransportTurnResult(
                 response_id=response.id,
                 previous_response_id=previous_response_id,
@@ -588,6 +684,7 @@ class PacketV8ResponsesTransport:
                 requested_model=model,
                 cached_input_tokens=cached_input_tokens,
                 cache_write_tokens=cache_write_tokens,
+                prompt_cache_policy=prompt_cache_policy.value,
                 latency_seconds=latency_seconds,
                 request_evidence_path=request_evidence_path,
             )
@@ -603,6 +700,7 @@ class PacketV8ResponsesTransport:
                             "input_tokens": result.input_tokens,
                             "cached_input_tokens": result.cached_input_tokens,
                             "cache_write_tokens": result.cache_write_tokens,
+                            "prompt_cache_policy": result.prompt_cache_policy,
                             "uncached_input_tokens": result.uncached_input_tokens,
                             "output_tokens": result.output_tokens,
                             "latency_seconds": result.latency_seconds,

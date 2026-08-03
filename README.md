@@ -98,8 +98,10 @@ The POC is intentionally bounded:
 - at most two replay-proven rounds;
 - two primary responses per round (combined authoring, then combined review/gate);
 - at most six model responses including one correction turn per round;
+- 8,000-token author and 4,000-token review/correction request caps;
 - cumulative total/cached/uncached input and output token usage shown in the panel;
 - separate cache-write usage and usage-derived USD calculation;
+- explicit no-cache request policy for fresh one-off author/review contexts;
 - exact provider input-token counting before generation dispatch;
 - a user-entered run-dollar ceiling, initialized to `0.00`;
 - one explicit context profile: `blind`, `assisted`, or `break_blind`;
@@ -122,6 +124,14 @@ versioned and hashed; override it with
 not a provider invoice. Cache reads and cache writes are retained separately in
 receipts. See
 [`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md).
+
+The provider-cost hardening pass disables GPT-5.6's implicit prompt-cache
+breakpoint without weakening Packet V8. A response reporting cache activity
+under that policy fails closed. The shared transport also exposes an exact
+count-only preflight which prepares the same request and cleans its uploads
+without dispatching generation. Current evidence and conservative Luna, Terra,
+and Sol ceilings are recorded in
+[`docs/v9_cost_hardening_evidence.md`](docs/v9_cost_hardening_evidence.md).
 
 Every authoring round starts with only its current Packet V8 authority. Review
 starts in another fresh provider context with the replay-proven derived packet

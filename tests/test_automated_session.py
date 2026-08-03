@@ -227,6 +227,12 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(transport.calls[1]["packet_dir"], derived.packet_dir)
             self.assertIsNone(transport.calls[0]["previous_response_id"])
             self.assertIsNone(transport.calls[1]["previous_response_id"])
+            self.assertEqual(transport.calls[0]["max_output_tokens"], 8_000)
+            self.assertEqual(transport.calls[1]["max_output_tokens"], 4_000)
+            self.assertEqual(
+                transport.calls[0]["prompt_cache_policy"].value,
+                "explicit_no_cache",
+            )
             review_resources = transport.calls[1]["additional_resources"]
             self.assertEqual(
                 [resource.role for resource in review_resources],
@@ -260,8 +266,10 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(len(estimates), 2)
             self.assertEqual(
                 Decimal(estimates[0]["payload"]["estimate"]["cost_usd"]),
-                Decimal("0.720625"),
+                Decimal("0.2405"),
             )
+            self.assertEqual(estimates[0]["payload"]["estimate"]["cache_write_tokens"], 0)
+            self.assertEqual(estimates[0]["payload"]["prompt_cache_policy"], "explicit_no_cache")
             self.assertEqual(
                 responses[0]["payload"]["calculated_call_cost"]["cache_write_tokens"], 10
             )
@@ -277,7 +285,7 @@ class AutomatedSessionTests(unittest.TestCase):
                 run_store=store,
                 initial_bundle=initial,
                 services=ServiceHarness(root, initial, []).services(),
-                budgets=SessionBudgets(maximum_calculated_cost_usd=Decimal("0.42")),
+                budgets=SessionBudgets(maximum_calculated_cost_usd=Decimal("0.20")),
             ).run()
             self.assertEqual(result.disposition, ControllerDisposition.BUDGET_EXHAUSTED)
             self.assertEqual(len(transport.calls), 1)
@@ -289,7 +297,7 @@ class AutomatedSessionTests(unittest.TestCase):
             self.assertEqual(rejected[-1]["payload"]["reason"], "maximum_calculated_cost_usd")
             self.assertEqual(
                 Decimal(rejected[-1]["payload"]["estimate"]["cost_usd"]),
-                Decimal("0.720625"),
+                Decimal("0.2405"),
             )
 
     def test_zero_dollar_budget_stops_before_context_or_provider_work(self) -> None:

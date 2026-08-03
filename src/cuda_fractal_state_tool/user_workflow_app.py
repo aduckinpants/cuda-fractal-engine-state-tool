@@ -29,7 +29,7 @@ from .automated_session import (
     create_job_bound_automated_route_services,
 )
 from .openai_credentials import resolve_openai_api_key, set_openai_api_key as store_openai_api_key
-from .openai_transport import OpenAISDKProvider, PacketV8ResponsesTransport
+from .openai_transport import OpenAISDKProvider, PacketV8ResponsesTransport, PromptCachePolicy
 from .preview_service import PreviewService
 from .pricing_policy import load_pricing_policy
 from .runtime_surface import DEFAULT_RUNTIME_CMD
@@ -96,7 +96,7 @@ def _automated_budget_text(projection: dict) -> str:
         f"Calculated USD {projection.get('cumulative_calculated_cost_usd', '0')}/"
         f"{projection.get('maximum_calculated_cost_usd', '0')} · "
         f"Next max {projection.get('last_estimated_call_cost_usd', '0')} · "
-        f"Pricing {pricing_id}"
+        f"Pricing {pricing_id} · Cache {projection.get('prompt_cache_policy', 'unbound')}"
     )
 
 
@@ -1049,6 +1049,7 @@ class UserWorkflowApp:
                     "reasoning_effort": "high",
                     "budgets": budgets.to_dict(),
                     "pricing_policy": pricing_policy.identity_dict(),
+                    "prompt_cache_policy": PromptCachePolicy.EXPLICIT_NO_CACHE.value,
                     "auto_promote": bool(self.auto_promote_var.get()),
                     "disclosure_profile": disclosure_profile.value,
                     "credential_source": credential.source,
