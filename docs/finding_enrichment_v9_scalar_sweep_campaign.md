@@ -349,12 +349,12 @@ no model downgrade or paid request occurs.
 
 ### Slice 5 - Headless Scalar Bracket Sweep V1
 
-- Implement parsing, validation, collision rejection, expansion, failure
+- [x] Implement parsing, validation, collision rejection, expansion, failure
   taxonomy, cancellation, immutable receipts, and headless CLI.
-- Reuse the canonical parser, merge, timeout, proof, and proof-image owners.
-- Prove plan abort, independent continuation, strict stop, cancellation, and
+- [x] Reuse the canonical parser, merge, timeout, proof, and proof-image owners.
+- [x] Prove plan abort, independent continuation, strict stop, cancellation, and
   authority drift.
-- Run the locked vortex fixture locally without provider calls.
+- [x] Run the locked vortex fixture locally without provider calls.
 
 Exit: deterministic local sweep artifacts and contact-sheet inputs exist.
 
@@ -408,8 +408,8 @@ one image-materialization owner, regardless of CLI, automation, or UI route.
 
 ## Current phase
 
-Slices 0-4 are complete. Exact input counting, conservative USD gating, fresh
-review contexts, exact resource reuse, and disclosure-controlled enrichment are
-checkpointed. Slice 5, Headless Scalar Bracket Sweep V1, is the next approved
-product boundary. All remaining work is covered by the preplanned slices above
-through the next manual-review gate.
+Slices 0-5 are complete. The headless five-member vortex bracket is replay
+proven and preserves ordinary proof receipts plus an aggregate non-acceptance
+receipt. Slice 6, thin sweep UI and grouped presentation, is the next approved
+product boundary. It is the final preplanned implementation slice before the
+user manual-review gate.

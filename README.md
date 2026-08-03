@@ -196,6 +196,25 @@ features, verifies selected points through `fractal.sample`, and creates a
 separately receipted annotation derivative. Evidence is recorded in
 [`docs/finding_enrichment_slice2_evidence.md`](docs/finding_enrichment_slice2_evidence.md).
 
+One bounded local scalar bracket can be run without a provider credential:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+py -3.14 -m cuda_fractal_state_tool.scalar_sweep_cli `
+  --packet-dir <exact-packet-v8-directory> `
+  --plan <scalar-sweep-v1.json> `
+  --runtime-cmd D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd
+```
+
+The V1 plan names one direct `params` leaf and 3–9 explicit ordered values.
+An optional fixed sparse override is validated independently and may not contain
+the sweep axis. Every member begins from the same exact packet base and uses the
+ordinary override materializer, packet-derived timeout, engine proof, and
+proof-owned PNG. Plan failures render nothing; member failures are preserved
+and either continue independently or stop according to the explicit policy.
+The aggregate receipt never records human acceptance. See
+[`docs/finding_enrichment_slice5_scalar_sweep_evidence.md`](docs/finding_enrichment_slice5_scalar_sweep_evidence.md).
+
 ## Packet V8 and override authority
 
 Packet V8 is the seven-file authority handoff when a frame exists:

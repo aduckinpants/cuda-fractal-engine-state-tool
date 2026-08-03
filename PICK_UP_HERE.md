@@ -29,10 +29,11 @@ Read first:
 3. [`docs/finding_enrichment_slice2_evidence.md`](docs/finding_enrichment_slice2_evidence.md)
 4. [`docs/finding_enrichment_slice3_cost_gate_evidence.md`](docs/finding_enrichment_slice3_cost_gate_evidence.md)
 5. [`docs/finding_enrichment_slice4_context_evidence.md`](docs/finding_enrichment_slice4_context_evidence.md)
-6. [`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
-7. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
-8. [`docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md`](docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md)
-9. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
+6. [`docs/finding_enrichment_slice5_scalar_sweep_evidence.md`](docs/finding_enrichment_slice5_scalar_sweep_evidence.md)
+7. [`docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md`](docs/v9_cost_controlled_automation_and_scalar_bracket_sweep_plan.md)
+8. [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md)
+9. [`docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md`](docs/manual-test-results/v9_vortex_bracket_discovery_2026-08-02.md)
+10. [`docs/v8_automated_route_authority_trace.md`](docs/v8_automated_route_authority_trace.md)
 
 ## Why cost is first
 
@@ -115,9 +116,10 @@ Then verify:
 ## Exact continuation
 
 Slice 0 is committed at `625f950`; Slice 1 at `18f3761`; Slice 2 at `a27ae92`;
-Slice 3 at `1f6999a`. Slice 4 context partition and disclosure is the current
-branch-tip checkpoint. Resume at **Slice 5 — Headless Scalar Bracket Sweep V1**.
-This is a local deterministic workflow and requires no provider credential.
+Slice 3 at `1f6999a`; Slice 4 at `ab2529a`. Slice 5 headless Scalar Bracket
+Sweep V1 is the current branch-tip checkpoint. Resume at **Slice 6 — thin sweep
+UI and grouped presentation**. This is the final preplanned implementation
+slice before the user manual-review gate and requires no provider credential.
 
 No paid provider call, model ablation, diagnostic-mosaic work, additional
 production provider, or engine mutation is authorized by the current state-tool
