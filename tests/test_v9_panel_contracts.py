@@ -240,7 +240,7 @@ class V9PanelContractTests(unittest.TestCase):
                 )
                 self.assertEqual(case.sha256, case_sha256)
 
-    def test_fixtures_d_through_f_result_ledgers_preserve_pass_and_failure(self) -> None:
+    def test_fixtures_d_through_g_result_ledgers_preserve_pass_and_failure(self) -> None:
         root = Path(__file__).resolve().parents[1]
         result_root = (
             root
@@ -252,6 +252,7 @@ class V9PanelContractTests(unittest.TestCase):
             "D": ("0.0758272", "replay_proven", "ROUND_ADVANCE", "BUDGET_EXHAUSTED"),
             "E": ("0.0733474", "replay_proven", "ROUND_ADVANCE", "BUDGET_EXHAUSTED"),
             "F": ("0.0373346", "rejected", "not_reached", "PROOF_FAILED"),
+            "G": ("0.0740508", "replay_proven", "ROUND_ADVANCE", "BUDGET_EXHAUSTED"),
         }
         for fixture_id, values in expected.items():
             ledger = json.loads(
