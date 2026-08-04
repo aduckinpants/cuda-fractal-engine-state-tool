@@ -181,3 +181,45 @@ analysis identity as
 `ba6a9bd1ca3c9c04cf0da5a2e48475831d9909cb81c6d602d3c5d56353b14e93`.
 The exact count-only preflight passed at 170,119 input tokens and a conservative
 `$0.0436238` author maximum. A separately approved paid rerun remains required.
+
+## Fixture G refreshed qualification pass
+
+The user authorized one refreshed Fixture G cell after the engine publication,
+timeout hardening, case refresh, and exact count-only preflight.
+
+- Experiment: `palette.seed_phase 0 -> 0.15` in the active `explaino_cmap` row.
+- Validation: one authorized changed leaf; no correction response.
+- Proof: replay proven under the 300-second runtime-drift floor.
+- Review: strong global recoloring; geometry, camera, and dynamics remained fixed.
+- Gate: `ROUND_ADVANCE`, followed by the exact one-round limit.
+- Terminal disposition: successful bounded `BUDGET_EXHAUSTED`.
+- Automatic gates: 10 of 10 passed.
+- Cost: `$0.0740508` under `$0.0884228`.
+- Human disposition: `pending`.
+
+The automated experiment is valid but less discriminating than the historical
+targeted Fixture G question. The historical session used categorical `root_index`
+to test whether visible shells and bridges aligned with basin classification.
+The generic automated prompt selected a narrower active-palette response test.
+This supports authority, camera, proof, and review comparability without claiming
+experiment-selection parity. Bracketed or fixture-specific questions remain the
+grounded next mechanism for reproducing harder historical pressures.
+
+Completed cells A through E and G total `$0.4497128`. Including the stopped
+Fixture F author turn and the first pre-hardening Fixture G author turn, all paid
+panel evidence represented here totals `$0.5255916`. Provider billing remains
+authoritative.
+
+## Panel disposition
+
+Six fixtures—A through E and G—completed the Luna High assisted author/proof/review
+cell with all automatic gates passing. Fixture F produced a valid author turn,
+then exposed the engine loaded-draft defect; its exact override was subsequently
+replay-proven against the merged repair without another model review.
+
+This is a technically strong tentative foundation for V9 work. It is not a
+seven-for-seven automated conversational pass, and formal human dispositions
+remain pending. The clearest remaining qualification limitation is generic
+experiment selection: multiple cells chose safe Color Pipeline edits instead of
+the harder targeted dynamics or interpretation questions present in the manual
+transcripts.

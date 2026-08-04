@@ -110,3 +110,51 @@ with case SHA-256
 Its exact count-only preflight passed at 170,119 input tokens and a conservative
 `$0.0436238` author maximum under the existing `$0.0884228` cell ceiling.
 Stop for separate paid-rerun authorization.
+
+## Authorized refreshed qualification result
+
+The user separately authorized one refreshed paid Fixture G cell. It completed
+under:
+
+- run: `v9-v8-g-luna-high-post-engine-live-dba1a920-3123-424f-bd46-7f1bfe6db968`;
+- case SHA-256:
+  `ba6a9bd1ca3c9c04cf0da5a2e48475831d9909cb81c6d602d3c5d56353b14e93`;
+- calculated cost: `$0.0740508` under `$0.0884228`;
+- automatic gates: 10 of 10 passed;
+- human acceptance: not recorded.
+
+The model changed only `palette.seed_phase` from `0` to `0.15`. Proof
+`ec54493b-295c-4a9c-9f97-d94b8bdb9306` materialized in `42.3782` seconds and
+replayed in `22.9861` seconds under the 300-second runtime-drift floor. Candidate
+and replay decoded to the same RGBA SHA-256:
+`06f7cc72314c06425a431f517a789034105c38243965126fa0b894f051a2708e`.
+
+The controller comparison found a large RGB response with no alpha difference.
+The fresh review correctly identified global recoloring with fixed geometry,
+camera, and dynamics, then proposed `ROUND_ADVANCE`. The exact one-round limit
+ended as the expected successful bounded `BUDGET_EXHAUSTED` disposition.
+
+This is a valid completed qualification cell, but it selected a simpler
+experiment than the historical targeted Fixture G prompt. The historical session
+changed from continuous lens-field coloring to categorical `root_index` to test
+geometry interpretation. The automated generic prompt instead tested active
+palette responsiveness. It therefore establishes robust authority, proof,
+camera, and review behavior—not exact historical experiment-selection parity.
+
+Evidence SHA-256:
+
+- `events.ndjson`:
+  `8ce38590384fcec3b8173489d52243d54801596e0e1bfdc53564df4cd4a99d69`;
+- `active-turn.json`:
+  `b8a25246edf1665a3f7b7b60b82e71c2c7ccc8c6e68e6db23f52ac708b6675aa`;
+- automatic gates:
+  `d52a5ca860c2f483063f70a2c3d04d8d9b4716808df5e324a383060fb383636e`;
+- round-review ledger:
+  `e4fd9c707592487c8dfd417f2a4440291c469e9cdeae2761d38e18673999c2e8`;
+- round-review comparison:
+  `13104c825d8a3d557dbb762132540346415c51d9a1f45eb60990e60f8c164452`;
+- proof receipt:
+  `cfc7557d17231272b03637df9be189d4a092609eeef682e914185f73754746c4`.
+
+Fixture G's automated qualification boundary is complete. Formal human
+disposition remains pending independent review.

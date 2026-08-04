@@ -1,0 +1,87 @@
+{
+  "ledger_version": 1,
+  "fixture_id": "G",
+  "historical_transcript": "docs/manual-test-results/v8_six_fixture_manual_gate_08-01-2026/Fixture-G-fractal_workflow_session_transcript.md",
+  "qualification_case_sha256": "ba6a9bd1ca3c9c04cf0da5a2e48475831d9909cb81c6d602d3c5d56353b14e93",
+  "run_id": "v9-v8-g-luna-high-post-engine-live-dba1a920-3123-424f-bd46-7f1bfe6db968",
+  "cost": {
+    "count_only_maximum_usd": "0.0884228",
+    "actual_calculated_usd": "0.0740508"
+  },
+  "workflow_result": {
+    "override_effect": "AUTHORIZED_CHANGE",
+    "proof_status": "replay_proven",
+    "model_gate": "ROUND_ADVANCE",
+    "controller_disposition": "BUDGET_EXHAUSTED",
+    "automatic_gates_passed": true
+  },
+  "historical_comparison": {
+    "experiment_selection": {
+      "historical": "Replaced the continuous lens-field recipe with categorical root-index coloring to test whether the visible shells and bridges coincided with root classification.",
+      "current": "Shifted the active explaino_cmap palette seed phase from 0 to 0.15 while preserving source, dynamics, and camera.",
+      "assessment": "different"
+    },
+    "prediction": {
+      "historical": "Predicted that categorical coloring would separate basin-scale structure from continuous lens-field decoration.",
+      "current": "Predicted a global palette-phase response with fixed geometry and camera, with no-change as an explicit disconfirmation.",
+      "assessment": "comparable_but_less_diagnostic"
+    },
+    "camera": {
+      "historical": "Preserved the exact high-zoom viewport for a color-channel comparison.",
+      "current": "Preserved the exact high-zoom viewport for a color-only parameter comparison and quoted its exact bounds.",
+      "assessment": "comparable"
+    },
+    "observability": {
+      "historical": "Selected root_index because the original lens-field signal could not directly test categorical basin correspondence.",
+      "current": "Used the active lens-field-to-explaino-cmap chain to test whether one active palette parameter visibly contributed.",
+      "assessment": "valid_but_narrower"
+    },
+    "override_quality": {
+      "historical": "Returned a complete fixed-topology categorical pipeline replacement.",
+      "current": "Returned a complete fixed-topology pipeline with exactly one authorized changed leaf and no correction turn.",
+      "assessment": "comparable"
+    },
+    "result_review": {
+      "historical": "Concluded that large structures survived categorical coloring while finer lens-field decoration changed.",
+      "current": "Correctly identified a strong global color response, fixed geometry and camera, and no dynamics claim; proposed ROUND_ADVANCE.",
+      "assessment": "comparable"
+    }
+  },
+  "enrichment_use": [
+    {
+      "claim_or_decision": "The exact viewport was retained for a color-only comparison.",
+      "support_class": "packet_v8_and_enrichment",
+      "exact_refs": [
+        "packet 71bae9d2-c49b-4219-be8e-8e2699d60823",
+        "analysis 80a6957a2992e4e0fcfc57284c3e01c40ec7223d3995829ae04d91a7687e1773/common-facts.json sha256 8ef5494be01886cea9efcaad2691c4aaed3b1c9bfc58c84ef5caca241ef0100d"
+      ],
+      "assessment": "Common facts compressed exact viewport evidence; Packet V8 remained state authority."
+    },
+    {
+      "claim_or_decision": "No selected-fractal provider semantics were available for explaino_tension.",
+      "support_class": "enrichment_only",
+      "exact_refs": [
+        "analysis 80a6957a2992e4e0fcfc57284c3e01c40ec7223d3995829ae04d91a7687e1773/provider-result.json sha256 4b648e955b30d58a6da72926b0840681e97b523b205915e523850fe470599135"
+      ],
+      "assessment": "Unavailable enrichment constrained provider claims and did not authorize the palette edit."
+    },
+    {
+      "claim_or_decision": "palette.seed_phase was authorized and replay-proven as the only changed leaf.",
+      "support_class": "packet_v8_and_proof",
+      "exact_refs": [
+        "override text sha256 2d647f6563f925564d08308043cb823b4cb5cbd2f01158404252a6e057853d02",
+        "proof ec54493b-295c-4a9c-9f97-d94b8bdb9306 receipt sha256 cfc7557d17231272b03637df9be189d4a092609eeef682e914185f73754746c4"
+      ],
+      "assessment": "The packet contract authorized the edit and the published engine remained final behavioral authority."
+    },
+    {
+      "claim_or_decision": "The result was a large color response with non-identical RGB pixels and unchanged alpha in the transported comparison.",
+      "support_class": "controller_comparison",
+      "exact_refs": [
+        "round-review-comparison.json sha256 13104c825d8a3d557dbb762132540346415c51d9a1f45eb60990e60f8c164452"
+      ],
+      "assessment": "The exact base/result derivative comparison supports the review without becoming state authority."
+    }
+  ],
+  "human_disposition": "pending"
+}
