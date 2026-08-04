@@ -11,7 +11,7 @@
     "maximum_review_output_tokens_per_response": 4000
   },
   "campaign_ceiling_usd": "8.00",
-  "disclosure": {"expected_analysis_id": "5e75bb00f9bc9efd753d0a812f37170c8506a7b7d4742185da666909ab93c47c", "profile": "assisted"},
+  "disclosure": {"expected_analysis_id": "80a6957a2992e4e0fcfc57284c3e01c40ec7223d3995829ae04d91a7687e1773", "profile": "assisted"},
   "model_profile": {"model": "gpt-5.6-luna", "pricing_tier": "standard", "profile_version": 1, "prompt_cache_policy": "explicit_no_cache", "reasoning_effort": "high", "sha256": "dbf174b6e03c074b26588e606e6ddb4a27eb5d36bcbb70184863116e39e268b7"},
   "packet": {"finding_id": "649c5e1ab68b4144ac257214b239dcd3b4888d8d034a91c6efc8018caf22c66c", "manifest_sha256": "883802ff8b838d3333655ef56cf12ae994e0d1bcdab70e1012820fdd8250aefe", "packet_id": "71bae9d2-c49b-4219-be8e-8e2699d60823", "selected_fractal_type": "explaino_tension"},
   "pricing_policy": {"currency": "USD", "effective_date": "2026-08-03", "long_context_threshold_tokens": 272000, "policy_id": "openai-standard-2026-08-03", "schema": "openai_pricing_policy.v1", "service_tier": "standard", "sha256": "7934d36c4865098494c52da4001f6c008b92a8f0cce2e261b8bd273ed44c088e", "source_url": "https://developers.openai.com/api/docs/pricing"},
@@ -21,5 +21,5 @@
   "qualification_case_version": 1,
   "role": "hard_calibrator",
   "rubric_version": "v9-economic-qualification-rubric.v1",
-  "sha256": "384cf69ff0d1bdb01219581c856b750cece44701192d34799704c0a003f4fd49"
+  "sha256": "ba6a9bd1ca3c9c04cf0da5a2e48475831d9909cb81c6d602d3c5d56353b14e93"
 }

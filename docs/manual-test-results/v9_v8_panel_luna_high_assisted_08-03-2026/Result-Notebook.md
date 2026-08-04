@@ -127,3 +127,57 @@ failed F author turn, total panel spend represented by these receipts is
 Formal human dispositions remain `pending`. The panel is paused on the Fixture F
 engine-authority limitation; it is not valid to claim a full A–G pass or to spend
 the G cell before that stop condition is reviewed.
+
+## Fixture F closure and Fixture G
+
+The engine loaded-draft compatibility defect was repaired centrally, merged as
+engine commit `e6b90cc4fba09618957f861d904501d59ef5dbca`, published, and re-proven
+against the exact Fixture F override. The merged published executable SHA-256 is
+`17513a94d277afb6188da1683214731476eddf6649471278129e54e93eea06c3`.
+Fixture F proof `0755c98c-d597-41ba-95fb-fdeb4caf5c45` replay-proved with
+identical candidate/replay decoded pixels.
+
+The user then authorized Fixture G. Its paid author turn selected one coherent
+color-only experiment:
+
+```text
+palette.seed_phase 0 -> 0.35
+```
+
+Validation accepted exactly one changed leaf. The first engine materialization
+used the packet-derived 90-second deadline and timed out without artifacts. The
+run stopped before review as `PROOF_FAILED`; provider cost was `$0.0385442` under
+the `$0.0884228` cell ceiling. The run also correctly exposed that its assisted
+qualification case retained the pre-publication expected analysis identity, so
+its disclosure gate is stale after the engine update.
+
+An exact no-API replay of the archived override with a 300-second diagnostic
+deadline subsequently passed:
+
+- proof: `8f250ee7-53ed-4f71-b7ab-396ae2f5e2f2`;
+- materialization: `82.8650` seconds;
+- action-free replay: `207.2056` seconds;
+- candidate/replay decoded RGBA SHA-256:
+  `b856a9d2e446b828a7cac69eed49f18c514b94fae1d30bc5fabf4a9bd17f24e4`;
+- engine candidate SHA-256:
+  `26f487c2ea432a4f629beba0c6572b2272047e11d209287e0e60c96d5a7f7d14`.
+
+This classifies the paid stop as timeout-policy underestimation under runtime
+identity drift, not an engine authority or model-authoring failure. The shared
+resolver now retains ordinary captured-timing behavior for matching runtimes,
+uses a bounded 300-second floor only for development-mode executable drift, and
+leaves explicit and strict policies unchanged.
+
+The repaired default path was then exercised without an explicit timeout. Proof
+`a447ac82-66e4-42a6-a629-5cc29ae304ea` recorded
+`runtime_drift_floor_applied: true`, resolved 300 seconds per stage, and
+replay-proved the same decoded RGBA identity. This run completed in `62.1997`
+seconds for materialization and `21.7986` seconds for replay, illustrating the
+large wall-clock variance that made the former 90-second deadline brittle.
+
+Fixture G is not yet a completed qualification cell: review was not dispatched,
+and automatic gates did not pass. Its case has now been refreshed to the current
+analysis identity as
+`ba6a9bd1ca3c9c04cf0da5a2e48475831d9909cb81c6d602d3c5d56353b14e93`.
+The exact count-only preflight passed at 170,119 input tokens and a conservative
+`$0.0436238` author maximum. A separately approved paid rerun remains required.

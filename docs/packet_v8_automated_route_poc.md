@@ -161,6 +161,14 @@ One resolver owns manual and automated proof timeout:
 ceil(clamp(90, (captured_last_render_ms / 1000) * 2 + 30, 600))
 ```
 
+Post-qualification amendment: the formula above remains authoritative when
+the packet and proof executable identities match. Fixture G later proved that
+an old packet's captured timing can materially understate current headless
+cost after a published-runtime change. Development-mode runtime drift therefore
+raises the per-stage floor to 300 seconds while retaining the 600-second cap.
+Explicit caller timeouts are never rewritten, and strict mode continues to stop
+before materialization.
+
 Missing or invalid timing uses the current conservative default. Receipts
 record inputs, resolved timeout, and outcome.
 

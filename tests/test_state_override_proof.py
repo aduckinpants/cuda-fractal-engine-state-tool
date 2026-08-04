@@ -406,6 +406,30 @@ class StateOverrideProofTests(unittest.TestCase):
                 receipt["proof_timeout"]["source"], "captured_last_render_ms"
             )
 
+    def test_development_runtime_drift_applies_shared_300_second_floor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = self._runtime(root)
+            packet = self._packet(root, runtime, last_render_ms=15964.0263671875)
+            (runtime.parent / "fractal_ui.exe").write_bytes(b"published runtime changed")
+            job = FakeProofJob()
+
+            result = execute_state_override_proof(
+                packet,
+                '{"params":{"explaino_damping":0.9}}',
+                runtime,
+                job,
+                proofs_root=root / "proofs",
+                runtime_compatibility_mode="development",
+            )
+
+            self.assertEqual(result.status, "replay_proven")
+            self.assertEqual(job.timeout_seconds, [300.0, 300.0])
+            receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
+            self.assertTrue(receipt["binding"]["runtime_compatibility"]["drift_detected"])
+            self.assertTrue(receipt["proof_timeout"]["runtime_drift_detected"])
+            self.assertTrue(receipt["proof_timeout"]["runtime_drift_floor_applied"])
+
     def test_empty_override_result_is_explicit_exact_base_replay(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

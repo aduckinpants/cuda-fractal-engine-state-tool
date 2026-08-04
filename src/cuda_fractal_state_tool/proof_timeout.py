@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +15,7 @@ MINIMUM_ADAPTIVE_TIMEOUT_SECONDS = 90.0
 MAXIMUM_ADAPTIVE_TIMEOUT_SECONDS = 600.0
 ADAPTIVE_RENDER_MULTIPLIER = 2.0
 ADAPTIVE_OVERHEAD_SECONDS = 30.0
+RUNTIME_DRIFT_MINIMUM_TIMEOUT_SECONDS = 300.0
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,9 @@ class ProofTimeoutResolution:
     maximum_seconds: float = MAXIMUM_ADAPTIVE_TIMEOUT_SECONDS
     render_multiplier: float = ADAPTIVE_RENDER_MULTIPLIER
     overhead_seconds: float = ADAPTIVE_OVERHEAD_SECONDS
+    runtime_drift_minimum_seconds: float = RUNTIME_DRIFT_MINIMUM_TIMEOUT_SECONDS
+    runtime_drift_detected: bool = False
+    runtime_drift_floor_applied: bool = False
 
     def to_receipt(self) -> dict[str, Any]:
         return asdict(self)
@@ -69,6 +73,29 @@ def resolve_proof_timeout(
         timeout_seconds=float(math.ceil(bounded)),
         source="captured_last_render_ms",
         captured_last_render_ms=captured,
+    )
+
+
+def apply_runtime_drift_timeout_floor(
+    resolution: ProofTimeoutResolution,
+    *,
+    drift_detected: bool,
+    proof_may_proceed: bool = True,
+) -> ProofTimeoutResolution:
+    """Allow a bounded slower proof when captured timing belongs to another runtime."""
+    if not drift_detected:
+        return resolution
+    if resolution.source == "explicit" or not proof_may_proceed:
+        return replace(resolution, runtime_drift_detected=True)
+    timeout_seconds = min(
+        resolution.maximum_seconds,
+        max(resolution.timeout_seconds, resolution.runtime_drift_minimum_seconds),
+    )
+    return replace(
+        resolution,
+        timeout_seconds=float(math.ceil(timeout_seconds)),
+        runtime_drift_detected=True,
+        runtime_drift_floor_applied=timeout_seconds > resolution.timeout_seconds,
     )
 
 

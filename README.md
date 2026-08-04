@@ -158,6 +158,13 @@ packet/state/frame artifacts remain the underlying authority.
 The automation panel streams a compact field-allowlisted view of
 `events.ndjson`; `Open Run Folder` is available as soon as durable run evidence
 exists, even when a session stops before final qualification.
+
+Proof timeout remains derived from the packet's captured render receipt when
+the published runtime identity matches. In development compatibility mode, an
+executable-identity mismatch applies a bounded 300-second per-stage floor
+because timing captured by another executable is not current performance
+authority. Explicit CLI timeouts remain exact, the ceiling remains 600 seconds,
+and strict compatibility mode still stops before materialization.
 The bounded paid-run outcome and exact receipts are summarized in
 [`docs/packet_v8_automated_route_live_qualification.md`](docs/packet_v8_automated_route_live_qualification.md).
 
