@@ -53,7 +53,7 @@
     {
       "fixture_id": "G",
       "case_path": "docs/v9_v8_fixture_g_luna_high_assisted_case.v1.json",
-      "case_sha256": "384cf69ff0d1bdb01219581c856b750cece44701192d34799704c0a003f4fd49",
+      "case_sha256": "ba6a9bd1ca3c9c04cf0da5a2e48475831d9909cb81c6d602d3c5d56353b14e93",
       "maximum_cell_cost_usd": "0.0884228"
     }
   ],

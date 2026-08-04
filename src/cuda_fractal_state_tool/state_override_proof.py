@@ -20,7 +20,12 @@ from .agent_bundle import SUPPORTED_PACKET_MANIFEST_VERSIONS, load_agent_bundle_
 from .async_jobs import AsyncJobRunner, JobCancelledError, JobContext, JobRequestIdentity
 from .json_utils import loads_strict_no_duplicates
 from .preview_worker import create_preview
-from .proof_timeout import ProofTimeoutResolution, resolve_packet_proof_timeout
+from .proof_timeout import (
+    MAXIMUM_ADAPTIVE_TIMEOUT_SECONDS,
+    ProofTimeoutResolution,
+    apply_runtime_drift_timeout_floor,
+    resolve_packet_proof_timeout,
+)
 from .runtime_surface import (
     build_detached_viewer_launch_command,
     build_materialization_command,
@@ -543,6 +548,11 @@ def execute_state_override_proof(
         runtime_identity, runtime_summary, runtime_sha256, runtime_compatibility = _assess_runtime_binding(
             manifest, runtime_cmd_path, compatibility_mode
         )
+        timeout_resolution = apply_runtime_drift_timeout_floor(
+            timeout_resolution,
+            drift_detected=bool(runtime_compatibility["drift_detected"]),
+            proof_may_proceed=bool(runtime_compatibility["proof_may_proceed"]),
+        )
         authority_identities = manifest.get("authority_identities")
         if not isinstance(authority_identities, dict):
             raise StateOverrideProofError("Agent-packet manifest has no authority identities")
@@ -798,7 +808,15 @@ def run_state_override_proof_sync(
         completion,
     )
     try:
-        if not completed.wait(timeout_resolution.timeout_seconds * 2 + 15.0):
+        # The worker resolves runtime identity and may apply the bounded development-mode
+        # drift floor after this outer wrapper has validated packet timing. Wait for the
+        # maximum inner policy when no explicit caller override fixes the exact deadline.
+        outer_stage_timeout = (
+            timeout_resolution.timeout_seconds
+            if timeout_seconds is not None
+            else MAXIMUM_ADAPTIVE_TIMEOUT_SECONDS
+        )
+        if not completed.wait(outer_stage_timeout * 2 + 15.0):
             runner.cancel_all()
             raise TimeoutError("State override proof worker did not finish within the bounded wait")
         outcome = outcome_box[0]

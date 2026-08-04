@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from cuda_fractal_state_tool.proof_timeout import (
+    apply_runtime_drift_timeout_floor,
     resolve_packet_proof_timeout,
     resolve_proof_timeout,
 )
@@ -41,6 +42,35 @@ class ProofTimeoutTests(unittest.TestCase):
         self.assertEqual(resolution.source, "explicit")
         with self.assertRaisesRegex(ValueError, "finite positive"):
             resolve_proof_timeout(None, explicit_timeout_seconds=math.inf)
+
+    def test_runtime_drift_uses_bounded_floor_without_overriding_explicit_policy(self) -> None:
+        captured = resolve_proof_timeout(15964.0263671875)
+
+        drifted = apply_runtime_drift_timeout_floor(captured, drift_detected=True)
+        self.assertEqual(drifted.timeout_seconds, 300.0)
+        self.assertTrue(drifted.runtime_drift_detected)
+        self.assertTrue(drifted.runtime_drift_floor_applied)
+        self.assertEqual(drifted.source, "captured_last_render_ms")
+
+        matching = apply_runtime_drift_timeout_floor(captured, drift_detected=False)
+        self.assertEqual(matching.timeout_seconds, 90.0)
+        self.assertFalse(matching.runtime_drift_detected)
+        self.assertFalse(matching.runtime_drift_floor_applied)
+
+        explicit = resolve_proof_timeout(15964.0263671875, explicit_timeout_seconds=12.5)
+        explicit_drifted = apply_runtime_drift_timeout_floor(explicit, drift_detected=True)
+        self.assertEqual(explicit_drifted.timeout_seconds, 12.5)
+        self.assertTrue(explicit_drifted.runtime_drift_detected)
+        self.assertFalse(explicit_drifted.runtime_drift_floor_applied)
+
+        strict_stop = apply_runtime_drift_timeout_floor(
+            captured,
+            drift_detected=True,
+            proof_may_proceed=False,
+        )
+        self.assertEqual(strict_stop.timeout_seconds, 90.0)
+        self.assertTrue(strict_stop.runtime_drift_detected)
+        self.assertFalse(strict_stop.runtime_drift_floor_applied)
 
     def test_packet_resolution_validates_manifest_and_reads_exact_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

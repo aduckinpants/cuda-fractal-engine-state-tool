@@ -219,7 +219,7 @@ class V9PanelContractTests(unittest.TestCase):
             "D": ("2414489f4fe0eee1a7e0a1ede78b0b0551c37e62fe1941aaaa113746931d4f35", "0.088836"),
             "E": ("942cc72cd918f51c4a32752ff389b0a6b364689a9ff0fab71d6b54dfa0367ecd", "0.087936"),
             "F": ("9c7bdf4da7bdc84ad85ce6bdd3e1dc526f377c03201a4ec233f827ef4fb06847", "0.0883194"),
-            "G": ("384cf69ff0d1bdb01219581c856b750cece44701192d34799704c0a003f4fd49", "0.0884228"),
+            "G": ("ba6a9bd1ca3c9c04cf0da5a2e48475831d9909cb81c6d602d3c5d56353b14e93", "0.0884228"),
         }
         prepared = {item["fixture_id"]: item for item in panel["prepared_next_cases"]}
         fixtures = {item["fixture_id"]: item for item in panel["fixtures"]}
