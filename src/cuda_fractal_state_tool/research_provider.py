@@ -77,6 +77,29 @@ class ResearchProviderDispatcher:
                 "rejection_reason": decision.rejection_reason,
             },
         )
+        self._append_event(
+            "research_dispatch_authorized"
+            if decision.authorized
+            else "research_dispatch_rejected",
+            {
+                "turn_id": turn_id,
+                "stage": decision.stage.value,
+                "exact_input_tokens": decision.exact_input_tokens,
+                "current_call_cost_usd": decimal_text(decision.current_call.cost_usd),
+                "reserved_cost_usd": decimal_text(decision.reserved_cost_usd),
+                "authorized": decision.authorized,
+                "rejection_reason": decision.rejection_reason,
+            },
+        )
+
+    def _append_event(self, event_type: str, payload: dict[str, object]) -> None:
+        active, _events = self.run_store.load_live_snapshot()
+        projection = (
+            dict(active.get("projection"))
+            if isinstance(active, dict) and isinstance(active.get("projection"), dict)
+            else {}
+        )
+        self.run_store.record_transition(event_type, payload, projection)
 
     def count_only(
         self,
@@ -182,6 +205,22 @@ class ResearchProviderDispatcher:
                 "cumulative_calculated_cost_usd": decimal_text(
                     self.cost.spent_cost_usd
                 ),
+            },
+        )
+        self._append_event(
+            "research_provider_response",
+            {
+                "turn_id": turn_id,
+                "stage": stage.value,
+                "requested_model": result.requested_model,
+                "resolved_model": result.model,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+                "calculated_call_cost_usd": decimal_text(actual.cost_usd),
+                "cumulative_calculated_cost_usd": decimal_text(
+                    self.cost.spent_cost_usd
+                ),
+                "latency_seconds": result.latency_seconds,
             },
         )
         return result

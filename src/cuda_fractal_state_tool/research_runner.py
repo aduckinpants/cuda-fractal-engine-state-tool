@@ -36,6 +36,7 @@ class ResearchSessionRunResult:
     current_bundle: AgentBundle
     attempts_consumed: int
     alternate_report_available: bool
+    visual_paths: tuple[Path, ...]
 
 
 class ResearchSessionRunner:
@@ -203,12 +204,24 @@ class ResearchSessionRunner:
                 self.controller.current_bundle,
                 self.controller.attempts_consumed,
                 alternate_available,
+                self._visual_paths(),
             )
         finally:
             self.provider.transport.close_owned_files(
                 run_store=self.controller.run_store,
                 reason="question_research_session_closed",
             )
+
+    def _visual_paths(self) -> tuple[Path, ...]:
+        paths: list[Path] = []
+        for evidence in self.controller.execution_history:
+            if evidence.proof is not None and evidence.proof.candidate_display_path is not None:
+                paths.append(evidence.proof.candidate_display_path)
+            if evidence.sweep is not None and evidence.sweep.web_review_dir is not None:
+                contact = evidence.sweep.web_review_dir / "contact-sheet.png"
+                if contact.is_file():
+                    paths.append(contact.resolve())
+        return tuple(paths)
 
     def _evidence_authority(
         self,
