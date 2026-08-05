@@ -18,6 +18,10 @@ from cuda_fractal_state_tool.scalar_sweep import (
     ScalarSweepPlanError,
     parse_scalar_sweep_plan,
 )
+from cuda_fractal_state_tool.sweep_presentation import (
+    CapturedBaseReference,
+    render_scalar_sweep_web_review,
+)
 
 
 def _plan(policy: str = "continue_independent") -> str:
@@ -57,18 +61,50 @@ class ScalarSweepTests(unittest.TestCase):
             proof_dir = packet_dir.parent / f"proof-{index}"
             proof_dir.mkdir()
             receipt = proof_dir / "receipt.json"
-            receipt.write_text("{}\n", encoding="utf-8")
+            receipt_document = (
+                {
+                    "status": "rejected",
+                    "errors": [
+                        "Engine reverted requested value at params.explaino_damping: "
+                        "requested test value, emitted exact base"
+                    ],
+                }
+                if status == "no_effect"
+                else {}
+            )
+            receipt.write_text(json.dumps(receipt_document) + "\n", encoding="utf-8")
             display = proof_dir / "candidate-display.png"
             Image.new("RGB", (16, 10), (index * 30, 0, 0)).save(display)
+            merged = proof_dir / "merged_candidate.json"
+            emitted = proof_dir / "materialization" / "state.json"
+            merged_sha = ""
+            emitted_sha = ""
+            if status == "no_effect":
+                base_document = json.loads((packet_dir / "state.json").read_text(encoding="utf-8"))
+                merged_document = json.loads(json.dumps(base_document))
+                requested = json.loads(override_text)["params"]["explaino_damping"]
+                merged_document["params"]["explaino_damping"] = requested
+                merged.write_text(json.dumps(merged_document), encoding="utf-8")
+                emitted.parent.mkdir()
+                emitted.write_text(json.dumps(base_document), encoding="utf-8")
+                merged_sha = hashlib.sha256(merged.read_bytes()).hexdigest()
+                emitted_sha = hashlib.sha256(emitted.read_bytes()).hexdigest()
             if after_proof is not None:
                 after_proof(index, job)
             return SimpleNamespace(
-                status=status,
+                status="rejected" if status == "no_effect" else status,
                 proof_id=f"proof-{index}",
                 message=status,
                 receipt_path=receipt,
-                receipt_sha256="a" * 64,
-                engine_candidate_sha256="b" * 64,
+                receipt_sha256=(
+                    hashlib.sha256(receipt.read_bytes()).hexdigest()
+                    if status == "no_effect"
+                    else "a" * 64
+                ),
+                merged_candidate_path=merged,
+                merged_candidate_sha256=merged_sha,
+                engine_candidate_path=emitted if status == "no_effect" else None,
+                engine_candidate_sha256=emitted_sha if status == "no_effect" else "b" * 64,
                 candidate_frame_sha256="c" * 64,
                 candidate_display_path=display if status == "replay_proven" else None,
                 candidate_display_sha256=(
@@ -90,10 +126,23 @@ class ScalarSweepTests(unittest.TestCase):
                 authority_identities={},
             )
 
+        def captured_base(packet_dir, axis_path):
+            path = packet_dir.parent / "captured-base.png"
+            if not path.exists():
+                Image.new("RGB", (32, 20), (4, 8, 12)).save(path)
+            return CapturedBaseReference(
+                source_path=path,
+                source_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+                axis_value=1.0,
+                packet_id=packet_dir.name,
+                finding_id="fixture-finding",
+            )
+
         return ScalarBracketSweepService(
             proof=proof,
             runtime_snapshot=snapshot,
             packet_binding=binding,
+            captured_base_reference=captured_base,
         )
 
     def test_plan_parser_rejects_duplicates_nonfinite_and_unsupported_shapes(self) -> None:
@@ -153,6 +202,23 @@ class ScalarSweepTests(unittest.TestCase):
             )
             self.assertEqual(result.disposition, "COMPLETE")
 
+    def test_exact_captured_base_value_is_rejected_before_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            packet = self._packet(root)
+            plan = json.loads(_plan())
+            plan["axis"]["values"] = [0.5, 1.0, 1.5]
+            with self.assertRaisesRegex(ScalarSweepPlanError, "exactly repeats captured base"):
+                self._service([]).execute(
+                    packet_dir=packet,
+                    fixed_override_text="{}",
+                    plan_text=json.dumps(plan),
+                    runtime_cmd_path=root / "runtime.cmd",
+                    job=FakeJob(),
+                    sweeps_root=root / "sweeps",
+                )
+            self.assertFalse((root / "sweeps").exists())
+
     def test_continue_independent_preserves_failed_member_and_completes_remaining(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -172,6 +238,49 @@ class ScalarSweepTests(unittest.TestCase):
             self.assertTrue(result.receipt_path.is_file())
             self.assertEqual((result.sweep_dir / "fixed-override.json").read_bytes(), b"{}")
             self.assertTrue((result.sweep_dir / "presentation" / "index.md").is_file())
+            self.assertIsNotNone(result.web_review_dir)
+            self.assertEqual(
+                {path.name for path in result.web_review_dir.iterdir()},
+                {"sweep-review.md", "sweep-evidence.json", "contact-sheet.png"},
+            )
+            first = {
+                path.name: path.read_bytes() for path in result.web_review_dir.iterdir()
+            }
+            regenerated = render_scalar_sweep_web_review(sweep_dir=result.sweep_dir)
+            self.assertEqual(
+                first,
+                {path.name: path.read_bytes() for path in regenerated.web_review_dir.iterdir()},
+            )
+            review = regenerated.review_path.read_text(encoding="utf-8")
+            self.assertIn("Current / captured base reference", review)
+            self.assertIn("not a sweep member and is not newly replay-proven", review)
+            self.assertNotIn(str(root), review)
+            evidence = json.loads(regenerated.evidence_path.read_text(encoding="utf-8"))
+            self.assertFalse(evidence["human_acceptance"])
+            self.assertTrue(
+                all(not Path(source["path"]).is_absolute() for source in evidence["sources"])
+            )
+            (result.sweep_dir / "presentation" / "contact-sheet.png").write_bytes(b"corrupt")
+            with self.assertRaisesRegex(ValueError, "differs"):
+                render_scalar_sweep_web_review(sweep_dir=result.sweep_dir)
+
+    def test_engine_emitted_exact_base_is_a_distinct_no_effect_member_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            packet = self._packet(root)
+            result = self._service(["replay_proven", "no_effect", "replay_proven"]).execute(
+                packet_dir=packet,
+                fixed_override_text="{}",
+                plan_text=_plan(),
+                runtime_cmd_path=root / "runtime.cmd",
+                job=FakeJob(),
+                sweeps_root=root / "sweeps",
+            )
+            self.assertEqual(result.disposition, "PARTIAL_MEMBER_FAILURES")
+            self.assertEqual(result.members[1].status, "NO_EFFECT_ENGINE_EMITTED_BASE")
+            self.assertIn("exact captured base value", result.members[1].message)
+            review = (result.web_review_dir / "sweep-review.md").read_text(encoding="utf-8")
+            self.assertIn("not a CUDA or image-render failure", review)
 
     def test_progress_reports_validation_members_and_terminal_disposition(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

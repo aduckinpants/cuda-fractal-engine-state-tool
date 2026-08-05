@@ -618,6 +618,66 @@ def derive_state_override_authoring_surface(
     }
 
 
+def derive_scalar_sweep_axis_projection(
+    authoring_surface: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Project structurally admissible scalar sweep axes from one packet surface.
+
+    This is deliberately not a behavioral capability model.  It only identifies
+    direct, numeric ``params`` leaves that the packet already authorizes as
+    standalone state overrides.  The packet prose remains responsible for
+    requiring a grounded observable experiment before the agent selects one.
+    """
+
+    entries = authoring_surface.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError("Authoring surface has no entries array")
+    projected: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("Authoring surface contains a non-object entry")
+        path = entry.get("path")
+        value_type = entry.get("type")
+        companions = entry.get("companion_paths")
+        if (
+            not isinstance(path, str)
+            or not path.startswith("params.")
+            or value_type not in {"int", "float"}
+            or companions not in (None, [])
+        ):
+            continue
+        projected.append(
+            {
+                "path": path,
+                "type": value_type,
+                "current_value": entry.get("current_value"),
+                "minimum": entry.get("minimum"),
+                "maximum": entry.get("maximum"),
+                "ui_minimum": entry.get("ui_minimum"),
+                "ui_maximum": entry.get("ui_maximum"),
+                "source_control_id": entry.get("source_control_id"),
+                "source_kind": entry.get("source_kind"),
+                "authority_refs": entry.get("authority_refs"),
+            }
+        )
+    return projected
+
+
+def load_packet_scalar_sweep_axis_projection(packet_dir: Path) -> list[dict[str, Any]]:
+    """Load the sweep projection from the exact authoring bytes in one Packet V8."""
+
+    bundle = load_existing_agent_bundle(packet_dir)
+    if bundle.packet_version != 8:
+        raise ValueError("Scalar Bracket Sweep V1 guidance requires Packet V8")
+    container_path = bundle.packet_dir / _STATE_AUTHORING_TRANSPORT_FILENAME
+    parsed = parse_authority_container(container_path.read_bytes())
+    artifact = parsed.artifacts.get(_AUTHORING_SURFACE_FILENAME)
+    if artifact is None:
+        raise ValueError("Packet V8 authoring container has no state-override authoring surface")
+    surface = _load_json_object(artifact.payload, "Packet V8 authoring surface")
+    return derive_scalar_sweep_axis_projection(surface)
+
+
 def serialize_state_override_authoring_surface(surface: dict[str, Any]) -> bytes:
     return _json_bytes(surface)
 
@@ -1193,6 +1253,18 @@ def _packet_markdown(
     params = state.get("params") if isinstance(state.get("params"), dict) else {}
     render = state.get("render") if isinstance(state.get("render"), dict) else {}
     authorable_paths = [entry["path"] for entry in authoring_surface["entries"]]
+    sweep_axes = derive_scalar_sweep_axis_projection(authoring_surface)
+    sweep_axis_lines: list[str] = []
+    for axis in sweep_axes:
+        declared_range = f"[{json.dumps(axis['minimum'])}, {json.dumps(axis['maximum'])}]"
+        ui_range = f"[{json.dumps(axis['ui_minimum'])}, {json.dumps(axis['ui_maximum'])}]"
+        sweep_axis_lines.append(
+            f"- `{axis['path']}` — type `{axis['type']}`; exact current value "
+            f"`{json.dumps(axis['current_value'], ensure_ascii=False)}`; declared range "
+            f"`{declared_range}`; UI range `{ui_range}`"
+        )
+    if not sweep_axis_lines:
+        sweep_axis_lines.append("- No direct numeric `params` path is structurally admissible for this finding.")
     viewport_camera = viewport_facts["camera"]
     viewport_frame = viewport_facts["local_frame"]
     viewport_basis = viewport_facts["complex_pixel_basis"]
@@ -1296,6 +1368,30 @@ def _packet_markdown(
             "  or substitute for an unrepresentable experiment. If no authorized leaf change implements the selected",
             "  experiment, ask one clarification question instead.",
             "",
+            "## Available tool-assisted state execution",
+            "",
+            "This tool can execute exactly one of two agent-authored state outputs after a concrete experiment is selected:",
+            "",
+            "1. `Sparse State Override` — one state-shaped JSON object for one candidate state.",
+            "2. `Local Scalar Bracket Sweep V1` — one bounded plan for 3–9 independent values of one direct numeric",
+            "   `params` path listed below. Each member starts from this exact packet base; members are never cumulative.",
+            "",
+            "The two output forms are mutually exclusive. Never return a sparse override and a sweep plan together.",
+            "A listed sweep axis is only structurally authorable. Its presence does not prove that changing it is safe,",
+            "visually observable, scientifically meaningful, monotonic, or independent of automatic engine behavior.",
+            "Ground the selected bracket in the current finding, active observation channel, and an explicit prediction.",
+            "The agent-authored V1 sweep has no fixed secondary mutation: every non-axis field remains exactly at the",
+            "packet base (`fixed_override` is `{}`). If the experiment needs a camera, color, iteration-cap, or other",
+            "secondary change, ask for a new base or use a separate sparse override before proposing the bracket.",
+            "",
+            "### Structurally admissible Local Scalar Bracket Sweep V1 axes",
+            "",
+            *sweep_axis_lines,
+            "",
+            "Select only one listed path. Use 3–9 unique finite values of its declared JSON type, all within the",
+            "attached authority ranges and all different from the exact current value. Do not use `view`, Color Pipeline,",
+            "custom-root arrays, multiple axes, adaptive branching, or an exact base member in a V1 sweep plan.",
+            "",
             "## Dynamics and viewport continuity — read before any non-color override",
             "",
             "This rule applies to every fractal selector, not only one family:",
@@ -1337,13 +1433,14 @@ def _packet_markdown(
             "unambiguously accepts one specific immediately preceding change. One override represents one state and one",
             "coherent experiment. Generic assent is ambiguous after multiple numbered experiments, alternatives, a",
             "multi-value sweep, unresolved camera choices, or more than one candidate state. Ask one concise clarification",
-            "question unless the user explicitly delegates the selection. A sweep cannot be encoded as one override;",
-            "select its exact single member before returning JSON.",
+            "question unless the user explicitly delegates the selection. A sweep cannot be encoded as a sparse override.",
+            "Use the separate Local Scalar Bracket Sweep V1 output only after one axis, value bracket, prediction, and",
+            "member-failure policy are explicitly selected.",
             "Ambiguity exception: when the selected experiment is ambiguous, return exactly one clarification question",
-            "with no decision-preflight sections and no JSON. The five-section preflight plus one JSON block applies only",
-            "after one coherent candidate state has been selected.",
+            "with no decision-preflight sections and no JSON. A decision preflight plus one JSON block applies only",
+            "after one coherent candidate state or one coherent scalar bracket has been selected.",
             "",
-            "When triggered, provide a concise visible decision preflight using these exact labels:",
+            "For a Sparse State Override, provide a concise visible decision preflight using these exact labels:",
             "",
             "- `Chosen experiment`: identify the one state and experiment being implemented.",
             "- `Why this override`: connect every changed path to that experiment.",
@@ -1369,6 +1466,40 @@ def _packet_markdown(
             "`center_x` with `center_hp_x`, `center_y` with `center_hp_y`, and `zoom` with `log2_zoom`.",
             "Use the JSON types shown in `state.json`; do not return a companion by itself.",
             *color_authoring_guidance,
+            "",
+            "For a Local Scalar Bracket Sweep V1, instead use these exact visible labels:",
+            "",
+            "- `Selected bracket`: identify the one axis and ordered concrete values.",
+            "- `Why this axis and values`: connect the bracket to the finding and justify its extent and density.",
+            "- `Expected trend and disconfirmation`: predict what should change across the ordered members and what",
+            "  result would weaken or refute that interpretation.",
+            "- `Fixed-state and camera policy`: state that every member uses this exact base with `{}` as the fixed",
+            "  override and that camera, color, iteration cap, and every other non-axis value remain unchanged.",
+            "- `Hostile self-review conclusion`: briefly audit axis authority, observability, exact-base exclusion,",
+            "  value uniqueness/range/type, member independence, and whether a bracket rather than one state is needed.",
+            "",
+            "After that sweep preflight, return exactly one fenced `json` block with only this plan shape:",
+            "`sweep_version: 1`; `axis: {path, values}`; and `member_failure_policy`, which is exactly",
+            "`continue_independent` or `stop_on_first_failure`. Do not include a sparse override, fixed override,",
+            "hashes, IDs, camera, Color Pipeline, actions,",
+            "or commentary inside the JSON. Plan-level validation fails before rendering any member. Under",
+            "`continue_independent`, an independent member proof failure is recorded and later members continue; under",
+            "`stop_on_first_failure`, the first member failure stops the run.",
+            "",
+            "### Scalar Bracket Sweep V1 Example",
+            "",
+            "This illustrates the sweep wire shape only. It grants no path or value authority.",
+            "",
+            "```json",
+            "{",
+            '  "sweep_version": 1,',
+            '  "axis": {',
+            '    "path": "params.some_direct_numeric_leaf",',
+            '    "values": [0.1, 0.2, 0.3]',
+            "  },",
+            '  "member_failure_policy": "continue_independent"',
+            "}",
+            "```",
             "",
             "### State Override Example",
             "",

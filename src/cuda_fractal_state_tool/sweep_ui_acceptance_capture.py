@@ -12,17 +12,6 @@ from PIL import ImageGrab
 from .user_workflow_app import DEFAULT_FINDING_WORKSPACE, UserWorkflowApp, _enable_dpi_awareness
 
 
-DEFAULT_PLAN = """{
-  "sweep_version": 1,
-  "axis": {
-    "path": "params.vortex_strength",
-    "values": [0, 0.25, 0.5, 0.75, 1]
-  },
-  "member_failure_policy": "continue_independent"
-}
-"""
-
-
 def _wait(root, predicate: Callable[[], bool], timeout_seconds: float, label: str) -> None:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
@@ -63,10 +52,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument("--packet-dir", type=Path, required=True)
     parser.add_argument("--workspace-root", type=Path, default=DEFAULT_FINDING_WORKSPACE)
-    parser.add_argument("--plan", type=Path)
+    parser.add_argument(
+        "--plan",
+        type=Path,
+        required=True,
+        help="Exact packet-authorized Scalar Bracket Sweep V1 JSON plan",
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
-    plan_text = args.plan.read_bytes().decode("utf-8") if args.plan else DEFAULT_PLAN
+    plan_text = args.plan.read_bytes().decode("utf-8")
 
     _enable_dpi_awareness()
     import tkinter as tk

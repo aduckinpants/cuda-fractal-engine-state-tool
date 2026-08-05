@@ -18,9 +18,11 @@ from cuda_fractal_state_tool.agent_bundle import (
     _validate_color_pipeline_compatibility_authority,
     build_agent_bundle,
     copy_agent_packet,
+    derive_scalar_sweep_axis_projection,
     derive_state_override_authoring_surface,
     load_existing_agent_bundle,
     load_agent_bundle_handoff,
+    load_packet_scalar_sweep_axis_projection,
     open_agent_bundle_folder,
     validate_captured_color_pipeline_draft,
 )
@@ -436,6 +438,58 @@ class AgentBundleTests(unittest.TestCase):
             )
             self.assertTrue(surface["color_authoring"]["engine_materialization_is_final_authority"])
 
+    def test_scalar_sweep_axis_projection_is_only_direct_numeric_params_authority(self) -> None:
+        authority_refs = {
+            "parameter_surface_sha256": "a" * 64,
+            "ui_schema_sha256": "b" * 64,
+        }
+        surface = {
+            "entries": [
+                {
+                    "path": "params.explaino_damping",
+                    "type": "float",
+                    "current_value": 1.0,
+                    "minimum": 0.01,
+                    "maximum": 10.0,
+                    "ui_minimum": 0.1,
+                    "ui_maximum": 2.0,
+                    "source_control_id": "explaino_damping",
+                    "source_kind": "selected_parameter_surface",
+                    "companion_paths": [],
+                    "authority_refs": authority_refs,
+                },
+                {
+                    "path": "params.max_iter",
+                    "type": "int",
+                    "current_value": 500,
+                    "minimum": 1,
+                    "maximum": 100000,
+                    "ui_minimum": 1,
+                    "ui_maximum": 10000,
+                    "source_control_id": "max_iter",
+                    "source_kind": "global_ui_schema",
+                    "companion_paths": [],
+                    "authority_refs": authority_refs,
+                },
+                {"path": "params.mode", "type": "enum", "companion_paths": []},
+                {"path": "params.enabled", "type": "bool", "companion_paths": []},
+                {"path": "view.zoom", "type": "float", "companion_paths": ["view.log2_zoom"]},
+                {"path": "params.synthetic", "type": "float", "companion_paths": ["params.other"]},
+            ]
+        }
+
+        projection = derive_scalar_sweep_axis_projection(surface)
+
+        self.assertEqual([entry["path"] for entry in projection], ["params.explaino_damping", "params.max_iter"])
+        self.assertEqual(projection[0]["current_value"], 1.0)
+        self.assertEqual(projection[0]["authority_refs"], authority_refs)
+
+    def test_scalar_sweep_axis_projection_rejects_malformed_surface(self) -> None:
+        with self.assertRaisesRegex(ValueError, "no entries array"):
+            derive_scalar_sweep_axis_projection({})
+        with self.assertRaisesRegex(ValueError, "non-object entry"):
+            derive_scalar_sweep_axis_projection({"entries": ["bad"]})
+
     def test_web_frame_derivative_is_png_bounded_and_never_upscaled(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -557,12 +611,30 @@ class AgentBundleTests(unittest.TestCase):
             self.assertIn("An empty override is an explicit exact-base-replay operation", packet)
             self.assertIn("never use it as a refusal, ambiguity fallback, capability signal", packet)
             self.assertIn("ask one clarification question instead", packet)
-            self.assertIn("A sweep cannot be encoded as one override", packet)
+            self.assertIn("Available tool-assisted state execution", packet)
+            self.assertIn("Local Scalar Bracket Sweep V1", packet)
+            self.assertIn("mutually exclusive", packet)
+            self.assertIn("only structurally authorable", packet)
+            self.assertIn("fixed_override` is `{}`", packet)
+            self.assertIn("Structurally admissible Local Scalar Bracket Sweep V1 axes", packet)
+            self.assertIn("`params.explaino_damping` — type `float`; exact current value `1.0`", packet)
+            self.assertNotIn("`view.center_x` — type `float`; exact current value", packet)
+            self.assertIn("A sweep cannot be encoded as a sparse override", packet)
+            self.assertIn("Selected bracket", packet)
+            self.assertIn("Why this axis and values", packet)
+            self.assertIn("Expected trend and disconfirmation", packet)
+            self.assertIn("Fixed-state and camera policy", packet)
+            self.assertIn("continue_independent", packet)
+            self.assertIn("stop_on_first_failure", packet)
+            self.assertIn("Do not include a sparse override, fixed override", packet)
+            self.assertIn("Scalar Bracket Sweep V1 Example", packet)
+            self.assertIn('"path": "params.some_direct_numeric_leaf"', packet)
+            self.assertIn("It grants no path or value authority", packet)
             self.assertIn("Generic assent", packet)
             self.assertIn("Ambiguity exception", packet)
             self.assertIn("exactly one clarification question", packet)
             self.assertIn("no decision-preflight sections and no JSON", packet)
-            self.assertIn("after one coherent candidate state has been selected", packet)
+            self.assertIn("after one coherent candidate state or one coherent scalar bracket has been selected", packet)
             self.assertIn("predicted to intersect the exact retained viewport", packet)
             self.assertIn("intentionally expected to lose the subject", packet)
             self.assertIn("predicted subject location", packet)
@@ -588,6 +660,11 @@ class AgentBundleTests(unittest.TestCase):
             )
             self.assertEqual(manifest["drag_all_attachments"], list(bundle.required_attachments))
             self.assertEqual(bundle.recommended_attachments, ())
+            sweep_projection = load_packet_scalar_sweep_axis_projection(bundle.packet_dir)
+            self.assertEqual(
+                [entry["path"] for entry in sweep_projection],
+                ["params.explaino_damping"],
+            )
             self.assertEqual(
                 manifest["authority_identities"]["fractal_viewport_facts_sha256"],
                 hashlib.sha256(fixture["viewport_facts_bytes"]).hexdigest(),

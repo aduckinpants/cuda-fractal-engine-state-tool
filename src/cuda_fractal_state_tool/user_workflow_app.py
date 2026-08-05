@@ -17,6 +17,7 @@ from .agent_bundle import (
     build_agent_bundle,
     copy_agent_packet,
     load_agent_bundle_handoff,
+    load_packet_scalar_sweep_axis_projection,
     open_agent_bundle_folder,
 )
 from .async_jobs import AsyncJobRunner, JobOutcome, JobRequestIdentity, WorkerQueueFullError
@@ -235,6 +236,9 @@ class UserWorkflowApp:
         self.automated_disposition_var = tk.StringVar(value="Disposition: not started")
         self.sweep_status_var = tk.StringVar(value="Sweep: not validated")
         self.sweep_binding_var = tk.StringVar(value="No validated scalar sweep binding.")
+        self.sweep_guidance_var = tk.StringVar(
+            value="Open an exact Packet V8 to see its structurally admissible numeric sweep axes."
+        )
         self.automated_summary_var = tk.StringVar(
             value="Credential not configured · no automated run"
         )
@@ -583,6 +587,10 @@ class UserWorkflowApp:
             controls, text="Open Contact Sheet", command=self.open_sweep_contact_sheet
         )
         self.open_contact_sheet_button.grid(row=0, column=4, padx=(5, 0))
+        self.open_sweep_web_review_button = ttk.Button(
+            controls, text="Open Web Review Bundle", command=self.open_sweep_web_review
+        )
+        self.open_sweep_web_review_button.grid(row=0, column=5, padx=(5, 0))
 
         body = ttk.Frame(window, padding=(12, 0, 12, 12))
         body.grid(row=2, column=0, sticky="nsew")
@@ -597,24 +605,21 @@ class UserWorkflowApp:
         ttk.Label(
             plan,
             text=(
-                "The main State Override editor is the optional fixed override. "
-                "A fixed override containing the axis is rejected."
+                "Paste either the exact sweep plan returned for this Packet V8 or a locally authored plan. "
+                "The agent-authored route uses the exact packet base (`{}` fixed override). The main State "
+                "Override editor remains an advanced local fixed override; an axis collision is rejected."
             ),
             wraplength=460,
         ).grid(row=0, column=0, sticky="w", pady=(0, 6))
         self.sweep_plan_text = ScrolledText(plan, height=22, wrap="none", undo=True)
         self.sweep_plan_text.grid(row=1, column=0, sticky="nsew")
-        self.sweep_plan_text.insert(
-            "1.0",
-            '{\n  "sweep_version": 1,\n  "axis": {\n'
-            '    "path": "params.vortex_strength",\n'
-            '    "values": [0, 0.25, 0.5, 0.75, 1]\n'
-            '  },\n  "member_failure_policy": "continue_independent"\n}\n',
-        )
         self.sweep_plan_text.edit_modified(False)
         self.sweep_plan_text.bind("<<Modified>>", self._sweep_plan_modified)
-        ttk.Label(plan, textvariable=self.sweep_binding_var, wraplength=460).grid(
+        ttk.Label(plan, textvariable=self.sweep_guidance_var, wraplength=460).grid(
             row=2, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Label(plan, textvariable=self.sweep_binding_var, wraplength=460).grid(
+            row=3, column=0, sticky="w", pady=(6, 0)
         )
 
         progress = ttk.LabelFrame(body, text="Per-member progress", padding=8)
@@ -944,6 +949,26 @@ class UserWorkflowApp:
             f"Drag all files in this packet folder: {required}\n"
             f"Recommended extras: {recommended} · Unavailable optional: {unavailable}"
         )
+        try:
+            axes = load_packet_scalar_sweep_axis_projection(bundle.packet_dir)
+        except Exception as exc:
+            self.sweep_guidance_var.set(
+                f"Packet-aware sweep guidance unavailable; validation will fail closed: {exc}"
+            )
+        else:
+            if axes:
+                rows = [
+                    f"{axis['path']} ({axis['type']}, current {axis['current_value']!r})"
+                    for axis in axes
+                ]
+                self.sweep_guidance_var.set(
+                    "Exact Packet V8 structurally admissible scalar axes (behavior still requires justification):\n"
+                    + "\n".join(f"• {row}" for row in rows)
+                )
+            else:
+                self.sweep_guidance_var.set(
+                    "This exact Packet V8 exposes no structurally admissible direct numeric params sweep axis."
+                )
         if loaded_existing:
             self.session.status_text = (
                 f"Loaded existing immutable Agent Bundle V{bundle.packet_version} {bundle.packet_id}; "
@@ -1478,7 +1503,7 @@ class UserWorkflowApp:
                 self.sweep_contact_label.configure(image="", text="Contact sheet unavailable")
                 self._set_error(f"Could not preview the receipted contact sheet: {exc}")
         self.session.status_text = (
-            f"Local scalar sweep {result.disposition}. Open the contact sheet and member proofs; "
+            f"Local scalar sweep {result.disposition}. Open the three-file web review or detailed member proofs; "
             "no human acceptance was recorded."
         )
         self._render()
@@ -1517,6 +1542,22 @@ class UserWorkflowApp:
             self.session.status_text = f"Opened derived scalar sweep contact sheet: {path}"
         except Exception as exc:
             self._set_error(f"Could not open scalar sweep contact sheet: {exc}")
+        self._render()
+
+    def open_sweep_web_review(self) -> None:
+        if self._sweep_result_dir is None:
+            self._set_error("No scalar sweep web-review bundle is available.")
+            self._render()
+            return
+        path = self._sweep_result_dir / "web-review"
+        try:
+            expected = {"sweep-review.md", "sweep-evidence.json", "contact-sheet.png"}
+            if not path.is_dir() or {item.name for item in path.iterdir()} != expected:
+                raise FileNotFoundError(path)
+            os.startfile(str(path))
+            self.session.status_text = f"Opened three-file scalar sweep web review: {path}"
+        except Exception as exc:
+            self._set_error(f"Could not open scalar sweep web-review bundle: {exc}")
         self._render()
 
     def prove_override(self) -> None:
@@ -1909,6 +1950,9 @@ class UserWorkflowApp:
         self._sweep_contact_photo = None
         self.sweep_status_var.set("Sweep: not validated")
         self.sweep_binding_var.set("No validated scalar sweep binding.")
+        self.sweep_guidance_var.set(
+            "Open an exact Packet V8 to see its structurally admissible numeric sweep axes."
+        )
         self._set_text(self.sweep_progress_text, "No local sweep has run.")
         self.sweep_contact_label.configure(image="", text="No contact sheet")
         self.session.reset()
@@ -1923,6 +1967,9 @@ class UserWorkflowApp:
         self._sweep_contact_photo = None
         self.sweep_status_var.set("Sweep: not validated")
         self.sweep_binding_var.set("No validated scalar sweep binding.")
+        self.sweep_guidance_var.set(
+            "Open an exact Packet V8 to see its structurally admissible numeric sweep axes."
+        )
         self._set_text(self.sweep_progress_text, "No local sweep has run.")
         self.sweep_contact_label.configure(image="", text="No contact sheet")
         self._set_text(self.summary_text, "")
@@ -2063,6 +2110,19 @@ class UserWorkflowApp:
         )
         self.open_contact_sheet_button.configure(
             state="normal" if contact_sheet is not None and contact_sheet.is_file() else "disabled"
+        )
+        web_review_dir = (
+            self._sweep_result_dir / "web-review"
+            if self._sweep_result_dir is not None
+            else None
+        )
+        self.open_sweep_web_review_button.configure(
+            state="normal"
+            if web_review_dir is not None
+            and web_review_dir.is_dir()
+            and {item.name for item in web_review_dir.iterdir()}
+            == {"sweep-review.md", "sweep-evidence.json", "contact-sheet.png"}
+            else "disabled"
         )
         self.run_automated_button.configure(
             state="normal"
