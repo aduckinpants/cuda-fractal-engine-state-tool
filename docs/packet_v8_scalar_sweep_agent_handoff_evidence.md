@@ -1,7 +1,7 @@
 # Packet V8 Scalar Sweep Agent Handoff Evidence
 
-Status: local implementation and real-workflow gates complete; bounded paid
-behavioral qualification stopped at a classified provider-credit limitation.
+Status: implementation, real workflow, and bounded paid behavioral qualification
+complete; user review remains the final acceptance boundary.
 
 ## Implementation checkpoint
 
@@ -133,6 +133,9 @@ py -3.14 -m unittest discover -s tests
 
 Result: 228 passing tests.
 
+After the credential-identity hardening, the full Python 3.14 suite passed again
+with 229 tests; PR #24's GitHub Python 3.14 check also passed.
+
 Hostile review found and removed the last generic hard-coded
 `params.vortex_strength` plan from the screenshot acceptance helper. That helper
 now requires an explicit packet-authorized plan. The review also tightened
@@ -140,7 +143,7 @@ now requires an explicit packet-authorized plan. The review also tightened
 the proof receipt's single exact-axis revert error; unrelated proof failures
 cannot receive the no-effect label.
 
-## Bounded paid qualification
+## Bounded paid qualification and credential reset
 
 Cell 1 used the exact Packet V8 above and the tracked Luna High qualification
 profile:
@@ -175,8 +178,8 @@ per-cell ceiling: $0.12
 campaign ceiling: $1.00
 ```
 
-The one authorized generation request reached the same 167,293-token
-pre-dispatch count, then the provider rejected it with:
+The first authorized generation request reached the same 167,293-token
+pre-dispatch count, then the provider rejected it before a model response with:
 
 ```text
 HTTP 429
@@ -185,29 +188,118 @@ message: You have no credits remaining. Add credits to continue using the API.
 ```
 
 The provider created no model response and returned no usage receipt. This
-report therefore does not infer a billed amount. All uploaded provider files
-were deleted successfully. There was no retry and the three-file result-review
-cell was not dispatched. Raw sanitized request, count, failure, and cleanup
-evidence is preserved under:
+report therefore does not infer a billed amount for that attempt. All uploaded
+provider files were deleted successfully. There was no automatic retry and the
+three-file result-review cell was not dispatched from the failed run. Raw
+sanitized request, count, failure, and cleanup evidence is preserved under:
 
 ```text
 .local/packet_v8_scalar_sweep_agent_handoff_qualification/cell1/
 ```
 
-The paid gate is `PROVIDER_CREDIT_BLOCKED`, not a model-behavior pass or failure.
-The campaign's decisive closure explicitly permits a classified limitation.
+The user then re-entered the same project-scoped key from the local vault without
+changing OpenAI key or billing administration. A 32-input-token Luna diagnostic
+completed as `BILLING_PATH_OK` for a calculated `$0.0000172`. Because the failed
+run had not retained a non-secret key identity, it could not prove whether the
+exact key bytes were identical across attempts.
 
 Hostile review confirmed that the failure occurred after the exact count and
 dispatch authorization but before any model response, so it cannot be used to
 judge the packet prompt. The transport classified the provider's 429 through
 its generic rate-limit category; the stable campaign conclusion records the
 more specific provider error code. The review also confirmed exact owned-file
-cleanup and rejected a retry, a second-cell dispatch, or a claim of zero billed
-cost without a provider usage receipt.
+cleanup and rejected a claim of zero billed cost without a provider usage
+receipt.
+
+PR #24 added one canonical non-secret credential identity to later automated-run
+protocol snapshots:
+
+```text
+source
+key kind
+16-hex SHA-256 fingerprint prefix
+```
+
+The raw credential is absent from the identity and its dataclass representation.
+The reset qualification bound both cells to:
+
+```text
+source: windows_credential_manager
+key kind: project_scoped
+fingerprint SHA-256 prefix: ef79473856bc978c
+```
+
+### Reset Cell 1 - capability discovery and plan
+
+The reset used no response history. Its count-only result was byte-for-byte
+consistent with the first preflight:
+
+```text
+input tokens: 167,293
+maximum output tokens: 4,000
+maximum calculated cost: $0.0382586
+actual output tokens: 2,671
+actual calculated cost: $0.0366638
+```
+
+Luna High identified the ordinary Sparse State Override and separate Local
+Scalar Bracket Sweep V1 modes. It returned exactly one fenced JSON block:
+
+```json
+{
+  "sweep_version": 1,
+  "axis": {
+    "path": "params.explaino_damping",
+    "values": [1.5, 1.8, 1.95, 2.05, 2.5]
+  },
+  "member_failure_policy": "continue_independent"
+}
+```
+
+The response excluded the exact captured base, kept camera, Color Pipeline, and
+iteration cap fixed, made displacement an explicit fixed-window limitation, and
+gave the required prediction/disconfirmation and hostile-review conclusions.
+The canonical `parse_scalar_sweep_plan` and exact Packet V8 service validation
+both passed. Plan SHA-256:
+`3d80822bd235bfa449f39134ef10ed68dfe9986e23678fd03dfd2f0ac98bd67a`.
+
+### Reset Cell 2 - fresh three-file result review
+
+Cell 2 began a new response with no Cell 1 or Packet V8 history. Its only
+authorities were the three exact web-review files recorded above:
+
+```text
+input tokens: 11,629
+maximum output tokens: 2,500
+maximum calculated cost: $0.0053258
+actual output tokens: 989
+actual calculated cost: $0.0035126
+```
+
+The review correctly stated:
+
+- the top-left tile is the captured base at
+  `params.explaino_damping = 1.899999976158142`;
+- it is not a sweep member and was not newly replay-proven;
+- all five requested members are independently `REPLAY_PROVEN`;
+- no member failed or received `NO_EFFECT_ENGINE_EMITTED_BASE`;
+- the visible progression toward broad dark regions at `2.0` and `2.02` is an
+  observation, not proof of monotonicity, causality, convergence, or a phase
+  transition;
+- `human_acceptance: false` and visual review remains pending.
+
+The response satisfied every planned result-review gate. No ambiguity or
+base-equivalence cell was warranted. Combined calculated qualification cost was
+`$0.0401764`, or `$0.0401936` including the separate billing diagnostic. Raw
+reset evidence is preserved under:
+
+```text
+.local/packet_v8_scalar_sweep_agent_handoff_qualification/reset/
+```
 
 ## Closure boundary
 
-Complete repository closure without claiming paid behavioral acceptance. A
-future paid rerun requires restored provider credit and a separately confirmed
-execution boundary; it must begin again with exact count-only preflight and may
-not reuse this failed turn as conversational history.
+The implementation and bounded behavioral qualification are complete. Manual
+review of the Packet V8 wording, scalar-sweep panel, captured-base contact sheet,
+three-file web bundle, and the two reset transcripts is the next boundary. No
+new product mutation is authorized by this evidence.

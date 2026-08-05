@@ -287,8 +287,8 @@ the stable evidence report.
 - [x] Preserve exact prompts, packet/bundle hashes, model profile, output limits,
   count-only estimates, actual usage, and responses.
 - [x] Dispatch cells sequentially under the locked per-cell and campaign caps.
-- [ ] Validate sweep JSON through the canonical parser and exact packet binding.
-- [ ] Verify result review distinguishes base, proven members, failed/no-effect
+- [x] Validate sweep JSON through the canonical parser and exact packet binding.
+- [x] Verify result review distinguishes base, proven members, failed/no-effect
   members, observed trends, hypotheses, and human acceptance.
 - [x] Stop immediately if transport, cost, or behavioral evidence invalidates the
   contract.
@@ -296,23 +296,29 @@ the stable evidence report.
 Exit: bounded live evidence establishes whether the revised handoff controls the
 target model without exceeding `$1.00`.
 
-Status: stopped at the first provider gate. The exact count-only request was
-167,293 input tokens and had a conservative maximum cost of `$0.0382586` with
-the locked 4,000-token output cap. The one authorized Luna High generation was
-rejected before a model response with HTTP 429 `credit_balance_exhausted`.
-No retry or later cell was dispatched. The JSON and result-review behavior gates
-remain not reached; this is the classified paid-qualification limitation allowed
-by the decisive-closure contract, not a behavioral pass.
+Status: complete after a fresh reset. An initial generation attempt was rejected
+with HTTP 429 `credit_balance_exhausted`; no response, retry, or later cell was
+created from that attempt. After the user re-entered the same project key, a
+minimal billing-path diagnostic passed. Credential identity hardening was then
+merged in PR #24 before qualification restarted from no conversational history.
+
+The reset Cell 1 count was again exactly 167,293 input tokens. Luna High returned
+one valid `params.explaino_damping` sweep plan; the canonical parser and exact
+Packet V8 validation passed. Fresh-context Cell 2 used only the deterministic
+three-file web bundle and correctly separated the captured base, five proven
+members, observed trend, bounded hypotheses, no failed/no-effect members, and
+`human_acceptance: false`. Actual calculated cell costs were `$0.0366638` and
+`$0.0035126`. No ambiguity cell was justified.
 
 ### Slice 5 - Acceptance checkpoint and closure
 
 - [x] Update README and stable evidence docs.
 - [x] Run focused tests, full Python 3.14 suite, real workflow, `git diff --check`,
   stale-architecture search, and hostile self-review.
-- [ ] Commit and push a clean ready PR.
-- [ ] Merge state-tool work under standing repository authority after green CI.
-- [ ] Fast-forward and verify exact clean `main`.
-- [ ] Stop for user review of the new packet, sweep panel, contact sheet, web
+- [x] Commit and push a clean ready PR.
+- [x] Merge state-tool work under standing repository authority after green CI.
+- [x] Fast-forward and verify exact clean `main`.
+- [x] Stop for user review of the new packet, sweep panel, contact sheet, web
   bundle, and paid transcripts.
 
 ## Non-Goals
