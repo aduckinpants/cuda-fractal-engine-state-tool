@@ -430,7 +430,7 @@ class PacketV8ResponsesTransport:
         *,
         instructions: str,
         prompt: str,
-        packet_dir: Path,
+        packet_dir: Path | None,
         run_store: AutomatedRunStore | None = None,
         turn_id: str = "count-0001",
         cancelled: Callable[[], bool] = lambda: False,
@@ -515,8 +515,10 @@ class PacketV8ResponsesTransport:
             or any(character not in "0123456789abcdef" for character in model_profile_sha256)
         ):
             raise ValueError("Model-profile identity must be a lowercase SHA-256")
-        if packet_dir is None and previous_response_id is None:
-            raise ValueError("The first automated turn requires a Packet V8 authority bundle")
+        if packet_dir is None and previous_response_id is None and not additional_resources:
+            raise ValueError(
+                "A fresh automated turn requires Packet V8 or exact additional resources"
+            )
         if cancelled():
             raise TransportCancelled("Automated turn was cancelled before API dispatch")
         prepared = prepare_packet_transport(packet_dir) if packet_dir is not None else None

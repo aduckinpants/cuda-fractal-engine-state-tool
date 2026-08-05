@@ -5,7 +5,7 @@
 ```text
 branch: codex/question-driven-research-session-poc
 starting main: cdfc516405080ba9604d8f16901068ed3018465a
-status: Slices 0-2 complete; Slice 3 is the next approved implementation boundary
+status: Slices 0-3 complete; Slice 4 is the next approved implementation boundary
 paid provider generation: not authorized
 engine mutation: not authorized
 ```
@@ -18,6 +18,7 @@ Read first:
 4. `docs/manual-test-results/v8-sweep-revision/README.md`
 5. `docs/question_driven_research_session_slice1_evidence.md`
 6. `docs/question_driven_research_session_slice2_evidence.md`
+7. `docs/question_driven_research_session_slice3_evidence.md`
 
 The campaign adds a sealed-question research route over the existing Packet V8,
 override, proof, scalar-sweep, promotion, packet-refresh, transport, pricing,

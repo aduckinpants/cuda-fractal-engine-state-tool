@@ -136,6 +136,8 @@ class ResearchSessionController:
         self.prepared: PreparedResearchExperiment | None = None
         self.last_execution: ResearchExecutionEvidence | None = None
         self.last_review: ResearchReviewDecision | None = None
+        self.execution_history: list[ResearchExecutionEvidence] = []
+        self.review_history: list[ResearchReviewDecision] = []
         self.terminal_planner_decision: PlannerDecision | None = None
         self._correction_used = False
         self._correction_available = False
@@ -168,6 +170,14 @@ class ResearchSessionController:
 
     def _attempt_dir(self, attempt_number: int) -> Path:
         return self.run_store.run_dir / "attempts" / f"{attempt_number:03d}"
+
+    @property
+    def correction_used(self) -> bool:
+        return self._correction_used
+
+    @property
+    def correction_available(self) -> bool:
+        return self._correction_available
 
     def prepare_planner_response(
         self, response_text: str, *, correction: bool = False
@@ -356,6 +366,7 @@ class ResearchSessionController:
             f"attempts/{prepared.attempt_number:03d}/execution-ref.json", reference
         )
         self.last_execution = evidence
+        self.execution_history.append(evidence)
         self.state = ResearchSessionState.REVIEW_READY
         self._record("experiment_attempt_finished", reference)
         return evidence
@@ -416,6 +427,7 @@ class ResearchSessionController:
                 else ResearchSessionDisposition.UNRESOLVED
             )
         self.last_review = decision
+        self.review_history.append(decision)
         self._record(
             "research_review_applied",
             {
