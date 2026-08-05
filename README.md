@@ -419,6 +419,26 @@ The proof CLI deliberately stops at visual review pending and never launches.
 Packets with an unsafe authoring-surface version are rejected with a rebuild
 instruction rather than retaining unsafe color-path authority.
 
+## Published Runtime Provider Integration
+
+The hermetic unit suite uses synthetic active-model receipts and responses. Run
+the dedicated integration rail whenever the engine active-model or canonical
+sampling contract changes, and as a mandatory cross-repo release/checkpoint
+proof for polynomial-model enrichment:
+
+```powershell
+py -3.14 -m cuda_fractal_state_tool.published_runtime_provider_integration `
+  --runtime-cmd D:\salt-fractal\cuda_newton_fractal_clone\runtime\fractal_ui.cmd `
+  --state-json D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-08-02\160241_458__explaino_rational_escape\state.json `
+  --out-json .local\validation\published_runtime_provider_integration.json
+```
+
+This command is deliberately non-skipping: a missing launcher, active
+executable, state, incompatible selector, state/runtime binding mismatch, wrong
+provider/model, non-CUDA sample response, or numeric-backend drift fails the
+command. Ordinary unit discovery remains hermetic and does not require the
+operator's published runtime tree.
+
 ## Validation
 
 ```powershell

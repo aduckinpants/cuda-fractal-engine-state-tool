@@ -20,6 +20,7 @@ cuda-fractal-state-override = "cuda_fractal_state_tool.state_override_cli:main"
 cuda-fractal-state-proof = "cuda_fractal_state_tool.state_override_proof_cli:main"
 cuda-fractal-finding-enrichment = "cuda_fractal_state_tool.finding_enrichment_cli:main"
 cuda-fractal-scalar-sweep = "cuda_fractal_state_tool.scalar_sweep_cli:main"
+cuda-fractal-published-provider-integration = "cuda_fractal_state_tool.published_runtime_provider_integration:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
