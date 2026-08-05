@@ -663,6 +663,21 @@ def derive_scalar_sweep_axis_projection(
     return projected
 
 
+def load_packet_scalar_sweep_axis_projection(packet_dir: Path) -> list[dict[str, Any]]:
+    """Load the sweep projection from the exact authoring bytes in one Packet V8."""
+
+    bundle = load_existing_agent_bundle(packet_dir)
+    if bundle.packet_version != 8:
+        raise ValueError("Scalar Bracket Sweep V1 guidance requires Packet V8")
+    container_path = bundle.packet_dir / _STATE_AUTHORING_TRANSPORT_FILENAME
+    parsed = parse_authority_container(container_path.read_bytes())
+    artifact = parsed.artifacts.get(_AUTHORING_SURFACE_FILENAME)
+    if artifact is None:
+        raise ValueError("Packet V8 authoring container has no state-override authoring surface")
+    surface = _load_json_object(artifact.payload, "Packet V8 authoring surface")
+    return derive_scalar_sweep_axis_projection(surface)
+
+
 def serialize_state_override_authoring_surface(surface: dict[str, Any]) -> bytes:
     return _json_bytes(surface)
 

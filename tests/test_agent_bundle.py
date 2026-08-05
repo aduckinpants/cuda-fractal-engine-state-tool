@@ -22,6 +22,7 @@ from cuda_fractal_state_tool.agent_bundle import (
     derive_state_override_authoring_surface,
     load_existing_agent_bundle,
     load_agent_bundle_handoff,
+    load_packet_scalar_sweep_axis_projection,
     open_agent_bundle_folder,
     validate_captured_color_pipeline_draft,
 )
@@ -659,6 +660,11 @@ class AgentBundleTests(unittest.TestCase):
             )
             self.assertEqual(manifest["drag_all_attachments"], list(bundle.required_attachments))
             self.assertEqual(bundle.recommended_attachments, ())
+            sweep_projection = load_packet_scalar_sweep_axis_projection(bundle.packet_dir)
+            self.assertEqual(
+                [entry["path"] for entry in sweep_projection],
+                ["params.explaino_damping"],
+            )
             self.assertEqual(
                 manifest["authority_identities"]["fractal_viewport_facts_sha256"],
                 hashlib.sha256(fixture["viewport_facts_bytes"]).hexdigest(),

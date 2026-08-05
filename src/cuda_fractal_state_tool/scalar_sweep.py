@@ -29,7 +29,12 @@ from .state_override import (
     parse_state_override,
 )
 from .state_override_proof import StateOverrideProofResult, execute_state_override_proof
-from .sweep_presentation import render_scalar_sweep_presentation
+from .sweep_presentation import (
+    CapturedBaseReference,
+    render_scalar_sweep_presentation,
+    render_scalar_sweep_web_review,
+    resolve_captured_base_reference,
+)
 
 
 SCALAR_SWEEP_VERSION = 1
@@ -90,6 +95,7 @@ class ScalarSweepResult:
     sweep_dir: Path
     receipt_path: Path
     members: tuple[ScalarSweepMemberResult, ...]
+    web_review_dir: Path | None = None
 
 
 class ProofExecutor(Protocol):
@@ -224,6 +230,61 @@ def _concrete_override(fixed: ParsedStateOverride, axis_path: str, value: int | 
     ).encode("utf-8")
 
 
+def _proof_emitted_exact_base(
+    proof: StateOverrideProofResult,
+    packet_dir: Path,
+    axis_path: str,
+) -> bool:
+    """Classify an exact emitted-base collapse without changing proof tolerance."""
+
+    engine_candidate_path = getattr(proof, "engine_candidate_path", None)
+    merged_candidate_path = getattr(proof, "merged_candidate_path", None)
+    if proof.status == "replay_proven" or engine_candidate_path is None or merged_candidate_path is None:
+        return False
+    paths = {
+        "base": packet_dir / "state.json",
+        "merged": Path(merged_candidate_path),
+        "emitted": Path(engine_candidate_path),
+        "receipt": proof.receipt_path,
+    }
+    if any(not path.is_file() for path in paths.values()):
+        return False
+    if sha256_file(paths["receipt"]) != proof.receipt_sha256:
+        return False
+    merged_sha = getattr(proof, "merged_candidate_sha256", None)
+    if merged_sha and sha256_file(paths["merged"]) != merged_sha:
+        return False
+    engine_sha = getattr(proof, "engine_candidate_sha256", None)
+    if engine_sha and sha256_file(paths["emitted"]) != engine_sha:
+        return False
+    try:
+        receipt = loads_strict_no_duplicates(paths["receipt"].read_text(encoding="utf-8"))
+        documents = {
+            name: loads_strict_no_duplicates(path.read_text(encoding="utf-8"))
+            for name, path in paths.items()
+            if name != "receipt"
+        }
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        return False
+    errors = receipt.get("errors") if isinstance(receipt, dict) else None
+    if (
+        receipt.get("status") != "rejected"
+        or not isinstance(errors, list)
+        or len(errors) != 1
+        or not isinstance(errors[0], str)
+        or not errors[0].startswith(f"Engine reverted requested value at {axis_path}:")
+    ):
+        return False
+    axis_name = axis_path.split(".", 1)[1]
+    try:
+        base_value = documents["base"]["params"][axis_name]
+        merged_value = documents["merged"]["params"][axis_name]
+        emitted_value = documents["emitted"]["params"][axis_name]
+    except (KeyError, TypeError):
+        return False
+    return merged_value != base_value and emitted_value == base_value
+
+
 class ScalarBracketSweepService:
     def __init__(
         self,
@@ -232,11 +293,15 @@ class ScalarBracketSweepService:
         proof: ProofExecutor = execute_state_override_proof,
         runtime_snapshot: Callable[[Path], dict[str, Any]] = _default_runtime_snapshot,
         packet_binding: Callable[[Path], PacketSweepBinding] = _default_packet_binding,
+        captured_base_reference: Callable[[Path, str], CapturedBaseReference] = (
+            resolve_captured_base_reference
+        ),
     ) -> None:
         self.materialize = materialize
         self.proof = proof
         self.runtime_snapshot = runtime_snapshot
         self.packet_binding = packet_binding
+        self.captured_base_reference = captured_base_reference
 
     def validate(
         self,
@@ -260,6 +325,21 @@ class ScalarBracketSweepService:
                 f"Fixed state override already contains sweep axis {plan.axis_path}"
             )
         binding = self.packet_binding(packet_dir)
+        try:
+            packet_state = loads_strict_no_duplicates(
+                (packet_dir / "state.json").read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+            raise ScalarSweepPlanError("Packet base state is unavailable or malformed") from exc
+        params = packet_state.get("params") if isinstance(packet_state, dict) else None
+        axis_name = plan.axis_path.split(".", 1)[1]
+        if not isinstance(params, dict) or axis_name not in params:
+            raise ScalarSweepPlanError(f"Sweep axis is absent from packet base: {plan.axis_path}")
+        base_value = params[axis_name]
+        if any(value == base_value for value in plan.values):
+            raise ScalarSweepPlanError(
+                f"Scalar sweep value exactly repeats captured base {plan.axis_path}={base_value!r}"
+            )
         runtime = self.runtime_snapshot(runtime_cmd_path)
         concrete = tuple(_concrete_override(fixed, plan.axis_path, value) for value in plan.values)
         try:
@@ -409,6 +489,16 @@ class ScalarBracketSweepService:
 
             if proof is not None:
                 status = "REPLAY_PROVEN" if proof.status == "replay_proven" else "PROOF_FAILED"
+                if status == "PROOF_FAILED" and _proof_emitted_exact_base(
+                    proof,
+                    packet_dir,
+                    validation.plan.axis_path,
+                ):
+                    status = "NO_EFFECT_ENGINE_EMITTED_BASE"
+                    message = (
+                        f"Engine emitted the exact captured base value for {validation.plan.axis_path}; "
+                        "this member produced no distinct state effect."
+                    )
                 member = ScalarSweepMemberResult(
                     index=index,
                     value=value,
@@ -437,7 +527,7 @@ class ScalarBracketSweepService:
             elif not self._authority_matches(packet_dir, runtime_cmd_path, validation):
                 disposition = "AUTHORITY_DRIFT"
                 stop_status = "NOT_STARTED_AFTER_AUTHORITY_DRIFT"
-            elif member.status == "PROOF_FAILED":
+            elif member.status in {"PROOF_FAILED", "NO_EFFECT_ENGINE_EMITTED_BASE"}:
                 if validation.plan.member_failure_policy == "stop_on_first_failure":
                     disposition = "STOPPED_AFTER_MEMBER_FAILURE"
                     stop_status = "NOT_STARTED_AFTER_FAILURE"
@@ -451,6 +541,9 @@ class ScalarBracketSweepService:
                 sweep_dir=sweep_dir,
                 sweep_id=sweep_id,
                 axis_path=validation.plan.axis_path,
+                captured_base=self.captured_base_reference(
+                    packet_dir, validation.plan.axis_path
+                ),
                 members=members,
             )
         except Exception as exc:
@@ -488,9 +581,30 @@ class ScalarBracketSweepService:
                 "receipt_sha256": presentation.receipt_sha256 if presentation else None,
                 "human_acceptance": False,
             },
+            "web_review": {
+                "path": "web-review" if presentation else None,
+                "generation": "deterministic_derived_after_aggregate_receipt",
+                "human_acceptance": False,
+            },
         }
         receipt_path = sweep_dir / "receipt.json"
         _write_json_once(receipt_path, receipt)
+        web_review = None
+        if presentation is not None:
+            try:
+                web_review = render_scalar_sweep_web_review(sweep_dir=sweep_dir)
+            except Exception as exc:
+                _progress(
+                    on_progress,
+                    {
+                        "event": "WEB_REVIEW_FAILED",
+                        "sweep_id": sweep_id,
+                        "error": str(exc),
+                    },
+                )
+                raise ScalarSweepPlanError(
+                    f"Sweep proofs are preserved at {sweep_dir}, but web-review generation failed: {exc}"
+                ) from exc
         _progress(
             on_progress,
             {
@@ -506,6 +620,7 @@ class ScalarBracketSweepService:
             sweep_dir=sweep_dir,
             receipt_path=receipt_path,
             members=tuple(members),
+            web_review_dir=web_review.web_review_dir if web_review else None,
         )
 
     def _authority_matches(
