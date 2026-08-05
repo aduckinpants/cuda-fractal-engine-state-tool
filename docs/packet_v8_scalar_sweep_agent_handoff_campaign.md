@@ -219,38 +219,38 @@ become a second automated-session controller.
   #22.
 - [x] Fast-forward clean local `main` to exact merged commit `aee1264`.
 - [x] Create `codex/packet-v8-sweep-web-review`.
-- [ ] Check in this campaign contract.
-- [ ] Record current packet, sweep, presentation, UI, transport, and cost owners.
-- [ ] Run focused plan/contract checks, full Python 3.14 suite, hostile review,
+- [x] Check in this campaign contract.
+- [x] Record current packet, sweep, presentation, UI, transport, and cost owners.
+- [x] Run focused plan/contract checks, full Python 3.14 suite, hostile review,
   commit, and clean-tree proof.
 
 Exit: the accepted contracts are tracked before product mutation.
 
 ### Slice 1 - Packet V8 sweep discovery and alternate output
 
-- [ ] Derive the structurally admissible numeric axis projection from the exact
+- [x] Derive the structurally admissible numeric axis projection from the exact
   packet authoring surface.
-- [ ] Add the front-loaded sweep capability and mutually exclusive output
+- [x] Add the front-loaded sweep capability and mutually exclusive output
   trigger to newly generated Packet V8 instances.
-- [ ] Preserve ordinary sparse-override wording and behavior.
-- [ ] Add focused packet and weak-output-shape tests.
-- [ ] Generate a real refreshed transcendental packet and inspect its text.
-- [ ] Run focused/full tests, hostile review, commit, and clean tree.
+- [x] Preserve ordinary sparse-override wording and behavior.
+- [x] Add focused packet and weak-output-shape tests.
+- [x] Generate a real refreshed transcendental packet and inspect its text.
+- [x] Run focused/full tests, hostile review, commit, and clean tree.
 
 Exit: a fresh agent can discover and return a valid local sweep plan without
 out-of-band instructions.
 
 ### Slice 2 - Captured-base presentation and compact web bundle
 
-- [ ] Resolve and hash-verify the durable full captured base through existing
+- [x] Resolve and hash-verify the durable full captured base through existing
   workspace ownership.
-- [ ] Reject exact base values as redundant sweep members.
-- [ ] Add the captured-base reference tile and no-effect emitted-base wording.
-- [ ] Generate the deterministic three-file web bundle.
-- [ ] Replace local absolute-path navigation with logical web-facing member
+- [x] Reject exact base values as redundant sweep members.
+- [x] Add the captured-base reference tile and no-effect emitted-base wording.
+- [x] Generate the deterministic three-file web bundle.
+- [x] Replace local absolute-path navigation with logical web-facing member
   references while preserving source documents and hashes.
-- [ ] Add `Open Web Review Bundle` and packet-aware sweep-editor guidance.
-- [ ] Run deterministic regeneration, corruption, missing-base, partial-member,
+- [x] Add `Open Web Review Bundle` and packet-aware sweep-editor guidance.
+- [x] Run deterministic regeneration, corruption, missing-base, partial-member,
   cancellation, focused/full tests, hostile review, commit, and clean tree.
 
 Exit: the user can drag three files into a web session without losing durable
