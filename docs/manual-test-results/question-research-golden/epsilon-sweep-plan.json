@@ -1,0 +1,14 @@
+{
+  "sweep_version": 1,
+  "axis": {
+    "path": "params.epsilon",
+    "values": [
+      5e-7,
+      7.5e-7,
+      1.25e-6,
+      1.5e-6,
+      2e-6
+    ]
+  },
+  "member_failure_policy": "continue_independent"
+}

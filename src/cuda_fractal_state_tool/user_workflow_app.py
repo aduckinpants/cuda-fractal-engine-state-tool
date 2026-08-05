@@ -244,6 +244,7 @@ class UserWorkflowApp:
         self._research_last_event_sequence = 0
         self._next_research_refresh_at = 0.0
         self._research_count_binding: tuple[str, ...] | None = None
+        self._research_count_gate_receipt: dict | None = None
         self._credential_available = False
         self._sweep_job_id: str | None = None
         self._sweep_result_dir: Path | None = None
@@ -1001,6 +1002,7 @@ class UserWorkflowApp:
 
     def _activate_bundle(self, bundle: AgentBundle, *, loaded_existing: bool) -> None:
         self._research_count_binding = None
+        self._research_count_gate_receipt = None
         handoff = load_agent_bundle_handoff(bundle.packet_dir)
         self.session.accept_bundle(bundle)
         self._set_text(self.packet_text, handoff.packet_text)
@@ -1116,6 +1118,7 @@ class UserWorkflowApp:
         if self._research_count_binding is None:
             return
         self._research_count_binding = None
+        self._research_count_gate_receipt = None
         self.research_dialog.cost_var.set("Cost: brief or model changed; recount required")
         self.research_dialog.gate_var.set("Gate: count-only approval invalidated")
         self._render()
@@ -1135,6 +1138,30 @@ class UserWorkflowApp:
             self.research_dialog.model_var.get().strip(),
             self.research_dialog.reasoning_var.get().strip(),
         )
+
+    def _validate_research_count_gate_receipt(self) -> None:
+        receipt = self._research_count_gate_receipt
+        store = self._research_run_store
+        if receipt is None or store is None:
+            raise ValueError("The authorized count gate receipt is unavailable")
+        if receipt.get("authorized") is not True:
+            raise ValueError("The count gate receipt is not authorized")
+        if receipt.get("binding") != list(self._current_research_count_binding() or ()):
+            raise ValueError("The count gate receipt no longer matches the exact research binding")
+        if receipt.get("source_count_run_id") != store.run_dir.name:
+            raise ValueError("The active count run identity changed")
+        manifest_sha = hashlib.sha256(store.manifest_path.read_bytes()).hexdigest()
+        if receipt.get("source_count_run_manifest_sha256") != manifest_sha:
+            raise ValueError("The count run manifest changed after authorization")
+        relative = receipt.get("source_authorization_relative_path")
+        if relative != "cost/planner-01-count-only-authorization.json":
+            raise ValueError("The count authorization path is invalid")
+        authorization_path = store.run_dir / "cost" / "planner-01-count-only-authorization.json"
+        if not authorization_path.is_file():
+            raise ValueError("The exact count authorization evidence is missing")
+        authorization_sha = hashlib.sha256(authorization_path.read_bytes()).hexdigest()
+        if receipt.get("source_authorization_sha256") != authorization_sha:
+            raise ValueError("The count authorization evidence changed after approval")
 
     def _research_model_profile(self, pricing_policy) -> ModelProfileV1:
         profile = ModelProfileV1(
@@ -1198,6 +1225,7 @@ class UserWorkflowApp:
         model_profile: ModelProfileV1,
         credential,
         purpose: str,
+        approved_count_gate: dict | None = None,
     ) -> ResearchRunStore:
         workspace_root = Path(self.workspace_root_var.get().strip()).resolve()
         return ResearchRunStore.create(
@@ -1211,6 +1239,7 @@ class UserWorkflowApp:
                 "prompt_cache_policy": PromptCachePolicy.EXPLICIT_NO_CACHE.value,
                 "credential_source": credential.source,
                 "credential_identity": credential.identity_dict(),
+                "approved_count_gate": approved_count_gate,
             },
             initial_packet=self._research_packet_binding(bundle),
             research_brief=brief.to_dict(),
@@ -1218,6 +1247,7 @@ class UserWorkflowApp:
 
     def count_research_budget(self) -> None:
         self._research_count_binding = None
+        self._research_count_gate_receipt = None
         try:
             bundle, _finding, identity, credential, brief, pricing, profile = (
                 self._research_prerequisites()
@@ -1313,6 +1343,33 @@ class UserWorkflowApp:
         )
         if gate.budget.authorized:
             self._research_count_binding = self._current_research_count_binding()
+            authorization_path = (
+                self._research_run_store.run_dir
+                / "cost"
+                / "planner-01-count-only-authorization.json"
+            )
+            self._research_count_gate_receipt = {
+                "count_gate_version": 1,
+                "binding": list(self._research_count_binding),
+                "source_count_run_id": self._research_run_store.run_dir.name,
+                "source_count_run_manifest_sha256": hashlib.sha256(
+                    self._research_run_store.manifest_path.read_bytes()
+                ).hexdigest(),
+                "source_authorization_relative_path": str(
+                    authorization_path.relative_to(self._research_run_store.run_dir)
+                ).replace("\\", "/"),
+                "source_authorization_sha256": hashlib.sha256(
+                    authorization_path.read_bytes()
+                ).hexdigest(),
+                "exact_initial_input_tokens": gate.count.input_tokens,
+                "exact_initial_call_estimate_usd": str(gate.budget.current_call.cost_usd),
+                "required_with_reserves_usd": str(
+                    gate.budget.required_available_cost_usd
+                ),
+                "conservative_adaptive_ceiling_usd": gate.conservative_adaptive_ceiling_usd,
+                "hard_budget_usd": str(gate.budget.hard_budget_usd),
+                "authorized": True,
+            }
         self._refresh_research_projection()
         self._render()
 
@@ -1322,6 +1379,19 @@ class UserWorkflowApp:
                 "Run Research requires an authorized Count & Review Budget gate for this exact Packet, brief, model, and budget."
             )
             self.research_dialog.gate_var.set("Gate: count-only approval required")
+            self._render()
+            return
+        if self._research_count_gate_receipt is None:
+            self._set_error("The authorized count gate receipt is unavailable; recount before generation.")
+            self._render()
+            return
+        try:
+            self._validate_research_count_gate_receipt()
+        except Exception as exc:
+            self._research_count_binding = None
+            self._research_count_gate_receipt = None
+            self._set_error(f"Count gate revalidation failed; recount required: {exc}")
+            self.research_dialog.gate_var.set("Gate: count-only approval invalidated")
             self._render()
             return
         try:
@@ -1337,6 +1407,7 @@ class UserWorkflowApp:
                 model_profile=profile,
                 credential=credential,
                 purpose="question_research_generation",
+                approved_count_gate=self._research_count_gate_receipt,
             )
         except Exception as exc:
             self._set_error(f"Research run setup failed: {exc}")
@@ -1352,6 +1423,9 @@ class UserWorkflowApp:
         self.research_dialog.set_answer("Research is running. No scientific conclusion is available yet.")
         self.research_dialog.set_experiments("")
         self.research_dialog.set_files(str(store.run_dir))
+        store.write_evidence_once_json(
+            "cost/preflight-count-gate.json", self._research_count_gate_receipt
+        )
         workspace_root = Path(self.workspace_root_var.get().strip()).resolve()
 
         def operation(context):
@@ -1435,7 +1509,7 @@ class UserWorkflowApp:
         self.research_dialog.state_var.set(
             f"State: complete · attempts {result.attempts_consumed} · current research base {result.current_bundle.packet_id}"
         )
-        self.research_dialog.gate_var.set(f"Gate: {result.disposition.value}")
+        self.research_dialog.gate_var.set(f"Gate: {result.controller_disposition}")
         self.research_dialog.set_answer(result.result.working_report_path.read_text(encoding="utf-8"))
         self.research_dialog.set_experiments(self._research_experiment_summary())
         self.research_dialog.set_files(self._research_file_listing())
@@ -1514,7 +1588,7 @@ class UserWorkflowApp:
                 state = projection.get("state")
                 attempts = projection.get("attempts_consumed")
                 current = projection.get("current_research_base")
-                if state is not None:
+                if state is not None and self._research_result is None:
                     self.research_dialog.state_var.set(
                         f"State: {state} · attempts {attempts if attempts is not None else '?'}"
                     )
@@ -2482,6 +2556,7 @@ class UserWorkflowApp:
         self._research_current_visual = None
         self._research_last_event_sequence = 0
         self._research_count_binding = None
+        self._research_count_gate_receipt = None
         self.research_dialog.state_var.set("State: idle")
         self.research_dialog.authority_var.set("Authority: no Packet V8")
         self.research_dialog.pipeline_var.set("Active Color Pipeline: unavailable")

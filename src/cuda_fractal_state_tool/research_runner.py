@@ -15,6 +15,7 @@ from .research_context import (
 from .research_cost import ResearchProviderStage
 from .research_protocol import ResearchAction, canonical_json_sha256
 from .research_provider import ResearchProviderDispatcher
+from .openai_transport import DispatchAuthorizationRejected
 from .research_results import (
     ResearchResultDisposition,
     ResearchResultService,
@@ -37,6 +38,7 @@ class ResearchSessionRunResult:
     attempts_consumed: int
     alternate_report_available: bool
     visual_paths: tuple[Path, ...]
+    controller_disposition: str
 
 
 class ResearchSessionRunner:
@@ -157,6 +159,8 @@ class ResearchSessionRunner:
                     additional_resources=synthesis.resources,
                     alternate_communication_required=alternate_required,
                 )
+            except DispatchAuthorizationRejected:
+                raise
             except Exception as exc:
                 sealed = self.results.seal_synthesis_failure(
                     str(exc),
@@ -185,6 +189,8 @@ class ResearchSessionRunner:
                         packet_dir=None,
                         additional_resources=communication.resources,
                     )
+                except DispatchAuthorizationRejected:
+                    raise
                 except Exception as exc:
                     disposition = self.results.seal_communication_failure(
                         str(exc),
@@ -205,6 +211,33 @@ class ResearchSessionRunner:
                 self.controller.attempts_consumed,
                 alternate_available,
                 self._visual_paths(),
+                disposition.value,
+            )
+        except DispatchAuthorizationRejected as exc:
+            brief_sha = canonical_json_sha256(self.controller.brief.to_dict())
+            sealed = self.results.seal_synthesis_failure(
+                f"BUDGET_EXHAUSTED: {exc}",
+                research_brief_sha256=brief_sha,
+                current_bundle=self.controller.current_bundle,
+            )
+            self.controller.run_store.write_evidence_once_json(
+                "result/controller-closeout.json",
+                {
+                    "controller_disposition": "BUDGET_EXHAUSTED",
+                    "reason": str(exc),
+                    "attempts_consumed": self.controller.attempts_consumed,
+                    "provider_retry_authorized": False,
+                    "human_acceptance": False,
+                },
+            )
+            return ResearchSessionRunResult(
+                sealed,
+                ResearchResultDisposition.MANUAL_REVIEW_REQUIRED,
+                self.controller.current_bundle,
+                self.controller.attempts_consumed,
+                False,
+                self._visual_paths(),
+                "BUDGET_EXHAUSTED",
             )
         finally:
             self.provider.transport.close_owned_files(
