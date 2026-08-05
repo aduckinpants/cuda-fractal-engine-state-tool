@@ -94,6 +94,21 @@ def _atomic_write(path: Path, payload: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _atomic_write_once(path: Path, payload: bytes) -> None:
+    """Publish immutable evidence without an overwrite window."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _load_object(path: Path, label: str) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -105,7 +120,7 @@ def _load_object(path: Path, label: str) -> dict[str, Any]:
 
 
 @dataclass(frozen=True)
-class AutomatedRunStore:
+class DurableRunStore:
     run_dir: Path
     _projection_lock: threading.RLock = field(
         default_factory=threading.RLock,
@@ -186,6 +201,36 @@ class AutomatedRunStore:
         except AtomicWriteError as exc:
             raise RunStoreWriteError(
                 "EVIDENCE_BYTES_WRITE_FAILED",
+                str(exc),
+                event_appended=False,
+                event_sequence=None,
+            ) from exc
+        return path
+
+    def write_evidence_once_json(self, relative_path: str, value: Any) -> Path:
+        path = self._evidence_path(relative_path)
+        try:
+            _atomic_write_once(path, _json_bytes(value))
+        except FileExistsError:
+            raise
+        except OSError as exc:
+            raise RunStoreWriteError(
+                "IMMUTABLE_EVIDENCE_JSON_WRITE_FAILED",
+                str(exc),
+                event_appended=False,
+                event_sequence=None,
+            ) from exc
+        return path
+
+    def write_evidence_once_bytes(self, relative_path: str, payload: bytes) -> Path:
+        path = self._evidence_path(relative_path)
+        try:
+            _atomic_write_once(path, payload)
+        except FileExistsError:
+            raise
+        except OSError as exc:
+            raise RunStoreWriteError(
+                "IMMUTABLE_EVIDENCE_BYTES_WRITE_FAILED",
                 str(exc),
                 event_appended=False,
                 event_sequence=None,
@@ -317,3 +362,7 @@ class AutomatedRunStore:
             if active.get("projection") != expected_projection:
                 raise ValueError("Automated active-turn projection disagrees with event history")
             return expected_projection
+
+
+class AutomatedRunStore(DurableRunStore):
+    """Existing automated-session specialization of the shared durable store."""

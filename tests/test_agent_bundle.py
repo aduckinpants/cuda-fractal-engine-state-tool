@@ -18,10 +18,12 @@ from cuda_fractal_state_tool.agent_bundle import (
     _validate_color_pipeline_compatibility_authority,
     build_agent_bundle,
     copy_agent_packet,
+    derive_active_color_pipeline_context,
     derive_scalar_sweep_axis_projection,
     derive_state_override_authoring_surface,
     load_existing_agent_bundle,
     load_agent_bundle_handoff,
+    load_packet_active_color_pipeline_context,
     load_packet_scalar_sweep_axis_projection,
     open_agent_bundle_folder,
     validate_captured_color_pipeline_draft,
@@ -410,6 +412,38 @@ class AgentBundleTests(unittest.TestCase):
             "resolution": resolution,
         }
 
+    def test_active_pipeline_context_uses_contract_labels_and_preserves_disabled_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = self._fixture(Path(temp_dir))
+            state = json.loads(fixture["state_bytes"])
+            contract = json.loads(fixture["contract_bytes"])
+            contract["function_library"]["lanes"][0]["functions"][0]["label"] = "Identity"
+            state["color_pipeline_draft"]["lanes"][0]["rows"][0]["enabled"] = False
+
+            context = derive_active_color_pipeline_context(state, contract)
+
+            self.assertEqual(context["status"], "available")
+            self.assertFalse(context["lanes"][0]["rows"][0]["enabled"])
+            self.assertEqual(context["lanes"][0]["rows"][0]["function_label"], "Identity")
+            self.assertNotIn("Identity [identity]", context["active_chain_text"].split(" -> ")[0])
+            self.assertEqual(
+                [item["lane_id"] for item in context["active_chain"]],
+                ["shape", "palette", "grading"],
+            )
+
+    def test_active_pipeline_context_is_unavailable_without_complete_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = self._fixture(Path(temp_dir))
+            state = json.loads(fixture["state_bytes"])
+            contract = json.loads(fixture["contract_bytes"])
+            state.pop("color_pipeline_draft")
+
+            context = derive_active_color_pipeline_context(state, contract)
+
+            self.assertEqual(context["status"], "unavailable")
+            self.assertEqual(context["lanes"], [])
+            self.assertIn("no complete captured", context["active_chain_text"])
+
     def test_authoring_surface_is_mechanically_derived_and_excludes_live_only_controls(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = self._fixture(Path(temp_dir))
@@ -591,6 +625,14 @@ class AgentBundleTests(unittest.TestCase):
             )
             packet = bundle.packet_path.read_text(encoding="utf-8")
             self.assertIn("State Override Example", packet)
+            self.assertIn("## Captured observation channel — read before interpreting the frame", packet)
+            self.assertIn("Active Color Pipeline at capture:", packet)
+            self.assertLess(
+                packet.index("Active Color Pipeline at capture:"),
+                packet.index("## Experiment executability and observability"),
+            )
+            self.assertIn("`[identity] -> [identity] -> [identity] -> [contrast_lift]`", packet)
+            self.assertIn("replay/compatibility mirror; the captured Color Pipeline below is active", packet)
             self.assertIn("Dynamics and viewport continuity", packet)
             self.assertIn("same_window_comparison", packet)
             self.assertIn("feature_tracking", packet)
@@ -751,6 +793,12 @@ class AgentBundleTests(unittest.TestCase):
                     self.assertEqual(embedded[name]["size_bytes"], artifact.byte_length)
             self.assertIn("discussion derivative", packet)
             self.assertIn("not as full-resolution pixel authority", packet)
+            loaded_pipeline = load_packet_active_color_pipeline_context(bundle.packet_dir)
+            self.assertEqual(loaded_pipeline["status"], "available")
+            self.assertEqual(
+                loaded_pipeline["active_chain_text"],
+                "[identity] -> [identity] -> [identity] -> [contrast_lift]",
+            )
 
             copied: list[str] = []
             handoff = copy_agent_packet(bundle.packet_dir, copied.append)

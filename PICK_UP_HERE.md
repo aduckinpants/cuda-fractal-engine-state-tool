@@ -5,7 +5,7 @@
 ```text
 branch: codex/question-driven-research-session-poc
 starting main: cdfc516405080ba9604d8f16901068ed3018465a
-status: Slice 0 contract lock in progress
+status: Slice 1 implementation and qualification in progress
 paid provider generation: not authorized
 engine mutation: not authorized
 ```
@@ -16,6 +16,7 @@ Read first:
 2. `docs/question_driven_research_session_slice0_authority.md`
 3. `docs/v8_automated_route_authority_trace.md`
 4. `docs/manual-test-results/v8-sweep-revision/README.md`
+5. `docs/question_driven_research_session_slice1_evidence.md`
 
 The campaign adds a sealed-question research route over the existing Packet V8,
 override, proof, scalar-sweep, promotion, packet-refresh, transport, pricing,
