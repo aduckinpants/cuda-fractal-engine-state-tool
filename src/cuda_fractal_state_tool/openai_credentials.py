@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import os
-from dataclasses import dataclass
-from typing import Mapping, Protocol
+from dataclasses import dataclass, field
+from typing import Any, Mapping, Protocol
 
 
 OPENAI_CREDENTIAL_TARGET = "openai/api_key"
@@ -20,8 +21,30 @@ class CredentialStore(Protocol):
 
 @dataclass(frozen=True)
 class OpenAICredential:
-    value: str
+    value: str = field(repr=False)
     source: str
+
+    @property
+    def fingerprint_sha256(self) -> str:
+        """Return a comparison identity without persisting the credential."""
+
+        return hashlib.sha256(self.value.encode("utf-8")).hexdigest()
+
+    @property
+    def key_kind(self) -> str:
+        if self.value.startswith("sk-proj-"):
+            return "project_scoped"
+        if self.value.startswith("sk-svcacct-"):
+            return "service_account"
+        return "other"
+
+    def identity_dict(self) -> dict[str, Any]:
+        return {
+            "credential_identity_version": 1,
+            "source": self.source,
+            "key_kind": self.key_kind,
+            "fingerprint_sha256_prefix": self.fingerprint_sha256[:16],
+        }
 
 
 def _default_store() -> CredentialStore:
