@@ -1,0 +1,8 @@
+todo: reformat into notebook format shape
+
+D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-08-05\143014_930__explaino_transcendental
+D:\salt-fractal\cuda-fractal-engine-state-tool\findings\3209208bc5ccbc09a8f36fbc60b95d125f082761e0195b8c9aaee1af80f3c2cc\packets\41de51de-0e49-4114-8c1a-0b6f86a09af3
+D:\salt-fractal\cuda-fractal-engine-state-tool\findings\3209208bc5ccbc09a8f36fbc60b95d125f082761e0195b8c9aaee1af80f3c2cc
+
+fractal_session_transcript(1).md
+fractal_tooling_packet_self_evaluation.md

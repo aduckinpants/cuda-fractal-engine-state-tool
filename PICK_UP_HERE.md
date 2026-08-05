@@ -1,4 +1,35 @@
-# Pick Up Here — V9 Economic Qualification Planning
+# Pick Up Here — Question-Driven Research Session POC
+
+## Current campaign
+
+```text
+branch: codex/question-driven-research-session-poc
+starting main: cdfc516405080ba9604d8f16901068ed3018465a
+status: Slice 0 contract lock in progress
+paid provider generation: not authorized
+engine mutation: not authorized
+```
+
+Read first:
+
+1. `docs/question_driven_research_session_poc_plan.md`
+2. `docs/question_driven_research_session_slice0_authority.md`
+3. `docs/v8_automated_route_authority_trace.md`
+4. `docs/manual-test-results/v8-sweep-revision/README.md`
+
+The campaign adds a sealed-question research route over the existing Packet V8,
+override, proof, scalar-sweep, promotion, packet-refresh, transport, pricing,
+cleanup, and durable-run owners. It stops at an explicit count/budget gate
+before any paid provider generation.
+
+The approved golden court uses the 2026-08-05 ExplainO Transcendental capture
+and authorizes only `params.epsilon`. The preserved historical packet predates
+the current published runtime, so a fresh Packet V8 must be generated and
+requalified before paid execution.
+
+---
+
+# Historical Pickup — V9 Economic Qualification Planning
 
 ## Active campaign state
 
