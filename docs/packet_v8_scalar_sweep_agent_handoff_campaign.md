@@ -278,24 +278,36 @@ override behavior, and no automatic acceptance.
 
 Exit: real local workflow evidence is complete before any paid model call.
 
+Status: complete. The five members are `REPLAY_PROVEN`; the captured base,
+contact sheet, and deterministic three-file web review bundle are retained in
+the stable evidence report.
+
 ### Slice 4 - Bounded paid behavioral qualification
 
-- [ ] Preserve exact prompts, packet/bundle hashes, model profile, output limits,
+- [x] Preserve exact prompts, packet/bundle hashes, model profile, output limits,
   count-only estimates, actual usage, and responses.
-- [ ] Dispatch cells sequentially under the locked per-cell and campaign caps.
+- [x] Dispatch cells sequentially under the locked per-cell and campaign caps.
 - [ ] Validate sweep JSON through the canonical parser and exact packet binding.
 - [ ] Verify result review distinguishes base, proven members, failed/no-effect
   members, observed trends, hypotheses, and human acceptance.
-- [ ] Stop immediately if transport, cost, or behavioral evidence invalidates the
+- [x] Stop immediately if transport, cost, or behavioral evidence invalidates the
   contract.
 
 Exit: bounded live evidence establishes whether the revised handoff controls the
 target model without exceeding `$1.00`.
 
+Status: stopped at the first provider gate. The exact count-only request was
+167,293 input tokens and had a conservative maximum cost of `$0.0382586` with
+the locked 4,000-token output cap. The one authorized Luna High generation was
+rejected before a model response with HTTP 429 `credit_balance_exhausted`.
+No retry or later cell was dispatched. The JSON and result-review behavior gates
+remain not reached; this is the classified paid-qualification limitation allowed
+by the decisive-closure contract, not a behavioral pass.
+
 ### Slice 5 - Acceptance checkpoint and closure
 
-- [ ] Update README and stable evidence docs.
-- [ ] Run focused tests, full Python 3.14 suite, real workflow, `git diff --check`,
+- [x] Update README and stable evidence docs.
+- [x] Run focused tests, full Python 3.14 suite, real workflow, `git diff --check`,
   stale-architecture search, and hostile self-review.
 - [ ] Commit and push a clean ready PR.
 - [ ] Merge state-tool work under standing repository authority after green CI.

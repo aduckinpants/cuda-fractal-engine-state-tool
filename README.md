@@ -239,6 +239,21 @@ from hash-verified proof-owned PNGs. The contact sheet and aggregate receipt are
 comparison evidence only and never record human acceptance. See the
 [Slice 6 manual gate](docs/finding_enrichment_slice6_manual_gate.md).
 
+New Packet V8 instances also describe this sweep as a separate agent output
+from an ordinary sparse override. A generated, finding-specific axis list is a
+structural projection only: the agent must still justify observability, fixed
+conditions, value spacing, and uncertainty before returning one Scalar Bracket
+Sweep V1 plan. The exact captured base is rejected as a redundant member.
+
+Completed sweeps add a captured-base-aware contact sheet and a deterministic
+web handoff containing exactly `sweep-review.md`, `sweep-evidence.json`, and
+`contact-sheet.png`. **Open Web Review Bundle** opens that compact directory;
+the original granular sweep tree remains immutable authority. The first image
+tile is explicitly the hash-verified current capture, not a newly replay-proven
+sweep member, and neither the detailed nor compact result records human
+acceptance. See the
+[scalar-sweep handoff evidence](docs/packet_v8_scalar_sweep_agent_handoff_evidence.md).
+
 ## Packet V8 and override authority
 
 Packet V8 is the seven-file authority handoff when a frame exists:

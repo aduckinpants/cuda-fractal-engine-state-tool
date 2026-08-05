@@ -1,7 +1,7 @@
 # Packet V8 Scalar Sweep Agent Handoff Evidence
 
 Status: local implementation and real-workflow gates complete; bounded paid
-behavioral qualification remains pending.
+behavioral qualification stopped at a classified provider-credit limitation.
 
 ## Implementation checkpoint
 
@@ -140,8 +140,74 @@ now requires an explicit packet-authorized plan. The review also tightened
 the proof receipt's single exact-axis revert error; unrelated proof failures
 cannot receive the no-effect label.
 
-## Remaining authorized boundary
+## Bounded paid qualification
 
-Run the count-only, sequential Luna High behavioral qualification under the
-locked `$0.12` per-cell and `$1.00` campaign ceilings. No automatic retry is
-authorized. This document does not pre-judge those model responses.
+Cell 1 used the exact Packet V8 above and the tracked Luna High qualification
+profile:
+
+```text
+model: gpt-5.6-luna
+reasoning effort: high
+prompt cache: explicit no-cache
+model-profile SHA-256:
+dbf174b6e03c074b26588e606e6ddb4a27eb5d36bcbb70184863116e39e268b7
+maximum output: 4,000 tokens
+```
+
+Qualification prompt:
+
+```text
+Identify the two tool-assisted state execution modes described by this exact
+packet. Then select a Local Scalar Bracket Sweep V1 over
+params.explaino_damping to examine the visible collapse near 2 while preserving
+the exact packet base, camera, color, and iteration cap. Choose 3 to 5 non-base
+values spanning the informative near-2 transition. Return the exact sweep
+preflight and one valid sweep-plan JSON block, not a sparse override.
+```
+
+The exact count-only request completed before dispatch:
+
+```text
+input tokens: 167,293
+context tier: short
+conservative maximum cost: $0.0382586
+per-cell ceiling: $0.12
+campaign ceiling: $1.00
+```
+
+The one authorized generation request reached the same 167,293-token
+pre-dispatch count, then the provider rejected it with:
+
+```text
+HTTP 429
+code: credit_balance_exhausted
+message: You have no credits remaining. Add credits to continue using the API.
+```
+
+The provider created no model response and returned no usage receipt. This
+report therefore does not infer a billed amount. All uploaded provider files
+were deleted successfully. There was no retry and the three-file result-review
+cell was not dispatched. Raw sanitized request, count, failure, and cleanup
+evidence is preserved under:
+
+```text
+.local/packet_v8_scalar_sweep_agent_handoff_qualification/cell1/
+```
+
+The paid gate is `PROVIDER_CREDIT_BLOCKED`, not a model-behavior pass or failure.
+The campaign's decisive closure explicitly permits a classified limitation.
+
+Hostile review confirmed that the failure occurred after the exact count and
+dispatch authorization but before any model response, so it cannot be used to
+judge the packet prompt. The transport classified the provider's 429 through
+its generic rate-limit category; the stable campaign conclusion records the
+more specific provider error code. The review also confirmed exact owned-file
+cleanup and rejected a retry, a second-cell dispatch, or a claim of zero billed
+cost without a provider usage receipt.
+
+## Closure boundary
+
+Complete repository closure without claiming paid behavioral acceptance. A
+future paid rerun requires restored provider credit and a separately confirmed
+execution boundary; it must begin again with exact count-only preflight and may
+not reuse this failed turn as conversational history.
