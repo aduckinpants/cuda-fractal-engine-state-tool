@@ -86,6 +86,9 @@ class ScalarSweepMemberResult:
     candidate_display_path: Path | None = None
     candidate_display_sha256: str | None = None
     message: str | None = None
+    # In-process authority for callers that need to promote the exact proven
+    # member. Durable sweep evidence continues to use proof_id and receipt hash.
+    proof_result: StateOverrideProofResult | None = None
 
 
 @dataclass(frozen=True)
@@ -511,6 +514,7 @@ class ScalarBracketSweepService:
                     candidate_display_path=proof.candidate_display_path,
                     candidate_display_sha256=proof.candidate_display_sha256,
                     message=message,
+                    proof_result=proof,
                 )
                 _write_json_once(member_dir / "proof-ref.json", _member_receipt(member))
             else:
