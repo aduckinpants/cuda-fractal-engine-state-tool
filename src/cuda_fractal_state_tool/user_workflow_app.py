@@ -1009,7 +1009,10 @@ class UserWorkflowApp:
             return
         self._credential_available = credential is not None
         self.automated_credential_var.set(
-            f"Credential: available from {credential.source}"
+            (
+                f"Credential: available from {credential.source} · {credential.key_kind} · "
+                f"SHA-256 {credential.fingerprint_sha256[:16]}…"
+            )
             if credential is not None
             else "Credential: not configured (no API request can start)"
         )
@@ -1112,6 +1115,7 @@ class UserWorkflowApp:
                     "auto_promote": bool(self.auto_promote_var.get()),
                     "disclosure_profile": disclosure_profile.value,
                     "credential_source": credential.source,
+                    "credential_identity": credential.identity_dict(),
                 },
                 initial_packet={
                     "packet_id": bundle.packet_id,

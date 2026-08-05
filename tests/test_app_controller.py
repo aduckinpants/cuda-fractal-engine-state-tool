@@ -46,6 +46,8 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("Run Automated Session", source)
         self.assertIn("automated_model_var", source)
         self.assertIn("automated_reasoning_effort_var", source)
+        self.assertIn("credential.identity_dict()", source)
+        self.assertIn("fingerprint_sha256[:16]", source)
         self.assertIn("Cancel Automation", source)
         self.assertIn("Open Run Folder", source)
         self.assertIn("Sanitized live event stream", source)

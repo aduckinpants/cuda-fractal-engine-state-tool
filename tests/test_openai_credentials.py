@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import unittest
 
 from cuda_fractal_state_tool.openai_credentials import (
@@ -56,6 +57,31 @@ class OpenAICredentialTests(unittest.TestCase):
         self.assertEqual(credential.source, "windows_credential_manager")
         store.values[OPENAI_CREDENTIAL_USERNAME] = None
         self.assertIsNone(resolve_openai_api_key(environment={}, store=store))
+
+    def test_identity_is_comparable_without_exposing_the_key(self) -> None:
+        credential = resolve_openai_api_key(
+            environment={"OPENAI_API_KEY": "sk-proj-secret-value"},
+            store=FakeCredentialStore(),
+        )
+        self.assertEqual(
+            credential.identity_dict(),
+            {
+                "credential_identity_version": 1,
+                "source": "environment:OPENAI_API_KEY",
+                "key_kind": "project_scoped",
+                "fingerprint_sha256_prefix": hashlib.sha256(
+                    b"sk-proj-secret-value"
+                ).hexdigest()[:16],
+            },
+        )
+        self.assertNotIn("sk-proj-secret-value", repr(credential))
+        self.assertNotIn("value", credential.identity_dict())
+
+        service = resolve_openai_api_key(
+            environment={"OPENAI_API_KEY": "sk-svcacct-secret-value"},
+            store=FakeCredentialStore(),
+        )
+        self.assertEqual(service.key_kind, "service_account")
 
     def test_legacy_windows_username_is_read_only_fallback(self) -> None:
         store = FakeCredentialStore(legacy_value=" legacy-key ")
