@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Any
 
+from .json_utils import loads_strict_no_duplicates
 from .scalar_sweep import ScalarSweepPlan, parse_scalar_sweep_plan
 from .state_override import (
     ParsedStateOverride,
@@ -18,6 +19,7 @@ from .state_override import (
 
 RESEARCH_PROTOCOL_VERSION = 1
 ROUND_PLAN_VERSION = 1
+ROUND_PLAN_CANONICALIZATION_VERSION = 1
 SUPPORTED_EXPERIMENT_DOMAINS = frozenset({"params", "view", "color_pipeline_draft"})
 SUPPORTED_COMMUNICATION_PROFILES = frozenset({"working_session", "adult_beginner_carl_sagan"})
 _SAFE_PATH = re.compile(r"^(params|view)(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
@@ -47,6 +49,14 @@ class ResearchNextActionClass(str, Enum):
     ANALYSIS_ONLY = "ANALYSIS_ONLY"
     ANSWER_READY = "ANSWER_READY"
     UNAVAILABLE = "UNAVAILABLE"
+
+
+class ResearchObservationClassification(str, Enum):
+    SUPPORTED = "SUPPORTED"
+    CONTRADICTED = "CONTRADICTED"
+    CENSORED_OUT_OF_FRAME = "CENSORED_OUT_OF_FRAME"
+    UNOBSERVABLE = "UNOBSERVABLE"
+    EXECUTION_FAILED = "EXECUTION_FAILED"
 
 
 class UnresolvedReason(str, Enum):
@@ -88,10 +98,25 @@ class ResearchReviewDecision:
     source_response_sha256: str
     prediction_outcome: str
     evidence_assessment: str
+    observation_outcomes: tuple["ResearchObservationOutcome", ...]
     selected_result: ResearchResultSelection
     next_action_class: ResearchNextActionClass
     next_research_step: str
     hostile_self_review_conclusion: str
+
+
+@dataclass(frozen=True)
+class ResearchObservationOutcome:
+    result_identity: str
+    classification: ResearchObservationClassification
+    assessment: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "result_identity": self.result_identity,
+            "classification": self.classification.value,
+            "assessment": self.assessment,
+        }
 
 
 @dataclass(frozen=True)
@@ -425,12 +450,44 @@ def parse_review_response(text: str) -> ResearchReviewDecision:
         (
             "Prediction outcome",
             "Evidence assessment",
+            "Observation outcomes",
             "Selected result",
             "Next action class",
             "Next research step",
             "Hostile self-review conclusion",
         ),
     )
+    try:
+        raw_outcomes = loads_strict_no_duplicates(fields["Observation outcomes"])
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("Observation outcomes must be one JSON array") from exc
+    if not isinstance(raw_outcomes, list) or not raw_outcomes:
+        raise ValueError("Observation outcomes must be a non-empty JSON array")
+    outcomes: list[ResearchObservationOutcome] = []
+    identities: set[str] = set()
+    for item in raw_outcomes:
+        if not isinstance(item, dict) or set(item) != {
+            "result_identity",
+            "classification",
+            "assessment",
+        }:
+            raise ValueError("Observation outcomes contain an invalid item")
+        identity = item["result_identity"]
+        assessment = item["assessment"]
+        if not isinstance(identity, str) or not identity.strip():
+            raise ValueError("Observation outcome result_identity must be non-empty text")
+        if identity in identities:
+            raise ValueError("Observation outcome result identities must be unique")
+        if not isinstance(assessment, str) or not assessment.strip():
+            raise ValueError("Observation outcome assessment must be non-empty text")
+        try:
+            classification = ResearchObservationClassification(item["classification"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Observation outcome classification is unsupported") from exc
+        identities.add(identity)
+        outcomes.append(
+            ResearchObservationOutcome(identity, classification, assessment.strip())
+        )
     selection = ResearchResultSelection.parse(fields["Selected result"])
     try:
         next_action_class = ResearchNextActionClass(fields["Next action class"])
@@ -452,6 +509,7 @@ def parse_review_response(text: str) -> ResearchReviewDecision:
         source_response_sha256=hashlib.sha256(exact).hexdigest(),
         prediction_outcome=fields["Prediction outcome"],
         evidence_assessment=fields["Evidence assessment"],
+        observation_outcomes=tuple(outcomes),
         selected_result=selection,
         next_action_class=next_action_class,
         next_research_step=fields["Next research step"],
@@ -532,6 +590,7 @@ def round_plan_document(decision: PlannerDecision, *, attempt_number: int) -> di
         raise ValueError("Executable planner decision has no payload identity")
     return {
         "round_plan_version": ROUND_PLAN_VERSION,
+        "round_plan_canonicalization_version": ROUND_PLAN_CANONICALIZATION_VERSION,
         "attempt_number": attempt_number,
         "action": decision.action.value,
         "experiment": decision.fields[

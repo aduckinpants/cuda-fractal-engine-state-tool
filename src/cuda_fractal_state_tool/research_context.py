@@ -67,7 +67,7 @@ def seal_prior_round_ledger(
             if path.is_file():
                 payload = path.read_bytes()
                 round_record[key] = json.loads(payload.decode("utf-8"))
-                round_record[f"{key}_sha256"] = hashlib.sha256(payload).hexdigest()
+                round_record[f"{key}_file_sha256"] = hashlib.sha256(payload).hexdigest()
         payload_path = attempt_dir / "payload.json"
         if payload_path.is_file() and round_record.get("round_plan", {}).get("action") == "SCALAR_SWEEP":
             payload = json.loads(payload_path.read_text(encoding="utf-8"))
@@ -176,6 +176,30 @@ def build_review_context(
     round_plan_bytes = round_plan_path.read_bytes()
     execution_bytes = execution_ref_path.read_bytes()
     pipeline = load_packet_active_color_pipeline_context(bundle.packet_dir)
+    expected_observation_outcomes: list[dict[str, Any]]
+    if evidence.sweep is not None:
+        expected_observation_outcomes = [
+            {
+                "result_identity": f"sweep:{evidence.sweep.sweep_id}:{member.index}",
+                "execution_status": member.status,
+            }
+            for member in evidence.sweep.members
+        ]
+    elif evidence.proof is not None:
+        expected_observation_outcomes = [
+            {
+                "result_identity": f"single:{evidence.proof.proof_id}",
+                "execution_status": evidence.proof.status.upper(),
+            }
+        ]
+    else:
+        expected_observation_outcomes = [
+            {
+                "result_identity": f"{evidence.action.value.lower()}:execution",
+                "execution_status": "EXECUTION_FAILED",
+            }
+        ]
+    round_plan = json.loads(round_plan_bytes.decode("utf-8"))
     context = {
         "research_review_context_version": 1,
         "attempt_number": attempt,
@@ -187,10 +211,17 @@ def build_review_context(
             "finding_id": bundle.finding_id,
         },
         "captured_active_color_pipeline": pipeline,
-        "round_plan": json.loads(round_plan_bytes.decode("utf-8")),
-        "round_plan_file_sha256": hashlib.sha256(round_plan_bytes).hexdigest(),
+        "round_plan": round_plan,
+        "round_plan_identity": {
+            "round_plan_contract_sha256": evidence.round_plan_contract_sha256,
+            "round_plan_canonicalization_version": round_plan[
+                "round_plan_canonicalization_version"
+            ],
+            "round_plan_file_sha256": hashlib.sha256(round_plan_bytes).hexdigest(),
+        },
         "execution": json.loads(execution_bytes.decode("utf-8")),
         "execution_file_sha256": hashlib.sha256(execution_bytes).hexdigest(),
+        "expected_observation_outcomes": expected_observation_outcomes,
         "authority_note": (
             "This is a fresh review context. The round plan locks the prediction before evidence; "
             "Packet V8 and proof/sweep artifacts remain domain authority."
@@ -247,8 +278,8 @@ Bind every conclusion to the attached exact round plan and result evidence. Comp
 prediction with what the evidence establishes, including failure or no-effect evidence.
 The first nonempty line must be exactly `RESEARCH_GATE: <GATE>`, with the colon present, where
 `<GATE>` is one of `COMPLETE_RESEARCH`, `CONTINUE_RETAIN_BASE`,
-`CONTINUE_PROMOTE_RESULT`, or `UNRESOLVED`. Then return exactly these six labeled fields in
-this order: `Prediction outcome:`, `Evidence assessment:`, `Selected result:`,
+`CONTINUE_PROMOTE_RESULT`, or `UNRESOLVED`. Then return exactly these seven labeled fields in
+this order: `Prediction outcome:`, `Evidence assessment:`, `Observation outcomes:`, `Selected result:`,
 `Next action class:`, `Next research step:`, and `Hostile self-review conclusion:`. The next
 action class is exactly one of `STATE_EXPERIMENT`, `ANALYSIS_ONLY`, `ANSWER_READY`, or
 `UNAVAILABLE`. `CONTINUE_RETAIN_BASE` and `CONTINUE_PROMOTE_RESULT` are legal only with
@@ -256,6 +287,12 @@ action class is exactly one of `STATE_EXPERIMENT`, `ANALYSIS_ONLY`, `ANSWER_READ
 unless `CONTINUE_PROMOTE_RESULT` nominates one exact `single:<proof_id>` or
 `sweep:<sweep_id>:<member_index>`. Return plain text only: no JSON object and no code fence.
 Promotion requires one exact replay-proven result identity; replay proof alone never implies it.
+`Observation outcomes:` must be one compact JSON array with exactly one object for every identity
+listed in `expected_observation_outcomes`. Each object has exactly `result_identity`,
+`classification`, and `assessment`. Classification is exactly one of `SUPPORTED`, `CONTRADICTED`,
+`CENSORED_OUT_OF_FRAME`, `UNOBSERVABLE`, or `EXECUTION_FAILED`. A result whose subject or
+measurement boundary leaves the retained viewport is `CENSORED_OUT_OF_FRAME`: it contributes
+neither confirmation nor contradiction. Do not turn loss of observability into disconfirmation.
 """
     return ResearchStageContext(prompt, tuple(resources), context_path)
 
@@ -282,7 +319,7 @@ def build_synthesis_context(
             path = attempt_dir / filename
             if path.is_file():
                 record[key] = json.loads(path.read_text(encoding="utf-8"))
-                record[f"{key}_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+                record[f"{key}_file_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         attempts.append(record)
     pipeline = load_packet_active_color_pipeline_context(current_bundle.packet_dir)
     context = {
@@ -328,6 +365,7 @@ def build_synthesis_context(
                 "action",
                 "prediction",
                 "prediction_outcome",
+                "observation_outcomes",
                 "evidence_references",
             ],
             "value_receipt_fields": [
@@ -344,6 +382,14 @@ def build_synthesis_context(
                     "arrays of objects with exactly claim_id, text, and evidence_references"
                 ),
                 "unresolved_questions": "array of non-empty strings, not objects",
+                "observation_outcomes": (
+                    "copy the exact non-empty observation_outcomes array from the referenced "
+                    "review decision; never reinterpret censoring as contradiction"
+                ),
+                "confidence_and_limitations": (
+                    "object with confidence exactly LOW, MODERATE, or HIGH and a non-empty "
+                    "limitations string array"
+                ),
                 "requested_canonical_emitted_values": (
                     "one object per distinct requested/emitted pair; a sweep path may repeat "
                     "for different values"
@@ -366,6 +412,7 @@ def build_synthesis_context(
                 "unresolved_questions",
                 "experiment_summaries",
                 "requested_canonical_emitted_values",
+                "confidence_and_limitations",
                 "best_next_experiment",
             ],
         },
@@ -395,7 +442,8 @@ def build_synthesis_context(
 Return exactly one fenced JSON object and no prose outside it. Follow the exact top-level fields,
 field types, and wire_shape_rules in scientific_record_contract. In particular: answer is one
 string; unresolved_questions is an array of strings; each claim is exactly {claim_id, text,
-evidence_references}; and best_next_experiment is a string or null. Copy evidence-reference
+evidence_references}; confidence_and_limitations is the required structured confidence object;
+and best_next_experiment is a string or null. Copy evidence-reference
 objects byte-for-field from allowed_evidence_references instead of inventing identities.
 The source object must copy all five declared source fields exactly, including
 `human_acceptance: false`.
@@ -412,8 +460,9 @@ Use scientific_record_version 1 and the exact source identities from the synthes
 Separate established, inferred, contradicted, and unresolved material. CONTRADICTED applies only
 when the question's principal proposition was contradicted. Keep the record concise enough to
 complete: use the shortest sufficient evidence set for each item and do not repeat explanatory
-prose across sections. Do not infer science from replay success or image hashes alone and do not
-record human acceptance.
+prose across sections. Every experiment summary must copy observation_outcomes exactly from its
+referenced review decision. `CENSORED_OUT_OF_FRAME` is neither support nor contradiction. Do not
+infer science from replay success or image hashes alone and do not record human acceptance.
 """
     return ResearchStageContext(prompt, tuple(resources), context_path)
 

@@ -77,6 +77,10 @@ Hostile self-review conclusion: Synthesis must ground any claim in packet eviden
                 "unresolved_questions": ["No causal experiment was run."],
                 "experiment_summaries": [],
                 "requested_canonical_emitted_values": [],
+                "confidence_and_limitations": {
+                    "confidence": "LOW",
+                    "limitations": ["No causal experiment was run."],
+                },
                 "best_next_experiment": None,
             }
             return SimpleNamespace(output_text="```json\n" + json.dumps(value) + "\n```")
@@ -184,7 +188,7 @@ class ResearchSessionRunnerTests(unittest.TestCase):
         evidence = ResearchExecutionEvidence(
             attempt_number=1,
             action=ResearchAction.SCALAR_SWEEP,
-            round_plan_sha256="a" * 64,
+            round_plan_contract_sha256="a" * 64,
             sweep=SimpleNamespace(disposition="AUTHORITY_DRIFT"),
         )
         reason = ResearchSessionRunner._execution_blocker(evidence)
@@ -194,7 +198,7 @@ class ResearchSessionRunnerTests(unittest.TestCase):
         complete = ResearchExecutionEvidence(
             attempt_number=1,
             action=ResearchAction.SCALAR_SWEEP,
-            round_plan_sha256="b" * 64,
+            round_plan_contract_sha256="b" * 64,
             sweep=SimpleNamespace(disposition="COMPLETE"),
         )
         self.assertIsNone(ResearchSessionRunner._execution_blocker(complete))
@@ -426,7 +430,7 @@ Hostile self-review conclusion: Runtime drift invalidates continuation.
             self.assertEqual(active["state"], "COMPLETED")
             self.assertEqual(active["controller_disposition"], "COMPLETED")
             self.assertEqual(active["scientific_conclusion"], "ANSWER_PARTIAL")
-            self.assertIsNone(active["pending_round_plan_sha256"])
+            self.assertIsNone(active["pending_round_plan_contract_sha256"])
             self.assertTrue(active["cleanup_complete"])
 
     def test_budget_refusal_closes_without_experiment_or_provider_retry(self) -> None:

@@ -273,6 +273,7 @@ def _validate_experiment_summaries(value: Any, roots: ArtifactRootRegistry) -> N
             "action",
             "prediction",
             "prediction_outcome",
+            "observation_outcomes",
             "evidence_references",
         }:
             raise ValueError("experiment_summaries contains an invalid item")
@@ -284,7 +285,76 @@ def _validate_experiment_summaries(value: Any, roots: ArtifactRootRegistry) -> N
         seen.add(attempt)
         for key in ("action", "prediction", "prediction_outcome"):
             _text(item[key], f"experiment_summaries.{key}")
-        _reference_array(item["evidence_references"], "experiment_summaries", roots)
+        outcomes = _validate_observation_outcomes(
+            item["observation_outcomes"], "experiment_summaries.observation_outcomes"
+        )
+        references = _reference_array(
+            item["evidence_references"], "experiment_summaries", roots
+        )
+        review_outcomes: list[Any] = []
+        for reference in references:
+            if reference.artifact_role != "research_review_decision":
+                continue
+            path = roots.resolve_and_verify(reference)
+            try:
+                document = loads_strict_no_duplicates(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValueError):
+                continue
+            if isinstance(document, dict):
+                review_outcomes.append(document.get("observation_outcomes"))
+        if outcomes not in review_outcomes:
+            raise ValueError(
+                "Experiment observation outcomes must exactly match a referenced review decision"
+            )
+
+
+def _validate_observation_outcomes(value: Any, label: str) -> list[dict[str, str]]:
+    allowed = {
+        "SUPPORTED",
+        "CONTRADICTED",
+        "CENSORED_OUT_OF_FRAME",
+        "UNOBSERVABLE",
+        "EXECUTION_FAILED",
+    }
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{label} must be a non-empty array")
+    seen: set[str] = set()
+    normalized: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict) or set(item) != {
+            "result_identity",
+            "classification",
+            "assessment",
+        }:
+            raise ValueError(f"{label} contains an invalid item")
+        identity = _text(item["result_identity"], f"{label}.result_identity")
+        assessment = _text(item["assessment"], f"{label}.assessment")
+        classification = item["classification"]
+        if classification not in allowed:
+            raise ValueError(f"{label} contains an unsupported classification")
+        if identity in seen:
+            raise ValueError(f"{label} result identities must be unique")
+        seen.add(identity)
+        normalized.append(
+            {
+                "result_identity": identity,
+                "classification": classification,
+                "assessment": assessment,
+            }
+        )
+    return normalized
+
+
+def _validate_confidence_and_limitations(value: Any) -> None:
+    if not isinstance(value, dict) or set(value) != {"confidence", "limitations"}:
+        raise ValueError("confidence_and_limitations has an invalid shape")
+    if value["confidence"] not in {"LOW", "MODERATE", "HIGH"}:
+        raise ValueError("confidence must be LOW, MODERATE, or HIGH")
+    limitations = _string_array(
+        value["limitations"], "confidence_and_limitations.limitations"
+    )
+    if not limitations:
+        raise ValueError("confidence_and_limitations requires at least one limitation")
 
 
 def _validate_value_receipts(value: Any, roots: ArtifactRootRegistry) -> None:
@@ -391,6 +461,7 @@ def parse_scientific_record_response(
         "unresolved_questions",
         "experiment_summaries",
         "requested_canonical_emitted_values",
+        "confidence_and_limitations",
         "best_next_experiment",
     }
     if set(value) != expected or value["scientific_record_version"] != SCIENTIFIC_RECORD_VERSION:
@@ -428,6 +499,7 @@ def parse_scientific_record_response(
     _string_array(value["unresolved_questions"], "unresolved_questions")
     _validate_experiment_summaries(value["experiment_summaries"], roots)
     _validate_value_receipts(value["requested_canonical_emitted_values"], roots)
+    _validate_confidence_and_limitations(value["confidence_and_limitations"])
     _text(value["best_next_experiment"], "best_next_experiment", nullable=True)
     if conclusion is ScientificConclusion.CONTRADICTED and not contradicted:
         raise ValueError("CONTRADICTED requires a contradicted principal claim")
@@ -469,6 +541,10 @@ def no_scientific_conclusion_record(
         "unresolved_questions": [reason],
         "experiment_summaries": [],
         "requested_canonical_emitted_values": [],
+        "confidence_and_limitations": {
+            "confidence": "LOW",
+            "limitations": [reason],
+        },
         "best_next_experiment": None,
     }
 
@@ -513,6 +589,14 @@ def render_working_session_report(record: ScientificRecord) -> str:
                     f"- Outcome: {experiment['prediction_outcome']}",
                 ]
             )
+            for outcome in experiment["observation_outcomes"]:
+                lines.append(
+                    "- `{}` — `{}`: {}".format(
+                        outcome["result_identity"],
+                        outcome["classification"],
+                        outcome["assessment"],
+                    )
+                )
     else:
         lines.append("- No local experiment was executed.")
     lines.extend(["", "## Requested, canonical, and emitted values", ""])
@@ -540,6 +624,17 @@ def render_working_session_report(record: ScientificRecord) -> str:
             )
     else:
         lines.append("- No value-change receipt was sealed.")
+    confidence = value["confidence_and_limitations"]
+    lines.extend(
+        [
+            "",
+            "## Confidence and limitations",
+            "",
+            f"Confidence: `{confidence['confidence']}`",
+            "",
+        ]
+    )
+    lines.extend(f"- {item}" for item in confidence["limitations"])
     lines.extend(["", "## Best next experiment", ""])
     lines.append(value["best_next_experiment"] or "None required by the sealed record.")
     lines.extend(

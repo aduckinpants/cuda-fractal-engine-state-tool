@@ -85,7 +85,10 @@ class ResearchContextTests(unittest.TestCase):
             bundle = _bundle(root)
             attempt = store.run_dir / "attempts/001"
             attempt.mkdir()
-            (attempt / "round-plan.json").write_text('{"prediction":"grows"}\n', encoding="utf-8")
+            (attempt / "round-plan.json").write_text(
+                '{"prediction":"grows","round_plan_canonicalization_version":1}\n',
+                encoding="utf-8",
+            )
             (attempt / "execution-ref.json").write_text('{"proof":{"status":"replay_proven"}}\n', encoding="utf-8")
             proof_dir = root / "proof"
             proof_dir.mkdir()
@@ -96,8 +99,10 @@ class ResearchContextTests(unittest.TestCase):
             evidence = ResearchExecutionEvidence(
                 attempt_number=1,
                 action=ResearchAction.SINGLE_OVERRIDE,
-                round_plan_sha256="3" * 64,
+                round_plan_contract_sha256="3" * 64,
                 proof=SimpleNamespace(
+                    proof_id="proof-1",
+                    status="replay_proven",
                     receipt_path=receipt,
                     candidate_display_path=display,
                 ),
@@ -122,6 +127,12 @@ class ResearchContextTests(unittest.TestCase):
             self.assertIn("with the colon present", context.prompt)
             self.assertIn("Return plain text only: no JSON object", context.prompt)
             self.assertIn("Selected result: none", context.prompt)
+            self.assertIn("CENSORED_OUT_OF_FRAME", context.prompt)
+            document = json.loads(context.context_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                document["round_plan_identity"]["round_plan_contract_sha256"],
+                "3" * 64,
+            )
 
     def test_planner_context_requires_literal_colon_bearing_action_header(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -252,6 +263,10 @@ class ResearchContextTests(unittest.TestCase):
                 "unresolved_questions": ["More evidence is needed."],
                 "experiment_summaries": [],
                 "requested_canonical_emitted_values": [],
+                "confidence_and_limitations": {
+                    "confidence": "LOW",
+                    "limitations": ["More evidence is needed."],
+                },
                 "best_next_experiment": None,
             }
             exact = json.dumps(value)

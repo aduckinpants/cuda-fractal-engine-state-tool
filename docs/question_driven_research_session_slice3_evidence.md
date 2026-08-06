@@ -24,11 +24,17 @@ an ever-growing provider history.
 
 ```text
 planner       200,000 input / 8,000 output
-review        200,000 input / 4,000 output
+review        200,000 input / 8,000 output
 correction    200,000 input / 4,000 output
-synthesis     100,000 input / 8,000 output
+synthesis     100,000 input / 12,000 output
 communication 50,000 input / 6,000 output
 ```
+
+The review and synthesis ceilings were raised by the bounded live-golden
+hardening recorded in `question_driven_research_session_live_golden.md`: the
+original 4,000-token review and 8,000-token synthesis ceilings each produced a
+preserved incomplete provider response. The current plan explicitly adopts the
+proved 8,000/12,000 values.
 
 For each dispatch it distinguishes:
 

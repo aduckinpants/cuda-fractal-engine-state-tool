@@ -91,6 +91,17 @@ class ResearchCostControllerTests(unittest.TestCase):
         )
         self.assertGreater(ceiling, first.cost_usd)
 
+    def test_live_proven_review_and_synthesis_output_ceilings_are_locked(self) -> None:
+        controller = self._controller("10")
+        self.assertEqual(
+            controller.stage_limits[ResearchProviderStage.REVIEW].maximum_output_tokens,
+            8_000,
+        )
+        self.assertEqual(
+            controller.stage_limits[ResearchProviderStage.SYNTHESIS].maximum_output_tokens,
+            12_000,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

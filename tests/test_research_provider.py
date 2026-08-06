@@ -141,7 +141,7 @@ class ResearchProviderDispatcherTests(unittest.TestCase):
             self.assertEqual(provider.generated, 0)
             self.assertGreater(Decimal(gate.conservative_adaptive_ceiling_usd), 0)
 
-    def test_completed_durable_response_is_recovered_without_provider_redispatch(self) -> None:
+    def test_completed_durable_response_is_recovered_without_new_provider_request(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             dispatcher, provider, _transport, resource = self._fixture(root, "10")
@@ -169,12 +169,14 @@ class ResearchProviderDispatcherTests(unittest.TestCase):
             self.assertEqual(recovered.output_text, first.output_text)
             self.assertEqual(recovered_provider.generated, 0)
             self.assertEqual(recovered_provider.requests, [])
-            self.assertTrue(
-                any(
-                    event["event_type"] == "research_provider_response_recovered"
-                    for event in dispatcher.run_store.read_events()
-                )
+            recovered_event = next(
+                event
+                for event in dispatcher.run_store.read_events()
+                if event["event_type"] == "research_provider_response_recovered"
             )
+            self.assertFalse(recovered_event["payload"]["provider_request_dispatched"])
+            self.assertTrue(recovered_event["payload"]["durable_response_recovered"])
+            self.assertNotIn("provider_redispatch", recovered_event["payload"])
 
     def test_negative_generation_spacing_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -94,17 +94,42 @@ Hostile self-review conclusion: The authorized axis is observable.
 """
 
 
-def _review(gate: str, selected: str = "none") -> str:
+def _review(
+    gate: str,
+    selected: str = "none",
+    outcomes: str | None = None,
+) -> str:
     next_class = "STATE_EXPERIMENT" if gate.startswith("CONTINUE_") else "ANSWER_READY"
+    outcomes = outcomes or (
+        '[{"result_identity":"single:proof-1","classification":"SUPPORTED",'
+        '"assessment":"The result is observable."}]'
+    )
     return f"""RESEARCH_GATE: {gate}
 
 Prediction outcome: The evidence is consistent with the prediction.
 Evidence assessment: The replay evidence is sufficient for this gate.
+Observation outcomes: {outcomes}
 Selected result: {selected}
 Next action class: {next_class}
 Next research step: Continue only when requested by this gate.
 Hostile self-review conclusion: The exact result and authority were checked.
 """
+
+
+def _sweep_outcomes(last_classification: str = "SUPPORTED") -> str:
+    return json.dumps(
+        [
+            {
+                "result_identity": f"sweep:sweep-1:{index}",
+                "classification": (
+                    last_classification if index == 2 else "SUPPORTED"
+                ),
+                "assessment": "The member remains structurally bound to the sweep.",
+            }
+            for index in range(3)
+        ],
+        separators=(",", ":"),
+    )
 
 
 class _Services:
@@ -143,7 +168,7 @@ class _Services:
         )
 
     def promote(self, bundle, selection, evidence, promotion_dir):
-        self.promotions.append((selection, evidence.round_plan_sha256))
+        self.promotions.append((selection, evidence.round_plan_contract_sha256))
         return _bundle(self.root, "packet-2")
 
     def contract(self):
@@ -194,7 +219,7 @@ class ResearchSessionControllerTests(unittest.TestCase):
             controller.apply_review(_review("COMPLETE_RESEARCH"))
             self.assertEqual(controller.state, ResearchSessionState.READY_FOR_SYNTHESIS)
             self.assertIsNone(
-                store.load_active_turn()["projection"]["pending_round_plan_sha256"]
+                store.load_active_turn()["projection"]["pending_round_plan_contract_sha256"]
             )
             self.assertEqual(services.promotions, [])
 
@@ -217,7 +242,11 @@ class ResearchSessionControllerTests(unittest.TestCase):
             controller.prepare_planner_response(_sweep_response())
             controller.execute_prepared()
             controller.apply_review(
-                _review("CONTINUE_PROMOTE_RESULT", "sweep:sweep-1:1")
+                _review(
+                    "CONTINUE_PROMOTE_RESULT",
+                    "sweep:sweep-1:1",
+                    outcomes=_sweep_outcomes(),
+                )
             )
 
             self.assertEqual(controller.state, ResearchSessionState.PLANNING)
@@ -229,7 +258,12 @@ class ResearchSessionControllerTests(unittest.TestCase):
             controller, _services, _store = self._controller(Path(temp_dir))
             controller.prepare_planner_response(_sweep_response())
             controller.execute_prepared()
-            controller.apply_review(_review("CONTINUE_RETAIN_BASE"))
+            controller.apply_review(
+                _review(
+                    "CONTINUE_RETAIN_BASE",
+                    outcomes=_sweep_outcomes(),
+                )
+            )
 
             repeated = _sweep_response(
                 values="[0.00000075,0.0000015,0.000002]"
@@ -284,6 +318,37 @@ class ResearchSessionControllerTests(unittest.TestCase):
             self.assertEqual(controller.attempts_consumed, 1)
             self.assertEqual(evidence.execution_error, "runtime failed")
             self.assertEqual(controller.state, ResearchSessionState.REVIEW_READY)
+
+    def test_sweep_review_accepts_censored_member_and_rejects_missing_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            controller, _services, _store = self._controller(Path(temp_dir))
+            controller.prepare_planner_response(_sweep_response())
+            controller.execute_prepared()
+            with self.assertRaisesRegex(ValueError, "cover every exact execution result"):
+                controller.apply_review(
+                    _review(
+                        "COMPLETE_RESEARCH",
+                        outcomes=json.dumps(
+                            [
+                                {
+                                    "result_identity": "sweep:sweep-1:0",
+                                    "classification": "SUPPORTED",
+                                    "assessment": "Only one member was classified.",
+                                }
+                            ]
+                        ),
+                    )
+                )
+            decision = controller.apply_review(
+                _review(
+                    "COMPLETE_RESEARCH",
+                    outcomes=_sweep_outcomes("CENSORED_OUT_OF_FRAME"),
+                )
+            )
+            self.assertEqual(
+                decision.observation_outcomes[-1].classification.value,
+                "CENSORED_OUT_OF_FRAME",
+            )
 
     def test_answer_ready_consumes_no_attempt(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

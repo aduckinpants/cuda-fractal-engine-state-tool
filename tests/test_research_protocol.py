@@ -110,6 +110,7 @@ class ResearchProtocolTests(unittest.TestCase):
         plan = round_plan_document(decision, attempt_number=1)
         self.assertEqual(plan["prediction"], "The central circle grows.")
         self.assertEqual(plan["payload_sha256"], decision.payload_sha256)
+        self.assertEqual(plan["round_plan_canonicalization_version"], 1)
 
     def test_single_override_rejects_noop_and_unpermitted_path(self) -> None:
         permissions = ResearchBrief.from_dict(_brief()).experiment_permissions
@@ -184,6 +185,7 @@ Hostile self-review conclusion: No authorized state change can answer this quest
 
 Prediction outcome: The radius increased as predicted.
 Evidence assessment: Member two is replay-proven and informative.
+Observation outcomes: [{"result_identity":"sweep:sweep-1:2","classification":"SUPPORTED","assessment":"The member is observable."}]
 Selected result: sweep:sweep-1:2
 Next action class: STATE_EXPERIMENT
 Next research step: Rebind to the selected member.
@@ -193,6 +195,7 @@ Hostile self-review conclusion: The exact member identity is explicit.
         self.assertEqual(decision.gate.value, "CONTINUE_PROMOTE_RESULT")
         self.assertEqual(decision.selected_result.sweep_id, "sweep-1")
         self.assertEqual(decision.selected_result.member_index, 2)
+        self.assertEqual(decision.observation_outcomes[0].classification.value, "SUPPORTED")
 
         with self.assertRaisesRegex(ValueError, "requires one exact"):
             parse_review_response(
@@ -200,10 +203,26 @@ Hostile self-review conclusion: The exact member identity is explicit.
 
 Prediction outcome: Unknown.
 Evidence assessment: Incomplete.
+Observation outcomes: [{"result_identity":"sweep:sweep-1:2","classification":"UNOBSERVABLE","assessment":"The evidence is incomplete."}]
 Selected result: none
 Next action class: STATE_EXPERIMENT
 Next research step: Continue.
 Hostile self-review conclusion: No exact result was selected.
+"""
+            )
+
+    def test_review_rejects_unknown_observation_classification(self) -> None:
+        with self.assertRaisesRegex(ValueError, "classification is unsupported"):
+            parse_review_response(
+                """RESEARCH_GATE: UNRESOLVED
+
+Prediction outcome: The endpoint cannot be measured.
+Evidence assessment: The subject left the viewport.
+Observation outcomes: [{"result_identity":"single:proof-1","classification":"DISAPPEARED","assessment":"Not visible."}]
+Selected result: none
+Next action class: ANALYSIS_ONLY
+Next research step: Measure with a wider frame.
+Hostile self-review conclusion: Absence from frame is not falsification.
 """
             )
 
@@ -214,6 +233,7 @@ Hostile self-review conclusion: No exact result was selected.
 
 Prediction outcome: Supported.
 Evidence assessment: Complete.
+Observation outcomes: [{"result_identity":"single:proof-1","classification":"SUPPORTED","assessment":"The result is observable."}]
 Selected result: single:proof-1
 Next action class: ANSWER_READY
 Next research step: none
@@ -228,6 +248,7 @@ Hostile self-review conclusion: Complete.
 
 Prediction outcome: The trend is visible but not measured.
 Evidence assessment: Full-resolution boundary measurement is still needed.
+Observation outcomes: [{"result_identity":"single:proof-1","classification":"UNOBSERVABLE","assessment":"The boundary is not measurable."}]
 Selected result: none
 Next action class: ANALYSIS_ONLY
 Next research step: Measure the boundary radius from the exact frames.

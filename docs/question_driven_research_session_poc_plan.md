@@ -129,6 +129,19 @@ disconfirmation condition, camera policy, payload SHA-256, and source-response
 SHA-256. Review binds to the exact round-plan identity, so predictions cannot
 be rewritten after evidence exists.
 
+Round-plan identity is explicit:
+
+```text
+round_plan_contract_sha256
+  SHA-256 of canonical JSON under round_plan_canonicalization_version
+
+round_plan_file_sha256
+  SHA-256 of the exact persisted round-plan.json bytes
+```
+
+The generic name `round_plan_sha256` is not used because it does not identify
+which representation was hashed.
+
 `ANSWER_READY` is a provisional answer supplied to synthesis, not evidence.
 `UNRESOLVED_REPORT` uses one reason:
 
@@ -156,6 +169,21 @@ CONTINUE_RETAIN_BASE
 CONTINUE_PROMOTE_RESULT
 UNRESOLVED
 ```
+
+Review classifies every exact single result or sweep member once as:
+
+```text
+SUPPORTED
+CONTRADICTED
+CENSORED_OUT_OF_FRAME
+UNOBSERVABLE
+EXECUTION_FAILED
+```
+
+Loss of a subject or measurement boundary from the retained viewport is
+`CENSORED_OUT_OF_FRAME`. It contributes neither confirmation nor contradiction.
+The controller validates exact result coverage and execution-status consistency;
+the reviewer owns the evidence interpretation for replay-proven results.
 
 Automatic continuation may promote at most one exact replay-proven single
 result or sweep member per review gate. Promotion requires explicit model
@@ -188,13 +216,13 @@ hard dollar budget: 0 until entered
 `assisted` describes packet-bound enrichment disclosure; it is not an API
 service tier.
 
-Initial stage ceilings are:
+Current stage ceilings are:
 
 ```text
 planner: 200,000 input / 8,000 output tokens
-review: 200,000 input / 4,000 output tokens
+review: 200,000 input / 8,000 output tokens
 correction: 200,000 input / 4,000 output tokens
-final synthesis: 100,000 input / 8,000 output tokens
+final synthesis: 100,000 input / 12,000 output tokens
 alternate communication render: 50,000 input / 6,000 output tokens
 ```
 
@@ -247,6 +275,20 @@ safe relative path, SHA-256, and applicable proof, sweep, and member identities.
 Supported roots are `question_run`, `state_tool_workspace`, `finding`, `packet`,
 `proof`, `sweep`, and `engine_capture`. Resolution rejects absolute paths,
 traversal, root escape, stale identity, and hash mismatch.
+
+The implemented scientific-record V1 wire schema is authoritative for this
+POC. It uses `answer`, classified claim arrays, `unresolved_questions`,
+`experiment_summaries`, requested/canonical/emitted receipts,
+`confidence_and_limitations`, and nullable `best_next_experiment`. Each
+experiment summary copies the exact structured observation outcomes from its
+referenced review decision. `confidence_and_limitations` contains one overall
+`LOW`, `MODERATE`, or `HIGH` assessment plus at least one explicit limitation.
+
+Research-base and packet-lineage lifecycle identity remain controller-owned in
+the synthesis context, closeout, and active projection. They are not duplicated
+as model-authored scientific facts. Likewise, structured observation outcomes
+carry negative and unexpected findings without adding a second prose-only
+negative-findings field.
 
 The Working Session report is deterministic. The optional Adult Beginner / Carl
 Sagan / Concept First report is one fresh model call over the sealed record.
@@ -355,6 +397,31 @@ addendum supersedes the earlier Slice 5 stop only for the work below.
   terminal projection, result navigation, and scientific discipline with the
   first live pass.
 - Stop again for user review. Broader automated use remains unauthorized.
+
+## Post-Qualification Contract Alignment Addendum
+
+The successful paid rerun at
+`question-research-6440724c-b38d-43de-9ec4-5af4720831a3` exposed narrow contract
+alignment issues after the main transaction passed.
+
+- The 8,000-token review ceiling is retained because live Attempt 2 proved the
+  original 4,000-token ceiling incomplete. The 12,000-token synthesis ceiling
+  is retained because Attempt 5 reached the original 8,000-token limit. These
+  are explicit evidence-based amendments, not silent drift.
+- Review now seals exact per-result observation classifications. Out-of-frame
+  evidence is censored rather than falsifying.
+- Scientific-record V1 keeps the implemented claim-oriented schema and adds
+  required structured confidence and limitations. This explicitly supersedes
+  earlier planning vocabulary such as `direct_answer`; lifecycle base and
+  lineage remain controller receipts.
+- Round-plan canonical-contract and exact-file hashes are named separately and
+  the canonicalization version is persisted.
+- Provider events distinguish a newly dispatched request from recovery of a
+  durable response. A generation is not labeled a redispatch merely because a
+  count-only request preceded it.
+- Result disposition exposes `working_session_status` and
+  `alternate_communication_status` only; the redundant generic communication
+  alias is removed for new runs.
 
 ## Golden court
 

@@ -225,7 +225,8 @@ class ResearchProviderDispatcher:
                     self.cost.spent_cost_usd
                 ),
                 "latency_seconds": result.latency_seconds,
-                "provider_redispatch": not recovered,
+                "provider_request_dispatched": not recovered,
+                "durable_response_recovered": recovered,
             },
         )
         self._finalized_turns[turn_id] = result
@@ -298,7 +299,8 @@ class ResearchProviderDispatcher:
                 "cumulative_calculated_cost_usd": decimal_text(
                     self.cost.spent_cost_usd
                 ),
-                "provider_redispatch": False,
+                "provider_request_dispatched": True,
+                "durable_response_recovered": False,
             },
         )
 

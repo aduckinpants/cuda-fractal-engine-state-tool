@@ -15,6 +15,7 @@ from .research_protocol import (
     PlannerDecision,
     ResearchAction,
     ResearchBrief,
+    ResearchObservationClassification,
     ResearchResultSelection,
     ResearchReviewDecision,
     ResearchReviewGate,
@@ -97,7 +98,7 @@ class PreparedResearchExperiment:
     attempt_number: int
     decision: PlannerDecision
     round_plan: dict[str, Any]
-    round_plan_sha256: str
+    round_plan_contract_sha256: str
     validation: StateOverrideMaterialization | ScalarSweepValidation
 
 
@@ -105,7 +106,7 @@ class PreparedResearchExperiment:
 class ResearchExecutionEvidence:
     attempt_number: int
     action: ResearchAction
-    round_plan_sha256: str
+    round_plan_contract_sha256: str
     proof: StateOverrideProofResult | None = None
     sweep: ScalarSweepResult | None = None
     execution_error: str | None = None
@@ -166,8 +167,8 @@ class ResearchSessionController:
             "correction_used": self._correction_used,
             "current_research_base": self.current_packet.to_dict(),
             "current_packet_lineage": list(self.current_packet_lineage),
-            "pending_round_plan_sha256": (
-                self.prepared.round_plan_sha256 if self.prepared else None
+            "pending_round_plan_contract_sha256": (
+                self.prepared.round_plan_contract_sha256 if self.prepared else None
             ),
         }
 
@@ -294,7 +295,7 @@ class ResearchSessionController:
         plan = round_plan_document(decision, attempt_number=attempt_number)
         plan["packet_binding"] = self.current_packet.to_dict()
         plan["research_brief_sha256"] = canonical_json_sha256(self.brief.to_dict())
-        plan_sha = canonical_json_sha256(plan)
+        plan_contract_sha = canonical_json_sha256(plan)
         self.run_store.write_evidence_once_bytes(
             f"attempts/{attempt_number:03d}/payload.json",
             decision.payload_text.encode("utf-8"),
@@ -303,7 +304,7 @@ class ResearchSessionController:
             f"attempts/{attempt_number:03d}/round-plan.json", plan
         )
         self.prepared = PreparedResearchExperiment(
-            attempt_number, decision, plan, plan_sha, validation
+            attempt_number, decision, plan, plan_contract_sha, validation
         )
         self.state = ResearchSessionState.PLAN_READY
         self._record(
@@ -311,7 +312,7 @@ class ResearchSessionController:
             {
                 "attempt_number": attempt_number,
                 "action": decision.action.value,
-                "round_plan_sha256": plan_sha,
+                "round_plan_contract_sha256": plan_contract_sha,
                 "packet_binding": self.current_packet.to_dict(),
                 "correction_used": correction,
             },
@@ -329,7 +330,7 @@ class ResearchSessionController:
             {
                 "attempt_number": prepared.attempt_number,
                 "action": prepared.decision.action.value,
-                "round_plan_sha256": prepared.round_plan_sha256,
+                "round_plan_contract_sha256": prepared.round_plan_contract_sha256,
             },
         )
         proof = None
@@ -351,7 +352,7 @@ class ResearchSessionController:
         evidence = ResearchExecutionEvidence(
             attempt_number=prepared.attempt_number,
             action=prepared.decision.action,
-            round_plan_sha256=prepared.round_plan_sha256,
+            round_plan_contract_sha256=prepared.round_plan_contract_sha256,
             proof=proof,
             sweep=sweep,
             execution_error=error,
@@ -359,7 +360,7 @@ class ResearchSessionController:
         reference = {
             "attempt_number": evidence.attempt_number,
             "action": evidence.action.value,
-            "round_plan_sha256": evidence.round_plan_sha256,
+            "round_plan_contract_sha256": evidence.round_plan_contract_sha256,
             "execution_error": error,
             "proof": (
                 {
@@ -400,6 +401,7 @@ class ResearchSessionController:
         if self.state is not ResearchSessionState.REVIEW_READY or self.last_execution is None:
             raise RuntimeError("Research review is not legal in the current state")
         decision = parse_review_response(response_text)
+        self._validate_observation_outcomes(decision, self.last_execution)
         attempt = self.last_execution.attempt_number
         if decision.gate in {
             ResearchReviewGate.CONTINUE_PROMOTE_RESULT,
@@ -416,9 +418,12 @@ class ResearchSessionController:
             {
                 "gate": decision.gate.value,
                 "source_response_sha256": decision.source_response_sha256,
-                "round_plan_sha256": self.last_execution.round_plan_sha256,
+                "round_plan_contract_sha256": self.last_execution.round_plan_contract_sha256,
                 "prediction_outcome": decision.prediction_outcome,
                 "evidence_assessment": decision.evidence_assessment,
+                "observation_outcomes": [
+                    outcome.to_dict() for outcome in decision.observation_outcomes
+                ],
                 "selected_result": {
                     "kind": decision.selected_result.kind,
                     "proof_id": decision.selected_result.proof_id,
@@ -460,11 +465,65 @@ class ResearchSessionController:
             {
                 "attempt_number": attempt,
                 "gate": decision.gate.value,
-                "round_plan_sha256": self.last_execution.round_plan_sha256,
+                "round_plan_contract_sha256": self.last_execution.round_plan_contract_sha256,
                 "current_research_base": self.current_packet.to_dict(),
             },
         )
         return decision
+
+    @staticmethod
+    def _expected_observation_results(
+        evidence: ResearchExecutionEvidence,
+    ) -> dict[str, str]:
+        if evidence.sweep is not None:
+            return {
+                f"sweep:{evidence.sweep.sweep_id}:{member.index}": member.status
+                for member in evidence.sweep.members
+            }
+        if evidence.proof is not None:
+            return {f"single:{evidence.proof.proof_id}": evidence.proof.status.upper()}
+        return {f"{evidence.action.value.lower()}:execution": "EXECUTION_FAILED"}
+
+    @classmethod
+    def _validate_observation_outcomes(
+        cls,
+        decision: ResearchReviewDecision,
+        evidence: ResearchExecutionEvidence,
+    ) -> None:
+        expected = cls._expected_observation_results(evidence)
+        supplied = {
+            outcome.result_identity: outcome for outcome in decision.observation_outcomes
+        }
+        if set(supplied) != set(expected):
+            raise ValueError(
+                "Observation outcomes must cover every exact execution result once; "
+                f"expected={sorted(expected)!r}, supplied={sorted(supplied)!r}"
+            )
+        for identity, status in expected.items():
+            classification = supplied[identity].classification
+            if status == "REPLAY_PROVEN":
+                if classification is ResearchObservationClassification.EXECUTION_FAILED:
+                    raise ValueError(
+                        f"Replay-proven result cannot be EXECUTION_FAILED: {identity}"
+                    )
+            elif status == "EXECUTION_FAILED":
+                if classification is not ResearchObservationClassification.EXECUTION_FAILED:
+                    raise ValueError(
+                        f"Failed execution must be EXECUTION_FAILED: {identity}"
+                    )
+            elif status == "NO_EFFECT_ENGINE_EMITTED_BASE":
+                if classification is not ResearchObservationClassification.UNOBSERVABLE:
+                    raise ValueError(
+                        f"No-effect result must be UNOBSERVABLE: {identity}"
+                    )
+            elif classification not in {
+                ResearchObservationClassification.EXECUTION_FAILED,
+                ResearchObservationClassification.UNOBSERVABLE,
+            }:
+                raise ValueError(
+                    "Unproven execution result must be EXECUTION_FAILED or UNOBSERVABLE: "
+                    f"{identity}"
+                )
 
     @staticmethod
     def _validate_selected_result(

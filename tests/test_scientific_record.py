@@ -63,6 +63,10 @@ class ScientificRecordTests(unittest.TestCase):
             "unresolved_questions": [],
             "experiment_summaries": [],
             "requested_canonical_emitted_values": [],
+            "confidence_and_limitations": {
+                "confidence": "HIGH",
+                "limitations": ["The conclusion is bounded to this fixture."],
+            },
             "best_next_experiment": None,
         }
         response = "```json\n" + json.dumps(record) + "\n```\n"
@@ -187,6 +191,59 @@ class ScientificRecordTests(unittest.TestCase):
             self.assertTrue(
                 communication_coverage_receipt(report, record)["coverage_complete"]
             )
+
+    def test_experiment_outcomes_must_match_referenced_review_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            registry, value, _response = self._fixture(root)
+            outcomes = [
+                {
+                    "result_identity": "sweep:sweep-1:0",
+                    "classification": "CENSORED_OUT_OF_FRAME",
+                    "assessment": "The retained viewport does not contain the boundary.",
+                }
+            ]
+            review_bytes = (
+                json.dumps({"observation_outcomes": outcomes}) + "\n"
+            ).encode("utf-8")
+            review_path = root / "run" / "review.json"
+            review_path.write_bytes(review_bytes)
+            review_reference = {
+                "artifact_role": "research_review_decision",
+                "artifact_root": "question_run",
+                "root_identity": "a" * 64,
+                "relative_path": "review.json",
+                "sha256": _sha(review_bytes),
+                "proof_id": None,
+                "sweep_id": "sweep-1",
+                "member_index": None,
+            }
+            value["experiment_summaries"] = [
+                {
+                    "attempt_number": 1,
+                    "action": "SCALAR_SWEEP",
+                    "prediction": "The boundary remains measurable.",
+                    "prediction_outcome": "The endpoint was censored by the viewport.",
+                    "observation_outcomes": outcomes,
+                    "evidence_references": [review_reference],
+                }
+            ]
+            parsed = self._parse(
+                registry, "```json\n" + json.dumps(value) + "\n```"
+            )
+            self.assertEqual(
+                parsed.value["experiment_summaries"][0]["observation_outcomes"][0][
+                    "classification"
+                ],
+                "CENSORED_OUT_OF_FRAME",
+            )
+            value["experiment_summaries"][0]["observation_outcomes"][0][
+                "classification"
+            ] = "CONTRADICTED"
+            with self.assertRaisesRegex(ValueError, "exactly match"):
+                self._parse(
+                    registry, "```json\n" + json.dumps(value) + "\n```"
+                )
 
 
 if __name__ == "__main__":

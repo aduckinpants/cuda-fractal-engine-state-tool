@@ -78,6 +78,10 @@ class ResearchResultServiceTests(unittest.TestCase):
             "unresolved_questions": [],
             "experiment_summaries": [],
             "requested_canonical_emitted_values": [],
+            "confidence_and_limitations": {
+                "confidence": "MODERATE",
+                "limitations": ["The result is bounded to this evidence."],
+            },
             "best_next_experiment": None,
         }
         response = "```json\n" + json.dumps(value) + "\n```"
@@ -95,6 +99,11 @@ class ResearchResultServiceTests(unittest.TestCase):
             self.assertEqual(result.disposition, ResearchResultDisposition.COMPLETED)
             self.assertTrue(result.working_report_path.is_file())
             self.assertIn("bounded_answer", result.working_report_path.read_text(encoding="utf-8"))
+            disposition = json.loads(
+                (store.run_dir / "result/disposition.json").read_text(encoding="utf-8")
+            )
+            self.assertNotIn("communication_status", disposition)
+            self.assertEqual(disposition["alternate_communication_status"], "not_requested")
 
     def test_invalid_synthesis_has_no_retry_and_no_scientific_claims(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

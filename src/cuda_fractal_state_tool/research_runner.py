@@ -323,7 +323,7 @@ class ResearchSessionRunner:
             "current_packet_lineage": list(
                 getattr(self.controller, "current_packet_lineage", [])
             ),
-            "pending_round_plan_sha256": None,
+            "pending_round_plan_contract_sha256": None,
         }
 
     def _append_result_event(
@@ -594,7 +594,7 @@ class ResearchSessionRunner:
             disposition=controller_disposition,
             controller_disposition=controller_disposition,
             scientific_conclusion=sealed.scientific_record.conclusion.value,
-            pending_round_plan_sha256=None,
+            pending_round_plan_contract_sha256=None,
             final_record_sha256=sealed.scientific_record.sha256,
             cleanup_complete=cleanup_complete,
         )
