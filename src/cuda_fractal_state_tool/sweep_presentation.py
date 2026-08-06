@@ -21,6 +21,7 @@ TILE_WIDTH = 512
 IMAGE_HEIGHT = 320
 LABEL_HEIGHT = 44
 MAX_COLUMNS = 3
+RESEARCH_VISUAL_SUMMARY_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -550,3 +551,77 @@ def render_scalar_sweep_web_review(*, sweep_dir: Path) -> SweepWebReviewResult:
         contact_sheet_path=contact_path.resolve(),
         contact_sheet_sha256=contact_sha,
     )
+
+
+def compose_research_visual_summary(
+    sources: Sequence[tuple[str, Path]],
+) -> tuple[bytes, dict[str, Any]]:
+    """Lay out proof-owned PNG evidence as a navigation-only run summary."""
+
+    if not sources:
+        raise ValueError("Research visual summary requires at least one PNG source")
+    maximum_width = 1536
+    label_height = 34
+    prepared: list[tuple[str, Image.Image, dict[str, Any]]] = []
+    for label, path in sources:
+        resolved = path.resolve()
+        payload = resolved.read_bytes()
+        with Image.open(io.BytesIO(payload)) as opened:
+            source_width, source_height = opened.size
+            rendered = opened.convert("RGB")
+        if rendered.width > maximum_width:
+            target_height = max(
+                1, round(rendered.height * maximum_width / rendered.width)
+            )
+            rendered = rendered.resize(
+                (maximum_width, target_height), Image.Resampling.LANCZOS
+            )
+        prepared.append(
+            (
+                label,
+                rendered,
+                {
+                    "label": label,
+                    "source_path": str(resolved),
+                    "source_sha256": _sha256(payload),
+                    "source_width": source_width,
+                    "source_height": source_height,
+                    "summary_width": rendered.width,
+                    "summary_height": rendered.height,
+                },
+            )
+        )
+    width = max(rendered.width for _, rendered, _ in prepared)
+    height = sum(rendered.height + label_height for _, rendered, _ in prepared)
+    sheet = Image.new("RGB", (width, height), (15, 15, 17))
+    draw = ImageDraw.Draw(sheet)
+    font = ImageFont.load_default()
+    top = 0
+    for label, rendered, record in prepared:
+        draw.text((8, top + 10), label, fill=(240, 240, 243), font=font)
+        top += label_height
+        left = (width - rendered.width) // 2
+        sheet.paste(rendered, (left, top))
+        record["sheet_rect"] = [left, top, rendered.width, rendered.height]
+        top += rendered.height
+    encoded = io.BytesIO()
+    sheet.save(encoded, format="PNG", optimize=False, compress_level=6)
+    payload = encoded.getvalue()
+    receipt = {
+        "research_visual_summary_version": RESEARCH_VISUAL_SUMMARY_VERSION,
+        "renderer": {
+            "owner": "cuda_fractal_state_tool.sweep_presentation",
+            "pillow_version": PIL.__version__,
+            "maximum_width": maximum_width,
+            "resampling": "LANCZOS",
+        },
+        "sources": [record for _, _, record in prepared],
+        "output": {
+            "sha256": _sha256(payload),
+            "width": width,
+            "height": height,
+        },
+        "scientific_authority": False,
+        "navigation_presentation_only": True,
+    }
+    return payload, receipt

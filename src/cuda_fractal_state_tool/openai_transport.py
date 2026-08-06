@@ -430,7 +430,7 @@ class PacketV8ResponsesTransport:
         *,
         instructions: str,
         prompt: str,
-        packet_dir: Path,
+        packet_dir: Path | None,
         run_store: AutomatedRunStore | None = None,
         turn_id: str = "count-0001",
         cancelled: Callable[[], bool] = lambda: False,
@@ -515,8 +515,10 @@ class PacketV8ResponsesTransport:
             or any(character not in "0123456789abcdef" for character in model_profile_sha256)
         ):
             raise ValueError("Model-profile identity must be a lowercase SHA-256")
-        if packet_dir is None and previous_response_id is None:
-            raise ValueError("The first automated turn requires a Packet V8 authority bundle")
+        if packet_dir is None and previous_response_id is None and not additional_resources:
+            raise ValueError(
+                "A fresh automated turn requires Packet V8 or exact additional resources"
+            )
         if cancelled():
             raise TransportCancelled("Automated turn was cancelled before API dispatch")
         prepared = prepare_packet_transport(packet_dir) if packet_dir is not None else None
@@ -647,11 +649,36 @@ class PacketV8ResponsesTransport:
                 raise classify_provider_failure(exc, dispatched=True) from exc
             latency_seconds = time.monotonic() - started_at
             if response.status != "completed":
+                incomplete_details = (
+                    response.raw.get("incomplete_details")
+                    if isinstance(response.raw, dict)
+                    else None
+                )
+                if run_store is not None:
+                    run_store.write_evidence_json(
+                        f"transport/{turn_id}/incomplete-response.json",
+                        sanitize_evidence(
+                            {
+                                "response": response.raw,
+                                "response_id": response.id,
+                                "status": response.status,
+                                "incomplete_details": incomplete_details,
+                                "requested_model": model,
+                                "resolved_model": response.model,
+                                "reasoning_effort": reasoning_effort,
+                                "model_profile_sha256": model_profile_sha256,
+                                "usage": response.usage,
+                                "latency_seconds": latency_seconds,
+                                "provider_retry_authorized": False,
+                            }
+                        ),
+                    )
                 raise ProviderTransportError(
                     ProviderFailureKind.CONTENT_POLICY
                     if "content_policy" in json.dumps(response.raw).lower()
                     else ProviderFailureKind.MALFORMED_RESPONSE,
-                    f"Provider response did not complete: {response.status}",
+                    "Provider response did not complete: "
+                    f"{response.status}; incomplete_details={incomplete_details!r}",
                 )
             if (
                 not response.id
@@ -714,6 +741,8 @@ class PacketV8ResponsesTransport:
                         {
                             "response": response.raw,
                             "response_id": result.response_id,
+                            "output_text": result.output_text,
+                            "previous_response_id": result.previous_response_id,
                             "requested_model": result.requested_model,
                             "resolved_model": result.model,
                             "reasoning_effort": result.reasoning_effort,
@@ -725,6 +754,10 @@ class PacketV8ResponsesTransport:
                             "uncached_input_tokens": result.uncached_input_tokens,
                             "output_tokens": result.output_tokens,
                             "latency_seconds": result.latency_seconds,
+                            "resources": [resource.to_evidence() for resource in result.resources],
+                            "unavailable_optional_attachments": list(
+                                result.unavailable_optional_attachments
+                            ),
                         }
                     ),
                 )

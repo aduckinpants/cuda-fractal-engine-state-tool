@@ -41,6 +41,23 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         self.assertIn("Primary handoff remains drag-all", source)
         self.assertIn("Automated Packet V8 route (POC)", source)
         self.assertIn("Automated Session…", source)
+        self.assertIn("Research Question…", source)
+        self.assertIn("Question-Driven Fractal Research", inspect.getsource(user_workflow_app.ResearchQuestionDialog))
+        self.assertIn("Count & Review Budget", inspect.getsource(user_workflow_app.ResearchQuestionDialog))
+        self.assertIn("Active Color Pipeline", inspect.getsource(user_workflow_app.ResearchQuestionDialog))
+        self.assertIn("Answer", inspect.getsource(user_workflow_app.ResearchQuestionDialog))
+        self.assertIn("Experiments", inspect.getsource(user_workflow_app.ResearchQuestionDialog))
+        self.assertIn("Visuals", inspect.getsource(user_workflow_app.ResearchQuestionDialog))
+        self.assertIn("Files", inspect.getsource(user_workflow_app.ResearchQuestionDialog))
+        self.assertIn('value="gpt-5.6-luna"', source)
+        self.assertIn("create_job_bound_research_route_services", source)
+        self.assertIn("ResearchSessionRunner", source)
+        self.assertIn("It cannot record human acceptance or launch a viewer.", source)
+        self.assertIn("count-only approval required", source)
+        self.assertIn("_research_count_binding == self._current_research_count_binding()", source)
+        self.assertIn("cost/preflight-count-gate.json", source)
+        self.assertIn("source_authorization_sha256", source)
+        self.assertIn("count authorization evidence changed after approval", source)
         self.assertIn("It never records human acceptance.", source)
         self.assertIn("never human acceptance", source)
         self.assertIn("Run Automated Session", source)
@@ -167,6 +184,26 @@ class ActiveApplicationSurfaceTests(unittest.TestCase):
         )
         self.assertIn("REPLAY_PROVEN", completed)
         self.assertNotIn("ACCEPTED", completed)
+
+    def test_research_event_view_is_allowlisted(self) -> None:
+        from cuda_fractal_state_tool.user_workflow_app import _format_research_event
+
+        line = _format_research_event(
+            {
+                "sequence": 3,
+                "event_type": "research_provider_response",
+                "payload": {
+                    "stage": "planner",
+                    "turn_id": "planner-01",
+                    "current_call_cost_usd": "0.08",
+                    "response_text": "must-not-render",
+                    "api_key": "must-not-render",
+                },
+            }
+        )
+        self.assertIn("RESEARCH_PROVIDER_RESPONSE", line)
+        self.assertIn("stage=planner", line)
+        self.assertNotIn("must-not-render", line)
 
     def test_proposal_era_modules_are_absent_from_active_package(self) -> None:
         package_dir = Path(inspect.getfile(app_entry)).parent

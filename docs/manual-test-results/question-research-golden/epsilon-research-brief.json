@@ -1,0 +1,28 @@
+{
+  "question": "Why does the ring field terminate at a circle, and how does changing epsilon affect that circle's radius?",
+  "attention_context": "Track the visible termination circle and distinguish observed radius change from unsupported mechanism claims.",
+  "user_hypotheses": [
+    "Changing epsilon changes the visible termination-circle radius while the fixed camera and active phase pipeline preserve the observation channel."
+  ],
+  "experiment_permissions": {
+    "domains": [
+      "params"
+    ],
+    "allowed_paths": [
+      "params.epsilon"
+    ],
+    "allow_scalar_sweep": true
+  },
+  "fixed_conditions": {
+    "notes": [
+      "Keep the camera, damping, iteration cap, Color Pipeline, and every non-epsilon state path fixed."
+    ]
+  },
+  "useful_answer": {
+    "kind": "user_question_research_result",
+    "details": "Establish the narrowest evidence-supported relationship available within one sweep and one optional follow-up, or return a truthful unresolved report."
+  },
+  "maximum_experiment_rounds": 2,
+  "communication_profile": "working_session",
+  "hard_dollar_budget": "0.00"
+}

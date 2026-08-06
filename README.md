@@ -84,6 +84,36 @@ receipt.
 `launch.json` proves creation of the exact-candidate launcher process; it does
 not claim machine-verified viewer startup or rendering.
 
+## Question-driven research route
+
+`Research Question…` opens a bounded unattended research POC over the same
+Packet V8, sparse-override, proof, scalar-sweep, promotion, packet-refresh,
+transport, pricing, cleanup, and durable-run owners. It does not click the
+manual UI, record human acceptance, or launch a viewer.
+
+The sealed form asks what to understand, what deserves attention, current
+hypotheses/context, what must remain fixed, and what a useful answer contains.
+Executable domains, optional exact-path narrowing, scalar-sweep permission,
+zero through two experiment attempts, report profile, model, reasoning effort,
+and a hard dollar budget remain explicit. Luna/high and `$0.00` are the safe
+defaults.
+
+The exact captured Color Pipeline is displayed prominently and included in
+planner, review, and synthesis contexts. Result tabs expose the deterministic
+Working Session answer, locked predictions and gates, proof/sweep visuals,
+requested/canonical/emitted values, and durable files.
+
+`Run Research` remains disabled until `Count & Review Budget` authorizes the
+exact current Packet, brief, model, effort, and budget. Any edit invalidates
+that approval. Each later provider dispatch is counted again; the hard budget
+is always enforceable. Partial runs remain inspectable through `Open Run
+Folder`, while report and visual actions are independently gated.
+
+See
+[`docs/question_driven_research_session_poc_plan.md`](docs/question_driven_research_session_poc_plan.md)
+and the current manual gate under
+[`docs/manual-test-results/question-research-golden/`](docs/manual-test-results/question-research-golden/).
+
 ## Bounded automated Packet V8 route
 
 `Automated Session...` opens the optional Packet V8 automation panel without
@@ -94,7 +124,7 @@ human candidate acceptance or launches a viewer.
 
 The POC is intentionally bounded:
 
-- model `gpt-5.6` with high reasoning;
+- default model `gpt-5.6-luna` with high reasoning (other qualified profiles remain selectable);
 - at most two replay-proven rounds;
 - two primary responses per round (combined authoring, then combined review/gate);
 - at most six model responses including one correction turn per round;

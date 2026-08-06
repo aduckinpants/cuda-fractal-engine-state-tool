@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import queue
 import time
@@ -17,6 +18,7 @@ from .agent_bundle import (
     build_agent_bundle,
     copy_agent_packet,
     load_agent_bundle_handoff,
+    load_packet_active_color_pipeline_context,
     load_packet_scalar_sweep_axis_projection,
     open_agent_bundle_folder,
 )
@@ -34,6 +36,18 @@ from .openai_transport import OpenAISDKProvider, PacketV8ResponsesTransport, Pro
 from .model_profile import ModelProfileV1
 from .preview_service import PreviewService
 from .pricing_policy import load_pricing_policy
+from .research_context import build_planner_context
+from .research_cost import ResearchCostController, ResearchProviderStage
+from .research_protocol import ResearchBrief, canonical_json_sha256
+from .research_provider import ResearchProviderDispatcher
+from .research_question_ui import ResearchQuestionDialog
+from .research_results import ResearchResultService
+from .research_run_store import ResearchRunStore
+from .research_runner import ResearchSessionRunResult, ResearchSessionRunner
+from .research_session import (
+    ResearchSessionController,
+    create_job_bound_research_route_services,
+)
 from .runtime_surface import DEFAULT_RUNTIME_CMD
 from .runtime_compatibility import resolve_runtime_compatibility_mode
 from .scalar_sweep import ScalarBracketSweepService, ScalarSweepResult
@@ -147,6 +161,27 @@ def _format_automated_event(event: dict) -> str:
     return f"{sequence:>3}  {event_type}{('  ' + detail) if detail else ''}"
 
 
+def _format_research_event(event: dict) -> str:
+    sequence = event.get("sequence", "?")
+    event_type = str(event.get("event_type", "unknown")).upper()
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    details: list[str] = []
+    for key in (
+        "stage",
+        "turn_id",
+        "action",
+        "gate",
+        "attempt_number",
+        "current_call_cost_usd",
+        "cumulative_calculated_cost_usd",
+        "rejection_reason",
+    ):
+        value = payload.get(key)
+        if value is not None:
+            details.append(f"{key}={value}")
+    return f"{sequence:>3}  {event_type}{('  ' + ' '.join(details)) if details else ''}"
+
+
 def _format_scalar_sweep_progress(event: dict) -> str:
     kind = str(event.get("event", "UNKNOWN"))
     if kind == "PLAN_VALIDATED":
@@ -201,6 +236,15 @@ class UserWorkflowApp:
         self._automated_result_dir: Path | None = None
         self._automated_last_event_sequence = 0
         self._next_automated_refresh_at = 0.0
+        self._research_job_id: str | None = None
+        self._research_run_store: ResearchRunStore | None = None
+        self._research_result_dir: Path | None = None
+        self._research_result: ResearchSessionRunResult | None = None
+        self._research_current_visual: Path | None = None
+        self._research_last_event_sequence = 0
+        self._next_research_refresh_at = 0.0
+        self._research_count_binding: tuple[str, ...] | None = None
+        self._research_count_gate_receipt: dict | None = None
         self._credential_available = False
         self._sweep_job_id: str | None = None
         self._sweep_result_dir: Path | None = None
@@ -219,7 +263,7 @@ class UserWorkflowApp:
         self.changed_paths_var = tk.StringVar(value="No override changes have been proven.")
         self.auto_promote_var = tk.BooleanVar(value=True)
         self.automated_run_budget_usd_var = tk.StringVar(value="0.00")
-        self.automated_model_var = tk.StringVar(value="gpt-5.6")
+        self.automated_model_var = tk.StringVar(value="gpt-5.6-luna")
         self.automated_reasoning_effort_var = tk.StringVar(value="high")
         self.automated_disclosure_profile_var = tk.StringVar(
             value=DisclosureProfile.ASSISTED.value
@@ -255,6 +299,7 @@ class UserWorkflowApp:
         self._build_shell()
         self._build_automation_window()
         self._build_sweep_window()
+        self._build_research_window()
         self._refresh_credential_status()
         self._render()
         self.root.after(25, self._drain_completions)
@@ -392,19 +437,38 @@ class UserWorkflowApp:
         ttk.Label(binding, textvariable=self.binding_var, wraplength=670).grid(row=0, column=0, sticky="w")
         automation_entry = ttk.Frame(binding)
         automation_entry.grid(row=1, column=0, sticky="ew", pady=(8, 0))
-        automation_entry.columnconfigure(1, weight=1)
+        automation_entry.columnconfigure(2, weight=1)
         self.open_automation_panel_button = ttk.Button(
             automation_entry,
             text="Automated Session…",
             command=self.open_automation_panel,
         )
         self.open_automation_panel_button.grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.open_research_panel_button = ttk.Button(
+            automation_entry,
+            text="Research Question…",
+            command=self.open_research_panel,
+        )
+        self.open_research_panel_button.grid(row=0, column=1, sticky="w", padx=(0, 8))
         ttk.Label(
             automation_entry,
             textvariable=self.automated_summary_var,
             wraplength=520,
-        ).grid(row=0, column=1, sticky="w")
+        ).grid(row=0, column=2, sticky="w")
         self._build_override_editor()
+
+    def _build_research_window(self) -> None:
+        self.research_dialog = ResearchQuestionDialog(
+            self.root,
+            on_set_api_key=self.set_automated_api_key,
+            on_count=self.count_research_budget,
+            on_run=self.run_research_session,
+            on_cancel=self.cancel_research_session,
+            on_open_run=self.open_research_run,
+            on_open_report=self.open_research_report,
+            on_open_visual=self.open_research_visual,
+            on_brief_changed=self._research_brief_changed,
+        )
 
     def _build_automation_window(self) -> None:
         from tkinter.scrolledtext import ScrolledText
@@ -532,6 +596,10 @@ class UserWorkflowApp:
         self.automation_window.deiconify()
         self.automation_window.lift()
         self.automation_window.focus_set()
+
+    def open_research_panel(self) -> None:
+        self._refresh_research_authority()
+        self.research_dialog.show()
 
     def _build_sweep_window(self) -> None:
         from tkinter.scrolledtext import ScrolledText
@@ -933,6 +1001,8 @@ class UserWorkflowApp:
         self._render()
 
     def _activate_bundle(self, bundle: AgentBundle, *, loaded_existing: bool) -> None:
+        self._research_count_binding = None
+        self._research_count_gate_receipt = None
         handoff = load_agent_bundle_handoff(bundle.packet_dir)
         self.session.accept_bundle(bundle)
         self._set_text(self.packet_text, handoff.packet_text)
@@ -949,6 +1019,7 @@ class UserWorkflowApp:
             f"Drag all files in this packet folder: {required}\n"
             f"Recommended extras: {recommended} · Unavailable optional: {unavailable}"
         )
+        self._refresh_research_authority()
         try:
             axes = load_packet_scalar_sweep_axis_projection(bundle.packet_dir)
         except Exception as exc:
@@ -1006,6 +1077,7 @@ class UserWorkflowApp:
         except Exception as exc:
             self._credential_available = False
             self.automated_credential_var.set(f"Credential unavailable: {exc}")
+            self.research_dialog.credential_var.set(f"Credential unavailable: {exc}")
             return
         self._credential_available = credential is not None
         self.automated_credential_var.set(
@@ -1016,6 +1088,7 @@ class UserWorkflowApp:
             if credential is not None
             else "Credential: not configured (no API request can start)"
         )
+        self.research_dialog.credential_var.set(self.automated_credential_var.get())
 
     def set_automated_api_key(self) -> None:
         from tkinter import simpledialog
@@ -1036,6 +1109,534 @@ class UserWorkflowApp:
             )
         except Exception as exc:
             self._set_error(f"Could not store OpenAI API key: {exc}")
+        self._render()
+
+    def _research_brief(self) -> ResearchBrief:
+        return self.research_dialog.read_form().to_brief()
+
+    def _research_brief_changed(self) -> None:
+        if self._research_count_binding is None:
+            return
+        self._research_count_binding = None
+        self._research_count_gate_receipt = None
+        self.research_dialog.cost_var.set("Cost: brief or model changed; recount required")
+        self.research_dialog.gate_var.set("Gate: count-only approval invalidated")
+        self._render()
+
+    def _current_research_count_binding(self) -> tuple[str, ...] | None:
+        bundle = self.session.bundle
+        if bundle is None:
+            return None
+        try:
+            brief = self._research_brief()
+        except Exception:
+            return None
+        return (
+            bundle.packet_id,
+            bundle.manifest_sha256,
+            canonical_json_sha256(brief.to_dict()),
+            self.research_dialog.model_var.get().strip(),
+            self.research_dialog.reasoning_var.get().strip(),
+        )
+
+    def _validate_research_count_gate_receipt(self) -> None:
+        receipt = self._research_count_gate_receipt
+        store = self._research_run_store
+        if receipt is None or store is None:
+            raise ValueError("The authorized count gate receipt is unavailable")
+        if receipt.get("authorized") is not True:
+            raise ValueError("The count gate receipt is not authorized")
+        if receipt.get("binding") != list(self._current_research_count_binding() or ()):
+            raise ValueError("The count gate receipt no longer matches the exact research binding")
+        if receipt.get("source_count_run_id") != store.run_dir.name:
+            raise ValueError("The active count run identity changed")
+        manifest_sha = hashlib.sha256(store.manifest_path.read_bytes()).hexdigest()
+        if receipt.get("source_count_run_manifest_sha256") != manifest_sha:
+            raise ValueError("The count run manifest changed after authorization")
+        relative = receipt.get("source_authorization_relative_path")
+        if relative != "cost/planner-01-count-only-authorization.json":
+            raise ValueError("The count authorization path is invalid")
+        authorization_path = store.run_dir / "cost" / "planner-01-count-only-authorization.json"
+        if not authorization_path.is_file():
+            raise ValueError("The exact count authorization evidence is missing")
+        authorization_sha = hashlib.sha256(authorization_path.read_bytes()).hexdigest()
+        if receipt.get("source_authorization_sha256") != authorization_sha:
+            raise ValueError("The count authorization evidence changed after approval")
+
+    def _research_model_profile(self, pricing_policy) -> ModelProfileV1:
+        profile = ModelProfileV1(
+            model=self.research_dialog.model_var.get().strip(),
+            reasoning_effort=self.research_dialog.reasoning_var.get().strip(),
+            pricing_tier=pricing_policy.service_tier,
+        )
+        profile.validate(pricing_policy)
+        return profile
+
+    def _research_identity(self) -> JobRequestIdentity | None:
+        finding = self.session.finding
+        bundle = self.session.bundle
+        if finding is None or bundle is None:
+            return None
+        return JobRequestIdentity(
+            generation=self.session.generation,
+            finding_id=finding.finding_id,
+            authoring_base_sha256=finding.authoring_base_sha256,
+            packet_id=bundle.packet_id,
+            packet_manifest_sha256=bundle.manifest_sha256,
+        )
+
+    def _research_outcome_is_current(self, outcome: JobOutcome) -> bool:
+        current = self._research_identity()
+        return current is not None and outcome.identity == current
+
+    def _research_prerequisites(self):
+        bundle = self.session.bundle
+        finding = self.session.finding
+        identity = self._research_identity()
+        if bundle is None or finding is None or identity is None:
+            raise ValueError("Open a finding and build its exact Packet V8 before research.")
+        if bundle.packet_version != 8:
+            raise ValueError("Question-driven research requires an exact Packet V8 binding.")
+        if self._busy_kinds:
+            raise ValueError("Wait for current finding, packet, preview, proof, or research work to finish.")
+        credential = resolve_openai_api_key()
+        if credential is None:
+            raise ValueError("No OpenAI API key is configured. Use Set API Key first.")
+        brief = self._research_brief()
+        pricing = load_pricing_policy()
+        profile = self._research_model_profile(pricing)
+        return bundle, finding, identity, credential, brief, pricing, profile
+
+    @staticmethod
+    def _research_packet_binding(bundle: AgentBundle) -> dict[str, str]:
+        return {
+            "packet_id": bundle.packet_id,
+            "manifest_sha256": bundle.manifest_sha256,
+            "finding_id": bundle.finding_id,
+        }
+
+    def _create_research_store(
+        self,
+        *,
+        run_id: str,
+        bundle: AgentBundle,
+        brief: ResearchBrief,
+        pricing_policy,
+        model_profile: ModelProfileV1,
+        credential,
+        purpose: str,
+        approved_count_gate: dict | None = None,
+    ) -> ResearchRunStore:
+        workspace_root = Path(self.workspace_root_var.get().strip()).resolve()
+        return ResearchRunStore.create(
+            workspace_root,
+            run_id=run_id,
+            protocol_snapshot={
+                "schema": "question_research_protocol.v1",
+                "purpose": purpose,
+                "model_profile": model_profile.identity_dict(),
+                "pricing_policy": pricing_policy.identity_dict(),
+                "prompt_cache_policy": PromptCachePolicy.EXPLICIT_NO_CACHE.value,
+                "credential_source": credential.source,
+                "credential_identity": credential.identity_dict(),
+                "approved_count_gate": approved_count_gate,
+            },
+            initial_packet=self._research_packet_binding(bundle),
+            research_brief=brief.to_dict(),
+        )
+
+    def count_research_budget(self) -> None:
+        self._research_count_binding = None
+        self._research_count_gate_receipt = None
+        try:
+            bundle, _finding, identity, credential, brief, pricing, profile = (
+                self._research_prerequisites()
+            )
+            run_id = f"question-count-{uuid.uuid4()}"
+            store = self._create_research_store(
+                run_id=run_id,
+                bundle=bundle,
+                brief=brief,
+                pricing_policy=pricing,
+                model_profile=profile,
+                credential=credential,
+                purpose="count_only_no_generation",
+            )
+        except Exception as exc:
+            self._set_error(f"Research count setup failed: {exc}")
+            self._render()
+            return
+        self._research_run_store = store
+        self._research_result_dir = store.run_dir
+        self._research_result = None
+        self._research_current_visual = None
+        self._research_last_event_sequence = 0
+        self._research_count_binding = None
+        self.research_dialog.state_var.set("State: counting exact initial request; no generation")
+        self.research_dialog.gate_var.set("Gate: count-only")
+        workspace_root = Path(self.workspace_root_var.get().strip()).resolve()
+
+        def operation(context):
+            transport = PacketV8ResponsesTransport(OpenAISDKProvider(credential.value))
+            cost = ResearchCostController(
+                pricing_policy=pricing,
+                model_profile=profile,
+                hard_budget_usd=brief.hard_dollar_budget,
+            )
+            dispatcher = ResearchProviderDispatcher(
+                transport=transport,
+                run_store=store,
+                cost=cost,
+                model_profile=profile,
+                cancelled=lambda: context.cancelled,
+            )
+            planner = build_planner_context(brief, bundle)
+            try:
+                return dispatcher.count_only(
+                    stage=ResearchProviderStage.PLANNER,
+                    turn_id="planner-01-count-only",
+                    prompt=planner.prompt,
+                    packet_dir=bundle.packet_dir,
+                    planner_may_execute=brief.maximum_experiment_rounds > 0,
+                    correction_available=True,
+                    alternate_communication_required=(
+                        brief.communication_profile == "adult_beginner_carl_sagan"
+                    ),
+                    experiment_attempts_remaining=brief.maximum_experiment_rounds,
+                )
+            finally:
+                transport.close_owned_files(
+                    run_store=store, reason="question_research_count_only_closed"
+                )
+
+        self._research_job_id = self._submit(
+            "research_question", identity, operation, self._research_count_completed
+        )
+        if self._research_job_id is None:
+            self.research_dialog.state_var.set("State: count worker did not start")
+        self._render()
+
+    def _research_count_completed(self, outcome: JobOutcome) -> None:
+        self._busy_kinds.discard(outcome.kind)
+        self._research_job_id = None
+        if outcome.cancelled or not self._research_outcome_is_current(outcome):
+            self.research_dialog.state_var.set("State: count cancelled or stale")
+            self._render()
+            return
+        if outcome.error is not None:
+            self._set_error(f"Research count failed: {outcome.error}")
+            self.research_dialog.state_var.set("State: count failed")
+            self._refresh_research_projection()
+            self._render()
+            return
+        gate = outcome.value
+        self.research_dialog.state_var.set("State: exact first request counted; no generation")
+        self.research_dialog.cost_var.set(
+            "First planner input: "
+            f"{gate.count.input_tokens:,} tokens · exact estimated call ${gate.budget.current_call.cost_usd} · "
+            f"required now with reserves ${gate.budget.required_available_cost_usd} · "
+            f"adaptive ceiling ${gate.conservative_adaptive_ceiling_usd} · "
+            f"hard budget ${gate.budget.hard_budget_usd}"
+        )
+        self.research_dialog.gate_var.set(
+            "Gate: AUTHORIZED" if gate.budget.authorized else f"Gate: REFUSED — {gate.budget.rejection_reason}"
+        )
+        if gate.budget.authorized:
+            self._research_count_binding = self._current_research_count_binding()
+            authorization_path = (
+                self._research_run_store.run_dir
+                / "cost"
+                / "planner-01-count-only-authorization.json"
+            )
+            self._research_count_gate_receipt = {
+                "count_gate_version": 1,
+                "binding": list(self._research_count_binding),
+                "source_count_run_id": self._research_run_store.run_dir.name,
+                "source_count_run_manifest_sha256": hashlib.sha256(
+                    self._research_run_store.manifest_path.read_bytes()
+                ).hexdigest(),
+                "source_authorization_relative_path": str(
+                    authorization_path.relative_to(self._research_run_store.run_dir)
+                ).replace("\\", "/"),
+                "source_authorization_sha256": hashlib.sha256(
+                    authorization_path.read_bytes()
+                ).hexdigest(),
+                "exact_initial_input_tokens": gate.count.input_tokens,
+                "exact_initial_call_estimate_usd": str(gate.budget.current_call.cost_usd),
+                "required_with_reserves_usd": str(
+                    gate.budget.required_available_cost_usd
+                ),
+                "conservative_adaptive_ceiling_usd": gate.conservative_adaptive_ceiling_usd,
+                "hard_budget_usd": str(gate.budget.hard_budget_usd),
+                "authorized": True,
+            }
+        self._refresh_research_projection()
+        self._render()
+
+    def run_research_session(self) -> None:
+        if self._research_count_binding != self._current_research_count_binding():
+            self._set_error(
+                "Run Research requires an authorized Count & Review Budget gate for this exact Packet, brief, model, and budget."
+            )
+            self.research_dialog.gate_var.set("Gate: count-only approval required")
+            self._render()
+            return
+        if self._research_count_gate_receipt is None:
+            self._set_error("The authorized count gate receipt is unavailable; recount before generation.")
+            self._render()
+            return
+        try:
+            self._validate_research_count_gate_receipt()
+        except Exception as exc:
+            self._research_count_binding = None
+            self._research_count_gate_receipt = None
+            self._set_error(f"Count gate revalidation failed; recount required: {exc}")
+            self.research_dialog.gate_var.set("Gate: count-only approval invalidated")
+            self._render()
+            return
+        try:
+            bundle, _finding, identity, credential, brief, pricing, profile = (
+                self._research_prerequisites()
+            )
+            run_id = f"question-research-{uuid.uuid4()}"
+            store = self._create_research_store(
+                run_id=run_id,
+                bundle=bundle,
+                brief=brief,
+                pricing_policy=pricing,
+                model_profile=profile,
+                credential=credential,
+                purpose="question_research_generation",
+                approved_count_gate=self._research_count_gate_receipt,
+            )
+        except Exception as exc:
+            self._set_error(f"Research run setup failed: {exc}")
+            self._render()
+            return
+        self._research_run_store = store
+        self._research_result_dir = store.run_dir
+        self._research_result = None
+        self._research_current_visual = None
+        self._research_last_event_sequence = 0
+        self.research_dialog.state_var.set("State: starting bounded research")
+        self.research_dialog.gate_var.set("Gate: RUNNING")
+        self.research_dialog.set_answer("Research is running. No scientific conclusion is available yet.")
+        self.research_dialog.set_experiments("")
+        self.research_dialog.set_files(str(store.run_dir))
+        store.write_evidence_once_json(
+            "cost/preflight-count-gate.json", self._research_count_gate_receipt
+        )
+        workspace_root = Path(self.workspace_root_var.get().strip()).resolve()
+
+        def operation(context):
+            transport = PacketV8ResponsesTransport(OpenAISDKProvider(credential.value))
+            cost = ResearchCostController(
+                pricing_policy=pricing,
+                model_profile=profile,
+                hard_budget_usd=brief.hard_dollar_budget,
+            )
+            dispatcher = ResearchProviderDispatcher(
+                transport=transport,
+                run_store=store,
+                cost=cost,
+                model_profile=profile,
+                cancelled=lambda: context.cancelled,
+            )
+            services = create_job_bound_research_route_services(
+                runtime_cmd_path=self.runtime_cmd_path,
+                workspace_root=workspace_root,
+                job=context,
+                runtime_compatibility_mode=self.runtime_compatibility_mode,
+            )
+            controller = ResearchSessionController(
+                brief=brief,
+                run_store=store,
+                initial_bundle=bundle,
+                services=services,
+            )
+            return ResearchSessionRunner(
+                controller=controller,
+                provider=dispatcher,
+                results=ResearchResultService(store),
+            ).run()
+
+        self._research_job_id = self._submit(
+            "research_question", identity, operation, self._research_session_completed
+        )
+        if self._research_job_id is None:
+            self.research_dialog.state_var.set("State: run worker did not start")
+            self.research_dialog.gate_var.set("Gate: RUNTIME_FAILED")
+        else:
+            self.session.status_text = (
+                f"Started bounded question-driven research run {run_id}. "
+                "It cannot record human acceptance or launch a viewer."
+            )
+        self._render()
+
+    def cancel_research_session(self) -> None:
+        job_id = self._research_job_id
+        if job_id is None or not self.runner.cancel(job_id):
+            self.session.status_text = "No active research session owns cancellable work."
+        else:
+            self.research_dialog.state_var.set(
+                "State: cancellation requested; late remote completion cannot advance the controller"
+            )
+        self._render()
+
+    def _research_session_completed(self, outcome: JobOutcome) -> None:
+        self._busy_kinds.discard(outcome.kind)
+        self._research_job_id = None
+        if outcome.cancelled or not self._research_outcome_is_current(outcome):
+            self.research_dialog.state_var.set("State: cancelled or stale; manual review required")
+            self.research_dialog.gate_var.set("Gate: MANUAL_REVIEW_REQUIRED")
+            self._refresh_research_projection()
+            self._render()
+            return
+        if outcome.error is not None:
+            self._set_error(f"Research session failed: {outcome.error}")
+            self.research_dialog.state_var.set("State: failed; durable partial evidence preserved")
+            self.research_dialog.gate_var.set("Gate: MANUAL_REVIEW_REQUIRED")
+            self._refresh_research_projection()
+            self._render()
+            return
+        result = outcome.value
+        if not isinstance(result, ResearchSessionRunResult):
+            self._set_error("Research session returned an invalid result.")
+            self._render()
+            return
+        self._research_result = result
+        self._research_current_visual = result.visual_paths[-1] if result.visual_paths else None
+        self.research_dialog.state_var.set(
+            f"State: complete · attempts {result.attempts_consumed} · current research base {result.current_bundle.packet_id}"
+        )
+        self.research_dialog.gate_var.set(f"Gate: {result.controller_disposition}")
+        self.research_dialog.set_answer(result.result.working_report_path.read_text(encoding="utf-8"))
+        self.research_dialog.set_experiments(self._research_experiment_summary())
+        self.research_dialog.set_files(self._research_file_listing())
+        self.research_dialog.set_visual(self._research_current_visual)
+        self.session.status_text = (
+            f"Question-driven research closed at {result.disposition.value}; "
+            "no human acceptance or launch was recorded."
+        )
+        self._refresh_research_projection()
+        self._render()
+
+    def _research_file_listing(self) -> str:
+        root = self._research_result_dir
+        if root is None or not root.is_dir():
+            return "No research run folder exists."
+        return "\n".join(str(path.relative_to(root)) for path in sorted(root.rglob("*")) if path.is_file())
+
+    def _research_experiment_summary(self) -> str:
+        root = self._research_result_dir
+        if root is None:
+            return "No experiment was executed."
+        sections: list[str] = []
+        attempts_dir = root / "attempts"
+        if attempts_dir.is_dir():
+            for attempt_dir in sorted(path for path in attempts_dir.iterdir() if path.is_dir()):
+                sections.append(f"ATTEMPT {attempt_dir.name}")
+                for filename, label in (
+                    ("round-plan.json", "LOCKED PLAN AND PREDICTION"),
+                    ("execution-ref.json", "LOCAL EXECUTION"),
+                    ("review-decision.json", "FRESH REVIEW GATE"),
+                ):
+                    path = attempt_dir / filename
+                    if path.is_file():
+                        value = json.loads(path.read_text(encoding="utf-8"))
+                        sections.append(label)
+                        sections.append(json.dumps(value, indent=2, ensure_ascii=False))
+        record_path = root / "result" / "scientific-record.json"
+        if record_path.is_file():
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            sections.append("REQUESTED / CANONICAL / EMITTED VALUES")
+            sections.append(
+                json.dumps(
+                    record.get("requested_canonical_emitted_values", []),
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
+        return "\n\n".join(sections) if sections else "No experiment was executed."
+
+    def _refresh_research_authority(self) -> None:
+        bundle = self.session.bundle
+        if bundle is None:
+            self.research_dialog.authority_var.set("Authority: no Packet V8")
+            self.research_dialog.pipeline_var.set("Active Color Pipeline: unavailable")
+            return
+        self.research_dialog.authority_var.set(
+            f"Authority: Packet {bundle.packet_id} · finding {bundle.finding_id} · manifest {bundle.manifest_sha256[:16]}…"
+        )
+        try:
+            pipeline = load_packet_active_color_pipeline_context(bundle.packet_dir)
+        except Exception as exc:
+            self.research_dialog.pipeline_var.set(f"Active Color Pipeline unavailable: {exc}")
+        else:
+            self.research_dialog.pipeline_var.set(
+                f"Active Color Pipeline: {pipeline['active_chain_text']}"
+            )
+
+    def _refresh_research_projection(self) -> None:
+        store = self._research_run_store
+        if store is None:
+            return
+        try:
+            active, events = store.load_live_snapshot()
+            projection = active.get("projection") if isinstance(active, dict) else None
+            if isinstance(projection, dict):
+                state = projection.get("state")
+                attempts = projection.get("attempts_consumed")
+                current = projection.get("current_research_base")
+                if state is not None and self._research_result is None:
+                    self.research_dialog.state_var.set(
+                        f"State: {state} · attempts {attempts if attempts is not None else '?'}"
+                    )
+                if isinstance(current, dict):
+                    self.research_dialog.authority_var.set(
+                        f"Current research base: packet {current.get('packet_id', '?')} · finding {current.get('finding_id', '?')}"
+                    )
+            latest = events[-1].get("sequence", 0) if events else 0
+            provider_events = [
+                event
+                for event in events
+                if str(event.get("event_type", "")).lower()
+                == "research_provider_response"
+                and isinstance(event.get("payload"), dict)
+            ]
+            if provider_events:
+                payload = provider_events[-1]["payload"]
+                self.research_dialog.cost_var.set(
+                    f"Cost: ${payload.get('cumulative_calculated_cost_usd', '?')} actual through "
+                    f"{payload.get('stage', '?')} · last ${payload.get('calculated_call_cost_usd', '?')}"
+                )
+            if latest != self._research_last_event_sequence:
+                self.research_dialog.set_events(
+                    "\n".join(_format_research_event(event) for event in events)
+                )
+                self._research_last_event_sequence = latest
+        except Exception as exc:
+            self.research_dialog.gate_var.set(f"Gate projection unavailable: {exc}")
+
+    def open_research_run(self) -> None:
+        self._open_research_path(self._research_result_dir, "research run folder")
+
+    def open_research_report(self) -> None:
+        path = self._research_result.result.working_report_path if self._research_result else None
+        self._open_research_path(path, "working report")
+
+    def open_research_visual(self) -> None:
+        self._open_research_path(self._research_current_visual, "research visual")
+
+    def _open_research_path(self, path: Path | None, label: str) -> None:
+        if path is None or not path.exists():
+            self._set_error(f"No {label} is available yet.")
+        else:
+            try:
+                os.startfile(str(path))
+                self.session.status_text = f"Opened {label}: {path}"
+            except Exception as exc:
+                self._set_error(f"Could not open {label}: {exc}")
         self._render()
 
     def run_automated_session(self) -> None:
@@ -1948,6 +2549,24 @@ class UserWorkflowApp:
     def reset_session(self) -> None:
         self.runner.cancel_all()
         self._busy_kinds.clear()
+        self._research_job_id = None
+        self._research_run_store = None
+        self._research_result_dir = None
+        self._research_result = None
+        self._research_current_visual = None
+        self._research_last_event_sequence = 0
+        self._research_count_binding = None
+        self._research_count_gate_receipt = None
+        self.research_dialog.state_var.set("State: idle")
+        self.research_dialog.authority_var.set("Authority: no Packet V8")
+        self.research_dialog.pipeline_var.set("Active Color Pipeline: unavailable")
+        self.research_dialog.cost_var.set("Cost: count not run")
+        self.research_dialog.gate_var.set("Gate: not started")
+        self.research_dialog.set_answer("")
+        self.research_dialog.set_experiments("")
+        self.research_dialog.set_files("")
+        self.research_dialog.set_events("")
+        self.research_dialog.set_visual(None)
         self._sweep_job_id = None
         self._sweep_validation_binding = None
         self._sweep_result_dir = None
@@ -2020,6 +2639,9 @@ class UserWorkflowApp:
         if now >= self._next_automated_refresh_at:
             self._next_automated_refresh_at = now + 0.25
             self._refresh_automated_projection()
+        if now >= self._next_research_refresh_at:
+            self._next_research_refresh_at = now + 0.25
+            self._refresh_research_projection()
         self.root.after(25, self._drain_completions)
 
     def _set_error(self, message: str) -> None:
@@ -2047,8 +2669,9 @@ class UserWorkflowApp:
         bundle_ready = self.session.bundle is not None
         proof_busy = "proof" in self._busy_kinds
         automated_busy = "automated_session" in self._busy_kinds
+        research_busy = "research_question" in self._busy_kinds
         sweep_busy = bool({"sweep_validation", "scalar_sweep"} & self._busy_kinds)
-        workflow_busy = automated_busy or sweep_busy
+        workflow_busy = automated_busy or research_busy or sweep_busy
         result = self.session.proof_result
         replay_proven = isinstance(result, StateOverrideProofResult) and result.status == "replay_proven"
         review_surface_seen = self.session.candidate_preview is not None or self._candidate_full_frame_opened
@@ -2137,24 +2760,54 @@ class UserWorkflowApp:
         self.open_automated_results_button.configure(
             state="normal" if self._automated_result_dir is not None else "disabled"
         )
-        self.set_api_key_button.configure(state="disabled" if automated_busy else "normal")
-        self.auto_promote_check.configure(state="disabled" if automated_busy else "normal")
+        self.set_api_key_button.configure(
+            state="disabled" if automated_busy or research_busy else "normal"
+        )
+        self.auto_promote_check.configure(
+            state="disabled" if automated_busy or research_busy else "normal"
+        )
         self.automated_run_budget_entry.configure(
-            state="disabled" if automated_busy else "normal"
+            state="disabled" if automated_busy or research_busy else "normal"
         )
         self.automated_disclosure_profile.configure(
-            state="disabled" if automated_busy else "readonly"
+            state="disabled" if automated_busy or research_busy else "readonly"
         )
         self.automated_model_profile.configure(
-            state="disabled" if automated_busy else "readonly"
+            state="disabled" if automated_busy or research_busy else "readonly"
         )
         self.automated_reasoning_profile.configure(
-            state="disabled" if automated_busy else "readonly"
+            state="disabled" if automated_busy or research_busy else "readonly"
         )
         credential_summary = "credential available" if self._credential_available else "credential not configured"
         disposition_summary = self.automated_disposition_var.get().removeprefix("Disposition: ")
         self.automated_summary_var.set(
             f"{credential_summary} · {disposition_summary}"
+        )
+        self.open_automation_panel_button.configure(
+            state="disabled" if research_busy else "normal"
+        )
+        self.open_research_panel_button.configure(
+            state="disabled" if automated_busy or sweep_busy else "normal"
+        )
+        report_path = (
+            self._research_result.result.working_report_path
+            if self._research_result is not None
+            else None
+        )
+        self.research_dialog.configure_controls(
+            ready=bundle_ready,
+            credential_available=self._credential_available,
+            busy=bool(self._busy_kinds),
+            run_authorized=(
+                self._research_count_binding is not None
+                and self._research_count_binding == self._current_research_count_binding()
+            ),
+            has_run=self._research_result_dir is not None,
+            has_report=report_path is not None and report_path.is_file(),
+            has_visual=(
+                self._research_current_visual is not None
+                and self._research_current_visual.is_file()
+            ),
         )
         self.copy_error_button.configure(state="normal" if self._last_copyable_error else "disabled")
 
@@ -2166,6 +2819,8 @@ class UserWorkflowApp:
             self.runner.cancel(self._automated_job_id)
         if self._sweep_job_id is not None:
             self.runner.cancel(self._sweep_job_id)
+        if self._research_job_id is not None:
+            self.runner.cancel(self._research_job_id)
         if self._owns_runner:
             self.runner.shutdown(wait=False)
         self.root.destroy()

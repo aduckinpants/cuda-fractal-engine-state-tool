@@ -89,6 +89,16 @@ class AutomatedRunStoreTests(unittest.TestCase):
                 with self.subTest(unsafe=unsafe), self.assertRaisesRegex(ValueError, "safe relative"):
                     store.write_evidence_json(unsafe, {})
 
+    def test_immutable_evidence_is_write_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = self._store(Path(temp_dir))
+            path = store.write_evidence_once_json("sealed/brief.json", {"question": "why"})
+
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"question": "why"})
+            with self.assertRaises(FileExistsError):
+                store.write_evidence_once_json("sealed/brief.json", {"question": "changed"})
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"question": "why"})
+
     def test_retryable_windows_projection_collision_recovers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             store = self._store(Path(temp_dir))
@@ -112,6 +122,30 @@ class AutomatedRunStoreTests(unittest.TestCase):
 
             self.assertEqual(attempts["count"], 2)
             self.assertEqual(event["sequence"], 1)
+            self.assertEqual(store.load_active_turn()["last_event_sequence"], 1)
+
+    def test_windows_sharing_violation_projection_collision_recovers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = self._store(Path(temp_dir))
+            from cuda_fractal_state_tool import automated_run_store as module
+
+            real_replace = module.os.replace
+            attempts = {"count": 0}
+
+            def replace_with_sharing_violation(source, target):
+                if Path(target) == store.active_turn_path and attempts["count"] == 0:
+                    attempts["count"] += 1
+                    error = PermissionError("file in use")
+                    error.winerror = 32
+                    raise error
+                return real_replace(source, target)
+
+            with patch.object(
+                module.os, "replace", side_effect=replace_with_sharing_violation
+            ), patch.object(module.time, "sleep", return_value=None):
+                store.record_transition("one", {}, {"state": "OBSERVE"})
+
+            self.assertEqual(attempts["count"], 1)
             self.assertEqual(store.load_active_turn()["last_event_sequence"], 1)
 
     def test_persistent_projection_collision_reports_event_append_precisely(self) -> None:

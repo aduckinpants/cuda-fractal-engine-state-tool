@@ -1043,6 +1043,92 @@ def _pipeline_topology_index(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def derive_active_color_pipeline_context(
+    state: dict[str, Any], contract: dict[str, Any]
+) -> dict[str, Any]:
+    """Present the captured draft without becoming another pipeline authority."""
+
+    draft = validate_captured_color_pipeline_draft(state, contract)
+    if draft is None:
+        return {
+            "status": "unavailable",
+            "role": "deterministic_presentation_of_copied_authority",
+            "reason": "captured state has no complete color_pipeline_draft",
+            "active_chain": [],
+            "active_chain_text": "Unavailable — no complete captured Color Pipeline draft.",
+            "lanes": [],
+        }
+    lane_order, functions = _contract_function_index(contract)
+    library = contract["function_library"]
+    contract_lanes = {lane["id"]: lane for lane in library["lanes"]}
+    lanes: list[dict[str, Any]] = []
+    active_chain: list[dict[str, Any]] = []
+    for lane in draft["lanes"]:
+        lane_id = lane["lane_id"]
+        contract_lane = contract_lanes[lane_id]
+        rows: list[dict[str, Any]] = []
+        for row in lane["rows"]:
+            function_id = row["function_id"]
+            function = functions[(lane_id, function_id)]
+            function_label = function.get("label")
+            if not isinstance(function_label, str) or not function_label:
+                function_label = None
+            rendered = {
+                "ui_row_id": row["ui_row_id"],
+                "enabled": row["enabled"],
+                "function_id": function_id,
+                "function_label": function_label,
+            }
+            rows.append(rendered)
+            if row["enabled"]:
+                active_chain.append(
+                    {
+                        "lane_id": lane_id,
+                        "ui_row_id": row["ui_row_id"],
+                        "function_id": function_id,
+                        "function_label": function_label,
+                    }
+                )
+        lane_label = contract_lane.get("label")
+        if not isinstance(lane_label, str) or not lane_label:
+            lane_label = lane.get("label") if isinstance(lane.get("label"), str) else lane_id
+        lanes.append({"lane_id": lane_id, "lane_label": lane_label, "rows": rows})
+    if [lane["lane_id"] for lane in lanes] != lane_order:
+        raise ValueError("Captured Color Pipeline context lane order changed after validation")
+
+    def _function_text(item: dict[str, Any]) -> str:
+        label = item.get("function_label")
+        return f"{label} [{item['function_id']}]" if label else f"[{item['function_id']}]"
+
+    return {
+        "status": "available",
+        "role": "deterministic_presentation_of_copied_authority",
+        "active_chain": active_chain,
+        "active_chain_text": " -> ".join(_function_text(item) for item in active_chain)
+        or "No enabled Color Pipeline rows.",
+        "lanes": lanes,
+    }
+
+
+def load_packet_active_color_pipeline_context(packet_dir: Path) -> dict[str, Any]:
+    """Derive the presentation from exact immutable Packet V8 bytes."""
+
+    bundle = load_existing_agent_bundle(packet_dir)
+    if bundle.packet_version != 8:
+        raise ValueError("Active Color Pipeline context requires Packet V8")
+    state = _load_json_object((bundle.packet_dir / "state.json").read_bytes(), "Packet state")
+    container = parse_authority_container(
+        (bundle.packet_dir / _COLOR_PIPELINE_TRANSPORT_FILENAME).read_bytes()
+    )
+    if _UI_SALT_FILENAME not in container.artifacts:
+        raise ValueError("Packet Color Pipeline authority has no copied UI-Salt contract")
+    contract = _load_json_object(
+        container.artifacts[_UI_SALT_FILENAME].payload,
+        "Packet UI-Salt contract",
+    )
+    return derive_active_color_pipeline_context(state, contract)
+
+
 def _build_transport_views(
     stage_dir: Path,
     state: dict[str, Any],
@@ -1248,6 +1334,7 @@ def _packet_markdown(
     file_hashes: dict[str, str],
     has_pipeline_example: bool,
     web_frame_derivative: dict[str, Any] | None,
+    active_pipeline: dict[str, Any],
 ) -> str:
     fractal_type = state["fractal_type"]
     params = state.get("params") if isinstance(state.get("params"), dict) else {}
@@ -1268,15 +1355,26 @@ def _packet_markdown(
     viewport_camera = viewport_facts["camera"]
     viewport_frame = viewport_facts["local_frame"]
     viewport_basis = viewport_facts["complex_pixel_basis"]
-    draft = state.get("color_pipeline_draft")
     pipeline_summary: list[str] = []
-    if isinstance(draft, dict) and isinstance(draft.get("lanes"), list):
-        for lane in draft["lanes"]:
-            rows = lane.get("rows", []) if isinstance(lane, dict) else []
-            functions = [row.get("function_id", "?") for row in rows if isinstance(row, dict)]
-            pipeline_summary.append(f"- `{lane.get('lane_id', '?')}`: {', '.join(functions) or '(no rows)'}")
+    if active_pipeline["status"] == "available":
+        for lane in active_pipeline["lanes"]:
+            row_text: list[str] = []
+            for row in lane["rows"]:
+                label = row.get("function_label")
+                function = f"{label} [`{row['function_id']}`]" if label else f"`{row['function_id']}`"
+                status = "enabled" if row["enabled"] else "disabled"
+                row_text.append(f"row `{row['ui_row_id']}` {status}: {function}")
+            pipeline_summary.append(
+                f"- `{lane['lane_id']}` / {lane['lane_label']}: "
+                + ("; ".join(row_text) if row_text else "(no rows)")
+            )
     else:
-        pipeline_summary.append("- No complete `color_pipeline_draft` is present in this capture.")
+        pipeline_summary.append(f"- {active_pipeline['active_chain_text']}")
+    flat_tuple_label = (
+        "Serialized flat color tuple (replay/compatibility mirror; the captured Color Pipeline below is active)"
+        if active_pipeline["status"] == "available"
+        else "Serialized flat color tuple"
+    )
 
     attachment_lines = [f"- `{name}` — SHA-256 `{file_hashes[name]}`" for name in required]
     context_lines = [f"- `{name}` — SHA-256 `{file_hashes[name]}`" for name in recommended]
@@ -1347,6 +1445,14 @@ def _packet_markdown(
             "  frame does not prove exact self-similarity.",
             "- Use engine help no more broadly than its words. Separate serialized facts, visual observations, grounded",
             "  inferences, and hypotheses.",
+            "",
+            "## Captured observation channel — read before interpreting the frame",
+            "",
+            "Active Color Pipeline at capture:",
+            f"`{active_pipeline['active_chain_text']}`",
+            "",
+            "This is derived from the exact captured draft and copied UI-Salt contract. It identifies the current",
+            "observation chain; it does not prove that every configured parameter contributes visibly.",
             "",
             "## Experiment executability and observability — read before recommending a state change",
             "",
@@ -1526,10 +1632,10 @@ def _packet_markdown(
             f"- Selected fractal: `{fractal_type}`",
             f"- Render: `{render.get('width', '?')} × {render.get('height', '?')}` on device `{render.get('device_id', '?')}`",
             f"- Iterations: `{params.get('max_iter', '?')}`",
-            f"- Serialized flat color tuple: `{params.get('color_signal', '?')} -> {params.get('color_shape', '?')} -> "
+            f"- {flat_tuple_label}: `{params.get('color_signal', '?')} -> {params.get('color_shape', '?')} -> "
             f"{params.get('color_palette', '?')} -> {params.get('color_grading', '?')}`",
             "",
-            "### Serialized Color Pipeline",
+            "### Color Pipeline row detail",
             "",
             *pipeline_summary,
             "",
@@ -1740,6 +1846,7 @@ def build_agent_bundle(
 
         draft = validate_captured_color_pipeline_draft(state, contract)
         has_pipeline_example = draft is not None
+        active_pipeline = derive_active_color_pipeline_context(state, contract)
         if draft is not None:
             _validate_color_pipeline_compatibility_authority(contract)
             example_bytes = _json_bytes({"color_pipeline_draft": {"lanes": draft["lanes"]}}, sort_keys=False)
@@ -1794,6 +1901,7 @@ def build_agent_bundle(
             file_hashes,
             has_pipeline_example,
             web_frame_derivative,
+            active_pipeline,
         )
         packet_bytes = packet_text.encode("utf-8")
         _write_bytes(stage_dir / "packet.md", packet_bytes)

@@ -11,6 +11,7 @@ from PIL import Image
 
 from cuda_fractal_state_tool.sweep_presentation import (
     CapturedBaseReference,
+    compose_research_visual_summary,
     render_scalar_sweep_presentation,
     resolve_captured_base_reference,
 )
@@ -139,6 +140,28 @@ class SweepPresentationTests(unittest.TestCase):
             )
             self.assertIsNone(result.source_records[1]["source_path"])
             self.assertEqual(result.source_records[1]["status"], "PROOF_FAILED")
+
+    def test_research_visual_summary_reuses_png_presentations(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first = root / "first.png"
+            second = root / "second.png"
+            Image.new("RGB", (1800, 300), "navy").save(first)
+            Image.new("RGB", (900, 200), "gold").save(second)
+
+            payload, receipt = compose_research_visual_summary(
+                (("Attempt 1", first), ("Attempt 2", second))
+            )
+
+            output = root / "summary.png"
+            output.write_bytes(payload)
+            with Image.open(output) as rendered:
+                self.assertEqual(rendered.width, 1536)
+            self.assertEqual(len(receipt["sources"]), 2)
+            self.assertFalse(receipt["scientific_authority"])
+            self.assertEqual(
+                receipt["output"]["sha256"], hashlib.sha256(payload).hexdigest()
+            )
 
 
 if __name__ == "__main__":

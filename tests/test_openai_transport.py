@@ -453,16 +453,32 @@ class OpenAITransportTests(unittest.TestCase):
             self.assertEqual(len(provider.deleted), 3)
 
     def test_incomplete_response_is_not_accepted(self) -> None:
-        provider = FakeProvider()
-        provider.response_status = "incomplete"
-        with self.assertRaises(ProviderTransportError) as captured:
-            PacketV8ResponsesTransport(provider).send_turn(
-                instructions="instructions",
-                prompt="prompt",
-                packet_dir=None,
-                previous_response_id="resp-1",
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = AutomatedRunStore.create(
+                Path(temp_dir),
+                run_id="incomplete-run",
+                protocol_snapshot={"schema": "test"},
+                initial_packet={"packet_id": "packet"},
             )
-        self.assertEqual(captured.exception.kind, ProviderFailureKind.MALFORMED_RESPONSE)
+            provider = FakeProvider()
+            provider.response_status = "incomplete"
+            with self.assertRaises(ProviderTransportError) as captured:
+                PacketV8ResponsesTransport(provider).send_turn(
+                    instructions="instructions",
+                    prompt="prompt",
+                    packet_dir=None,
+                    previous_response_id="resp-1",
+                    run_store=store,
+                    turn_id="review-01",
+                )
+            self.assertEqual(captured.exception.kind, ProviderFailureKind.MALFORMED_RESPONSE)
+            evidence = json.loads(
+                (store.run_dir / "transport/review-01/incomplete-response.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(evidence["status"], "incomplete")
+            self.assertFalse(evidence["provider_retry_authorized"])
 
     def test_failure_classifier_separates_control_and_ambiguous_failures(self) -> None:
         cases = [
