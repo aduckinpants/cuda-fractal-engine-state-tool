@@ -12,6 +12,7 @@ from cuda_fractal_state_tool.openai_transport import (
     PromptCachePolicy,
     ProviderFile,
     ProviderResponse,
+    TransportCancelled,
     TransportResource,
 )
 from cuda_fractal_state_tool.pricing_policy import load_pricing_policy
@@ -83,6 +84,7 @@ class ResearchProviderDispatcherTests(unittest.TestCase):
             run_store=store,
             cost=cost,
             model_profile=profile,
+            minimum_generation_spacing_seconds=0,
         )
         payload = b'{"context":"exact"}\n'
         path = root / "context.json"
@@ -172,6 +174,58 @@ class ResearchProviderDispatcherTests(unittest.TestCase):
                     for event in dispatcher.run_store.read_events()
                 )
             )
+
+    def test_negative_generation_spacing_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dispatcher, _provider, transport, _resource = self._fixture(Path(temp_dir), "10")
+            with self.assertRaisesRegex(ValueError, "spacing cannot be negative"):
+                ResearchProviderDispatcher(
+                    transport=transport,
+                    run_store=dispatcher.run_store,
+                    cost=dispatcher.cost,
+                    model_profile=dispatcher.model_profile,
+                    minimum_generation_spacing_seconds=-1,
+                )
+
+    def test_generation_spacing_is_cancellable_before_provider_dispatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dispatcher, provider, _transport, resource = self._fixture(Path(temp_dir), "10")
+            dispatcher.minimum_generation_spacing_seconds = 65
+            dispatcher.dispatch(
+                stage=ResearchProviderStage.REVIEW,
+                turn_id="review-1",
+                prompt="Review exact evidence.",
+                packet_dir=None,
+                additional_resources=(resource,),
+            )
+            cancellation_checks = 0
+
+            def cancel_during_pacing() -> bool:
+                nonlocal cancellation_checks
+                cancellation_checks += 1
+                return cancellation_checks >= 4
+
+            dispatcher.cancelled = cancel_during_pacing
+
+            with self.assertRaisesRegex(TransportCancelled, "pre-dispatch pacing"):
+                dispatcher.dispatch(
+                    stage=ResearchProviderStage.PLANNER,
+                    turn_id="planner-2",
+                    prompt="Plan a measured follow-up.",
+                    packet_dir=None,
+                    additional_resources=(resource,),
+                )
+
+            self.assertEqual(provider.generated, 1)
+            self.assertEqual(len(provider.requests), 1)
+            pacing = [
+                event
+                for event in dispatcher.run_store.read_events()
+                if event["event_type"] == "research_provider_pacing"
+            ]
+            self.assertEqual(len(pacing), 1)
+            self.assertEqual(pacing[0]["payload"]["turn_id"], "planner-2")
+            self.assertFalse(pacing[0]["payload"]["provider_dispatch_started"])
 
 
 if __name__ == "__main__":

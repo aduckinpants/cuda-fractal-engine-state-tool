@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -9,6 +10,7 @@ from .json_utils import loads_strict_no_duplicates
 from .openai_transport import (
     DispatchAuthorizationRejected,
     PacketV8ResponsesTransport,
+    TransportCancelled,
     TransportInputCountResult,
     TransportResource,
     TransportTurnResult,
@@ -27,6 +29,8 @@ Use only the attached Packet V8 and controller evidence as authority.
 Answer only the requested stage contract. Never equate replay proof or automated promotion with human acceptance.
 Do not provide private chain-of-thought; provide the concise conclusions and exact structured artifact requested.
 """
+
+DEFAULT_RESEARCH_PROVIDER_MINIMUM_SPACING_SECONDS = 65.0
 
 
 @dataclass(frozen=True)
@@ -47,6 +51,7 @@ class ResearchProviderDispatcher:
         cost: ResearchCostController,
         model_profile: ModelProfileV1,
         cancelled: Callable[[], bool] = lambda: False,
+        minimum_generation_spacing_seconds: float = DEFAULT_RESEARCH_PROVIDER_MINIMUM_SPACING_SECONDS,
     ) -> None:
         if cost.model_profile != model_profile:
             raise ValueError("Research provider dispatcher model profile disagrees with cost authority")
@@ -55,7 +60,38 @@ class ResearchProviderDispatcher:
         self.cost = cost
         self.model_profile = model_profile
         self.cancelled = cancelled
+        if minimum_generation_spacing_seconds < 0:
+            raise ValueError("Research provider spacing cannot be negative")
+        self.minimum_generation_spacing_seconds = float(minimum_generation_spacing_seconds)
+        self._last_provider_response_monotonic: float | None = None
         self._finalized_turns: dict[str, TransportTurnResult] = {}
+
+    def _pace_generation_dispatch(self, turn_id: str) -> None:
+        completed = self._last_provider_response_monotonic
+        if completed is None or self.minimum_generation_spacing_seconds <= 0:
+            return
+        deadline = completed + self.minimum_generation_spacing_seconds
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        self._append_event(
+            "research_provider_pacing",
+            {
+                "turn_id": turn_id,
+                "minimum_spacing_seconds": self.minimum_generation_spacing_seconds,
+                "planned_wait_seconds": round(remaining, 6),
+                "provider_dispatch_started": False,
+            },
+        )
+        while True:
+            if self.cancelled():
+                raise TransportCancelled(
+                    "Research provider dispatch was cancelled during pre-dispatch pacing"
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            time.sleep(min(0.25, remaining))
 
     @staticmethod
     def _output_text_from_raw_response(raw: object) -> str:
@@ -183,6 +219,7 @@ class ResearchProviderDispatcher:
             },
         )
         self._finalized_turns[turn_id] = result
+        self._last_provider_response_monotonic = time.monotonic()
         return result
 
     def _record_budget(
@@ -309,6 +346,7 @@ class ResearchProviderDispatcher:
             self._record_budget(turn_id, decision)
             if not decision.authorized:
                 raise DispatchAuthorizationRejected(decision.rejection_reason or "Dollar gate rejected")
+            self._pace_generation_dispatch(turn_id)
 
         result = self.transport.send_turn(
             instructions=RESEARCH_PROVIDER_INSTRUCTIONS,
