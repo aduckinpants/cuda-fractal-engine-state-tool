@@ -12,6 +12,7 @@ from .research_context import (
     build_planner_context,
     build_review_context,
     build_synthesis_context,
+    seal_prior_round_ledger,
     seal_communication_context,
 )
 from .research_cost import ResearchProviderStage
@@ -35,6 +36,7 @@ from .scientific_record import (
     EvidenceReference,
     make_evidence_reference,
 )
+from .sweep_presentation import compose_research_visual_summary
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,7 @@ class ResearchSessionRunner:
         self.controller = controller
         self.provider = provider
         self.results = results
+        self._provider_cleanup_attempted = False
 
     @staticmethod
     def _execution_blocker(evidence: ResearchExecutionEvidence) -> str | None:
@@ -86,37 +89,12 @@ class ResearchSessionRunner:
             ),
             current_bundle=self.controller.current_bundle,
         )
-        self.controller.run_store.write_evidence_once_json(
-            "result/controller-closeout.json",
-            {
-                "controller_disposition": controller_disposition,
-                "reason": reason,
-                "attempts_consumed": self.controller.attempts_consumed,
-                "provider_retry_authorized": False,
-                "human_acceptance": False,
-            },
-        )
-        active = self.controller.run_store.load_active_turn()
-        projection = dict(active["projection"])
-        projection["disposition"] = controller_disposition
-        self.controller.run_store.record_transition(
-            "research_session_closed",
-            {
-                "controller_disposition": controller_disposition,
-                "scientific_conclusion": "NO_SCIENTIFIC_CONCLUSION",
-                "provider_retry_authorized": False,
-                "reason": reason,
-            },
-            projection,
-        )
-        return ResearchSessionRunResult(
-            sealed,
-            ResearchResultDisposition.MANUAL_REVIEW_REQUIRED,
-            self.controller.current_bundle,
-            self.controller.attempts_consumed,
-            False,
-            self._visual_paths(),
-            controller_disposition,
+        return self._finalize_run(
+            sealed=sealed,
+            disposition=ResearchResultDisposition.MANUAL_REVIEW_REQUIRED,
+            alternate_available=False,
+            controller_disposition=controller_disposition,
+            reason=reason,
         )
 
     def run(self) -> ResearchSessionRunResult:
@@ -126,14 +104,38 @@ class ResearchSessionRunner:
         )
         try:
             while self.controller.state is ResearchSessionState.PLANNING:
+                ledger_path = seal_prior_round_ledger(
+                    run_store=self.controller.run_store,
+                    bundle=self.controller.current_bundle,
+                    packet_lineage=list(
+                        getattr(self.controller, "current_packet_lineage", [])
+                    ),
+                    attempts_consumed=self.controller.attempts_consumed,
+                    maximum_experiment_rounds=(
+                        self.controller.brief.maximum_experiment_rounds
+                    ),
+                    spent_cost_usd=str(
+                        getattr(getattr(self.provider, "cost", None), "spent_cost_usd", "0")
+                    ),
+                    hard_budget_usd=str(
+                        getattr(
+                            getattr(self.provider, "cost", None),
+                            "hard_budget_usd",
+                            self.controller.brief.hard_dollar_budget,
+                        )
+                    ),
+                )
                 planner = build_planner_context(
-                    self.controller.brief, self.controller.current_bundle
+                    self.controller.brief,
+                    self.controller.current_bundle,
+                    prior_round_ledger_path=ledger_path,
                 )
                 response = self.provider.dispatch(
                     stage=ResearchProviderStage.PLANNER,
                     turn_id=f"planner-{self.controller.attempts_consumed + 1:02d}",
                     prompt=planner.prompt,
                     packet_dir=self.controller.current_bundle.packet_dir,
+                    additional_resources=planner.resources,
                     planner_may_execute=(
                         self.controller.attempts_consumed
                         < self.controller.brief.maximum_experiment_rounds
@@ -159,6 +161,7 @@ class ResearchSessionRunner:
                         turn_id=f"correction-{self.controller.attempts_consumed + 1:02d}",
                         prompt=correction_prompt,
                         packet_dir=self.controller.current_bundle.packet_dir,
+                        additional_resources=planner.resources,
                         planner_may_execute=True,
                         correction_available=False,
                         alternate_communication_required=alternate_required,
@@ -272,15 +275,13 @@ class ResearchSessionRunner:
                         required_deliverable=True,
                     )
                     alternate_available = report is not None
-            return ResearchSessionRunResult(
-                sealed,
-                disposition,
-                self.controller.current_bundle,
-                self.controller.attempts_consumed,
-                alternate_available,
-                self._visual_paths(),
-                disposition.value,
+            result = self._finalize_run(
+                sealed=sealed,
+                disposition=disposition,
+                alternate_available=alternate_available,
+                controller_disposition=disposition.value,
             )
+            return result
         except DispatchAuthorizationRejected as exc:
             brief_sha = canonical_json_sha256(self.controller.brief.to_dict())
             sealed = self.results.seal_synthesis_failure(
@@ -288,30 +289,327 @@ class ResearchSessionRunner:
                 research_brief_sha256=brief_sha,
                 current_bundle=self.controller.current_bundle,
             )
-            self.controller.run_store.write_evidence_once_json(
-                "result/controller-closeout.json",
-                {
-                    "controller_disposition": "BUDGET_EXHAUSTED",
-                    "reason": str(exc),
-                    "attempts_consumed": self.controller.attempts_consumed,
-                    "provider_retry_authorized": False,
-                    "human_acceptance": False,
-                },
+            result = self._finalize_run(
+                sealed=sealed,
+                disposition=ResearchResultDisposition.MANUAL_REVIEW_REQUIRED,
+                alternate_available=False,
+                controller_disposition="BUDGET_EXHAUSTED",
+                reason=str(exc),
             )
-            return ResearchSessionRunResult(
-                sealed,
-                ResearchResultDisposition.MANUAL_REVIEW_REQUIRED,
-                self.controller.current_bundle,
-                self.controller.attempts_consumed,
-                False,
-                self._visual_paths(),
-                "BUDGET_EXHAUSTED",
-            )
+            return result
         finally:
+            if not self._provider_cleanup_attempted:
+                self.provider.transport.close_owned_files(
+                    run_store=self.controller.run_store,
+                    reason="question_research_session_aborted",
+                )
+
+    def _event_projection(self) -> dict[str, Any]:
+        active_path = self.controller.run_store.active_turn_path
+        if active_path.is_file():
+            return dict(self.controller.run_store.load_active_turn()["projection"])
+        return {
+            "state": getattr(self.controller.state, "value", str(self.controller.state)),
+            "disposition": "RUNNING",
+            "attempts_consumed": self.controller.attempts_consumed,
+            "maximum_experiment_rounds": (
+                self.controller.brief.maximum_experiment_rounds
+            ),
+            "current_research_base": {
+                "packet_id": self.controller.current_bundle.packet_id,
+                "manifest_sha256": self.controller.current_bundle.manifest_sha256,
+                "finding_id": self.controller.current_bundle.finding_id,
+            },
+            "current_packet_lineage": list(
+                getattr(self.controller, "current_packet_lineage", [])
+            ),
+            "pending_round_plan_sha256": None,
+        }
+
+    def _append_result_event(
+        self,
+        event_type: str,
+        payload: dict[str, Any],
+        **projection_updates: Any,
+    ) -> None:
+        projection = self._event_projection()
+        projection.update(projection_updates)
+        self.controller.run_store.record_transition(event_type, payload, projection)
+
+    def _seal_navigation_workspace(
+        self,
+        *,
+        sealed: SealedResearchResult,
+        disposition: ResearchResultDisposition,
+        controller_disposition: str,
+        cleanup_complete: bool,
+        reason: str | None,
+    ) -> tuple[Path | None, Path, Path]:
+        visual_sources = self._visual_paths()
+        visual_summary: Path | None = None
+        if visual_sources:
+            summary_bytes, summary_receipt = compose_research_visual_summary(
+                tuple(
+                    (f"Experiment attempt {index}", path)
+                    for index, path in enumerate(visual_sources, start=1)
+                )
+            )
+            visual_summary = self.controller.run_store.write_evidence_once_bytes(
+                "result/visual-summary.png", summary_bytes
+            )
+            self.controller.run_store.write_evidence_once_json(
+                "result/visual-summary-receipt.json", summary_receipt
+            )
+
+        entries: list[dict[str, Any]] = []
+
+        def add(role: str, path: Path, *, identity: dict[str, Any] | None = None) -> None:
+            if not path.is_file():
+                return
+            entries.append(
+                {
+                    "artifact_role": role,
+                    "local_path": str(path.resolve()),
+                    "sha256": sha256_file(path),
+                    "identity": identity or {},
+                }
+            )
+
+        run_dir = self.controller.run_store.run_dir
+        for relative, role in (
+            ("manifest.json", "question_run_manifest"),
+            ("result/scientific-record.json", "scientific_record"),
+            ("result/working-session.md", "working_session_report"),
+            ("result/disposition.json", "result_disposition"),
+            ("result/visual-summary.png", "visual_summary"),
+            ("result/visual-summary-receipt.json", "visual_summary_receipt"),
+            ("transport/provider-file-cleanup.json", "provider_cleanup_receipt"),
+        ):
+            add(role, run_dir / relative)
+        packet = self.controller.current_bundle
+        for filename, role in (
+            ("packet.md", "current_packet_index"),
+            ("manifest.json", "current_packet_manifest"),
+            ("state.json", "current_packet_state"),
+        ):
+            add(
+                role,
+                packet.packet_dir / filename,
+                identity={"packet_id": packet.packet_id},
+            )
+        for evidence in self.controller.execution_history:
+            attempt_identity = {"attempt_number": evidence.attempt_number}
+            attempt_dir = run_dir / "attempts" / f"{evidence.attempt_number:03d}"
+            for filename, role in (
+                ("round-plan.json", "locked_round_plan"),
+                ("execution-ref.json", "experiment_execution_reference"),
+                ("review-decision.json", "research_review_decision"),
+            ):
+                add(role, attempt_dir / filename, identity=attempt_identity)
+            proofs: list[tuple[Any, dict[str, Any]]] = []
+            if evidence.proof is not None:
+                proofs.append(
+                    (evidence.proof, {**attempt_identity, "proof_id": evidence.proof.proof_id})
+                )
+            if evidence.sweep is not None:
+                sweep = evidence.sweep
+                sweep_identity = {**attempt_identity, "sweep_id": sweep.sweep_id}
+                receipt_path = getattr(sweep, "receipt_path", None)
+                if isinstance(receipt_path, Path):
+                    add("scalar_sweep_receipt", receipt_path, identity=sweep_identity)
+                if sweep.web_review_dir is not None:
+                    add(
+                        "scalar_sweep_contact_sheet",
+                        sweep.web_review_dir / "contact-sheet.png",
+                        identity=sweep_identity,
+                    )
+                    add(
+                        "scalar_sweep_evidence",
+                        sweep.web_review_dir / "sweep-evidence.json",
+                        identity=sweep_identity,
+                    )
+                for member in sweep.members:
+                    if member.proof_result is not None:
+                        proofs.append(
+                            (
+                                member.proof_result,
+                                {
+                                    **sweep_identity,
+                                    "member_index": member.index,
+                                    "proof_id": member.proof_result.proof_id,
+                                },
+                            )
+                        )
+            for proof, identity in proofs:
+                add("proof_receipt", proof.receipt_path, identity=identity)
+                if proof.candidate_display_path is not None:
+                    add(
+                        "proof_candidate_display",
+                        proof.candidate_display_path,
+                        identity=identity,
+                    )
+        entries.sort(key=lambda item: (item["artifact_role"], item["local_path"]))
+        index_path = self.controller.run_store.write_evidence_once_json(
+            "result/artifact-index.json",
+            {
+                "research_artifact_index_version": 1,
+                "question_run_id": run_dir.name,
+                "navigation_only": True,
+                "scientific_authority": "referenced artifacts and receipts",
+                "artifacts": entries,
+            },
+        )
+        closeout = {
+            "research_closeout_version": 1,
+            "controller_disposition": controller_disposition,
+            "scientific_conclusion": sealed.scientific_record.conclusion.value,
+            "scientific_record_sha256": sealed.scientific_record.sha256,
+            "attempts_consumed": self.controller.attempts_consumed,
+            "current_research_base": {
+                "packet_id": packet.packet_id,
+                "manifest_sha256": packet.manifest_sha256,
+                "finding_id": packet.finding_id,
+                "human_acceptance": False,
+                "launched": False,
+            },
+            "packet_lineage": list(
+                getattr(self.controller, "current_packet_lineage", [])
+            ),
+            "provider_cleanup_complete": cleanup_complete,
+            "spent_cost_usd": str(
+                getattr(getattr(self.provider, "cost", None), "spent_cost_usd", "0")
+            ),
+            "artifact_index_sha256": sha256_file(index_path),
+            "visual_summary_sha256": (
+                sha256_file(visual_summary) if visual_summary is not None else None
+            ),
+            "reason": reason,
+            "provider_retry_authorized": False,
+            "human_acceptance": False,
+        }
+        closeout_path = self.controller.run_store.write_evidence_once_json(
+            "result/closeout.json", closeout
+        )
+        self.controller.run_store.write_evidence_once_json(
+            "result/controller-closeout.json", closeout
+        )
+        return visual_summary, index_path, closeout_path
+
+    def _finalize_run(
+        self,
+        *,
+        sealed: SealedResearchResult,
+        disposition: ResearchResultDisposition,
+        alternate_available: bool,
+        controller_disposition: str,
+        reason: str | None = None,
+    ) -> ResearchSessionRunResult:
+        self._append_result_event(
+            "scientific_record_sealed",
+            {
+                "scientific_conclusion": sealed.scientific_record.conclusion.value,
+                "scientific_record_sha256": sealed.scientific_record.sha256,
+                "validation_error": sealed.synthesis_validation_error,
+            },
+            final_record_sha256=sealed.scientific_record.sha256,
+            scientific_conclusion=sealed.scientific_record.conclusion.value,
+        )
+        self._append_result_event(
+            "working_report_rendered",
+            {
+                "path": str(sealed.working_report_path.resolve()),
+                "sha256": sha256_file(sealed.working_report_path),
+            },
+            final_record_sha256=sealed.scientific_record.sha256,
+            scientific_conclusion=sealed.scientific_record.conclusion.value,
+        )
+        cleanup_complete = True
+        cleanup_error: str | None = None
+        self._provider_cleanup_attempted = True
+        try:
             self.provider.transport.close_owned_files(
                 run_store=self.controller.run_store,
                 reason="question_research_session_closed",
             )
+        except Exception as exc:
+            cleanup_complete = False
+            cleanup_error = str(exc)
+            disposition = ResearchResultDisposition.MANUAL_REVIEW_REQUIRED
+            controller_disposition = "PROVIDER_CLEANUP_FAILED"
+            reason = cleanup_error if reason is None else f"{reason}; {cleanup_error}"
+        cleanup_path = (
+            self.controller.run_store.run_dir / "transport/provider-file-cleanup.json"
+        )
+        if not cleanup_path.is_file():
+            self.controller.run_store.write_evidence_once_json(
+                "transport/provider-file-cleanup.json",
+                {
+                    "reason": "question_research_session_closed",
+                    "cleanup_complete": cleanup_complete,
+                    "remaining_provider_file_ids": [],
+                    "failures": [] if cleanup_error is None else [cleanup_error],
+                },
+            )
+        self._append_result_event(
+            "provider_cleanup_completed",
+            {
+                "cleanup_complete": cleanup_complete,
+                "receipt_sha256": sha256_file(cleanup_path),
+                "error": cleanup_error,
+            },
+            cleanup_complete=cleanup_complete,
+        )
+        disposition_path = self.controller.run_store.run_dir / "result/disposition.json"
+        current_disposition = json.loads(disposition_path.read_text(encoding="utf-8"))
+        if current_disposition.get("controller_disposition") != controller_disposition:
+            current_disposition["controller_disposition"] = controller_disposition
+            current_disposition["error"] = reason
+            self.controller.run_store.write_evidence_json(
+                "result/disposition.json", current_disposition
+            )
+        visual_summary, index_path, closeout_path = self._seal_navigation_workspace(
+            sealed=sealed,
+            disposition=disposition,
+            controller_disposition=controller_disposition,
+            cleanup_complete=cleanup_complete,
+            reason=reason,
+        )
+        terminal_state = (
+            "COMPLETED"
+            if disposition is ResearchResultDisposition.COMPLETED
+            else "MANUAL_REVIEW_REQUIRED"
+        )
+        self._append_result_event(
+            "research_session_closed",
+            {
+                "controller_disposition": controller_disposition,
+                "scientific_conclusion": sealed.scientific_record.conclusion.value,
+                "scientific_record_sha256": sealed.scientific_record.sha256,
+                "artifact_index_sha256": sha256_file(index_path),
+                "closeout_sha256": sha256_file(closeout_path),
+                "cleanup_complete": cleanup_complete,
+                "provider_retry_authorized": False,
+            },
+            state=terminal_state,
+            disposition=controller_disposition,
+            controller_disposition=controller_disposition,
+            scientific_conclusion=sealed.scientific_record.conclusion.value,
+            pending_round_plan_sha256=None,
+            final_record_sha256=sealed.scientific_record.sha256,
+            cleanup_complete=cleanup_complete,
+        )
+        visuals = self._visual_paths()
+        if visual_summary is not None:
+            visuals = (*visuals, visual_summary)
+        return ResearchSessionRunResult(
+            sealed,
+            disposition,
+            self.controller.current_bundle,
+            self.controller.attempts_consumed,
+            alternate_available,
+            visuals,
+            controller_disposition,
+        )
 
     def _visual_paths(self) -> tuple[Path, ...]:
         paths: list[Path] = []

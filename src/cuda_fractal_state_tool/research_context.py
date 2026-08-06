@@ -41,7 +41,79 @@ class ResearchStageContext:
     context_path: Path | None = None
 
 
-def build_planner_context(brief: ResearchBrief, bundle: AgentBundle) -> ResearchStageContext:
+def seal_prior_round_ledger(
+    *,
+    run_store: ResearchRunStore,
+    bundle: AgentBundle,
+    packet_lineage: list[dict[str, Any]],
+    attempts_consumed: int,
+    maximum_experiment_rounds: int,
+    spent_cost_usd: str,
+    hard_budget_usd: str,
+) -> Path | None:
+    if attempts_consumed == 0:
+        return None
+    rounds: list[dict[str, Any]] = []
+    tested_values: dict[str, list[int | float]] = {}
+    for attempt in range(1, attempts_consumed + 1):
+        attempt_dir = run_store.run_dir / "attempts" / f"{attempt:03d}"
+        round_record: dict[str, Any] = {"attempt_number": attempt}
+        for filename, key in (
+            ("round-plan.json", "round_plan"),
+            ("execution-ref.json", "execution"),
+            ("review-decision.json", "review"),
+        ):
+            path = attempt_dir / filename
+            if path.is_file():
+                payload = path.read_bytes()
+                round_record[key] = json.loads(payload.decode("utf-8"))
+                round_record[f"{key}_sha256"] = hashlib.sha256(payload).hexdigest()
+        payload_path = attempt_dir / "payload.json"
+        if payload_path.is_file() and round_record.get("round_plan", {}).get("action") == "SCALAR_SWEEP":
+            payload = json.loads(payload_path.read_text(encoding="utf-8"))
+            axis = payload.get("axis") if isinstance(payload, dict) else None
+            if isinstance(axis, dict):
+                path = axis.get("path")
+                values = axis.get("values")
+                if isinstance(path, str) and isinstance(values, list):
+                    collected = tested_values.setdefault(path, [])
+                    for value in values:
+                        if isinstance(value, (int, float)) and not isinstance(value, bool):
+                            if value not in collected:
+                                collected.append(value)
+        rounds.append(round_record)
+    ledger = {
+        "prior_round_ledger_version": 1,
+        "current_research_base": {
+            "packet_id": bundle.packet_id,
+            "manifest_sha256": bundle.manifest_sha256,
+            "finding_id": bundle.finding_id,
+        },
+        "packet_lineage": packet_lineage,
+        "attempts_consumed": attempts_consumed,
+        "attempts_remaining": maximum_experiment_rounds - attempts_consumed,
+        "spent_cost_usd": spent_cost_usd,
+        "hard_budget_usd": hard_budget_usd,
+        "tested_scalar_values": tested_values,
+        "prior_rounds": rounds,
+        "continuation_contract": {
+            "use_prior_results": True,
+            "repeated_sweep_values_require_replication_controls": True,
+            "current_packet_is_only_authoring_base": True,
+        },
+    }
+    next_attempt = attempts_consumed + 1
+    return run_store.write_evidence_once_bytes(
+        f"attempts/{next_attempt:03d}/prior-round-ledger.json", _json_bytes(ledger)
+    )
+
+
+def build_planner_context(
+    brief: ResearchBrief,
+    bundle: AgentBundle,
+    *,
+    prior_round_ledger_path: Path | None = None,
+) -> ResearchStageContext:
     pipeline = load_packet_active_color_pipeline_context(bundle.packet_dir)
     prompt = f"""Investigate the sealed research brief using the attached Packet V8.
 
@@ -59,11 +131,35 @@ SINGLE_OVERRIDE uses
 these ordered fields: Chosen experiment; Why this experiment; Locked prediction; Observation
 channel; Disconfirmation condition; Camera and fixed-state policy; Hostile self-review conclusion.
 SCALAR_SWEEP uses: Selected bracket; Why this bracket; Locked trend prediction; Observation
-channel; Disconfirmation condition; Fixed-state and camera policy; Hostile self-review conclusion.
+channel; Disconfirmation condition; Fixed-state and camera policy; Replication controls; Hostile
+self-review conclusion. Use `Replication controls: none` unless an exact prior-tested value is
+deliberately repeated as a control; otherwise use one JSON numeric array containing exactly the
+repeated values. For a local response-law question prefer a dense bracket around the captured or
+current value. Use a broad logarithmic bracket only for coarse regime discovery.
 For an executable outcome, include exactly one bare JSON payload after those fields.
 ANSWER_READY and UNRESOLVED_REPORT contain no JSON. Do not ask a clarification question.
 """
-    return ResearchStageContext(prompt=prompt, resources=())
+    resources: tuple[TransportResource, ...] = ()
+    if prior_round_ledger_path is not None:
+        prompt += """
+
+This is a continuation, not a blind restart. The attached prior-round ledger is controller-built
+from immutable run evidence. Use its tested values, predictions, outcomes, review decision, current
+research base, remaining attempts, and remaining budget. Do not repeat a tested sweep value unless
+you explicitly declare it as a replication control.
+"""
+        resources = (
+            _resource(
+                prior_round_ledger_path,
+                filename="prior-round-ledger.json",
+                role="prior_round_ledger",
+            ),
+        )
+    return ResearchStageContext(
+        prompt=prompt,
+        resources=resources,
+        context_path=prior_round_ledger_path,
+    )
 
 
 def build_review_context(
@@ -151,9 +247,12 @@ Bind every conclusion to the attached exact round plan and result evidence. Comp
 prediction with what the evidence establishes, including failure or no-effect evidence.
 The first nonempty line must be exactly `RESEARCH_GATE: <GATE>`, with the colon present, where
 `<GATE>` is one of `COMPLETE_RESEARCH`, `CONTINUE_RETAIN_BASE`,
-`CONTINUE_PROMOTE_RESULT`, or `UNRESOLVED`. Then return exactly these five labeled fields in
+`CONTINUE_PROMOTE_RESULT`, or `UNRESOLVED`. Then return exactly these six labeled fields in
 this order: `Prediction outcome:`, `Evidence assessment:`, `Selected result:`,
-`Next research step:`, and `Hostile self-review conclusion:`. Use `Selected result: none`
+`Next action class:`, `Next research step:`, and `Hostile self-review conclusion:`. The next
+action class is exactly one of `STATE_EXPERIMENT`, `ANALYSIS_ONLY`, `ANSWER_READY`, or
+`UNAVAILABLE`. `CONTINUE_RETAIN_BASE` and `CONTINUE_PROMOTE_RESULT` are legal only with
+`Next action class: STATE_EXPERIMENT`. Use `Selected result: none`
 unless `CONTINUE_PROMOTE_RESULT` nominates one exact `single:<proof_id>` or
 `sweep:<sweep_id>:<member_index>`. Return plain text only: no JSON object and no code fence.
 Promotion requires one exact replay-proven result identity; replay proof alone never implies it.

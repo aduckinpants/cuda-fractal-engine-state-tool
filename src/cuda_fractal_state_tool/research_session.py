@@ -24,9 +24,15 @@ from .research_protocol import (
     parse_planner_response,
     parse_review_response,
     round_plan_document,
+    scalar_sweep_replication_controls,
 )
 from .research_run_store import ResearchRunStore
-from .scalar_sweep import ScalarBracketSweepService, ScalarSweepResult, ScalarSweepValidation
+from .scalar_sweep import (
+    ScalarBracketSweepService,
+    ScalarSweepResult,
+    ScalarSweepValidation,
+    parse_scalar_sweep_plan,
+)
 from .state_override import StateOverrideMaterialization, materialize_state_override
 from .state_override_proof import StateOverrideProofResult, execute_state_override_proof
 
@@ -252,6 +258,25 @@ class ResearchSessionController:
                 validation = self.services.validate_sweep(
                     self.current_bundle, decision.payload_text
                 )
+                controls = scalar_sweep_replication_controls(decision)
+                prior_values: list[int | float] = []
+                for earlier in self.execution_history:
+                    if earlier.sweep is None:
+                        continue
+                    earlier_payload = (
+                        self._attempt_dir(earlier.attempt_number) / "payload.json"
+                    ).read_text(encoding="utf-8")
+                    earlier_plan = parse_scalar_sweep_plan(earlier_payload)
+                    if earlier_plan.axis_path == validation.plan.axis_path:
+                        prior_values.extend(earlier_plan.values)
+                repeated = tuple(
+                    value for value in validation.plan.values if value in prior_values
+                )
+                if set(repeated) != set(controls):
+                    raise ValueError(
+                        "Repeated sweep values must exactly match declared replication controls; "
+                        f"repeated={list(repeated)!r}, declared={list(controls)!r}"
+                    )
         except Exception as exc:
             self._correction_available = not correction and not self._correction_used
             self._record(
@@ -400,6 +425,7 @@ class ResearchSessionController:
                     "sweep_id": decision.selected_result.sweep_id,
                     "member_index": decision.selected_result.member_index,
                 },
+                "next_action_class": decision.next_action_class.value,
                 "next_research_step": decision.next_research_step,
                 "hostile_self_review_conclusion": decision.hostile_self_review_conclusion,
             },
@@ -420,6 +446,7 @@ class ResearchSessionController:
             self.prepared = None
             self.state = ResearchSessionState.PLANNING
         else:
+            self.prepared = None
             self.state = ResearchSessionState.READY_FOR_SYNTHESIS
             self.disposition = (
                 ResearchSessionDisposition.REVIEW_COMPLETE

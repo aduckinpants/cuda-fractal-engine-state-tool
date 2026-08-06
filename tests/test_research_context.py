@@ -13,6 +13,7 @@ from cuda_fractal_state_tool.research_context import (
     build_planner_context,
     build_review_context,
     build_synthesis_context,
+    seal_prior_round_ledger,
     seal_communication_context,
 )
 from cuda_fractal_state_tool.research_protocol import ResearchBrief
@@ -134,6 +135,59 @@ class ResearchContextTests(unittest.TestCase):
             self.assertIn("RESEARCH_ACTION: <ACTION>", context.prompt)
             self.assertIn("with the colon present", context.prompt)
             self.assertIn("Do not write `RESEARCH_ACTION <ACTION>`", context.prompt)
+
+    def test_second_planner_receives_immutable_prior_round_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            store = self._store(root)
+            bundle = _bundle(root)
+            attempt = store.run_dir / "attempts/001"
+            attempt.mkdir()
+            (attempt / "round-plan.json").write_text(
+                '{"action":"SCALAR_SWEEP","prediction":"grows"}\n',
+                encoding="utf-8",
+            )
+            (attempt / "payload.json").write_text(
+                '{"sweep_version":1,"axis":{"path":"params.epsilon",'
+                '"values":[1e-7,1e-6,1e-5]},'
+                '"member_failure_policy":"continue_independent"}\n',
+                encoding="utf-8",
+            )
+            (attempt / "execution-ref.json").write_text(
+                '{"sweep":{"sweep_id":"sweep-1"}}\n', encoding="utf-8"
+            )
+            (attempt / "review-decision.json").write_text(
+                '{"gate":"CONTINUE_RETAIN_BASE",'
+                '"next_action_class":"STATE_EXPERIMENT",'
+                '"next_research_step":"refine locally"}\n',
+                encoding="utf-8",
+            )
+            ledger_path = seal_prior_round_ledger(
+                run_store=store,
+                bundle=bundle,
+                packet_lineage=[{"packet_id": bundle.packet_id}],
+                attempts_consumed=1,
+                maximum_experiment_rounds=2,
+                spent_cost_usd="0.08",
+                hard_budget_usd="0.30",
+            )
+            self.assertIsNotNone(ledger_path)
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                ledger["tested_scalar_values"]["params.epsilon"],
+                [1e-7, 1e-6, 1e-5],
+            )
+            self.assertEqual(ledger["attempts_remaining"], 1)
+            with patch(
+                "cuda_fractal_state_tool.research_context.load_packet_active_color_pipeline_context",
+                return_value={"active_chain_text": "Phase Orbit -> Phase Wheel"},
+            ):
+                context = build_planner_context(
+                    _brief(), bundle, prior_round_ledger_path=ledger_path
+                )
+            self.assertEqual(context.resources[0].role, "prior_round_ledger")
+            self.assertIn("continuation, not a blind restart", context.prompt)
+            self.assertIn("dense bracket", context.prompt)
 
     def test_synthesis_context_embeds_run_history_and_hash_bound_inventory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

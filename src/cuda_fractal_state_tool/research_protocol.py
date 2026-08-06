@@ -24,6 +24,10 @@ _SAFE_PATH = re.compile(r"^(params|view)(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
 _JSON_FENCE = re.compile(r"```([^\r\n`]*)\r?\n(.*?)```", re.DOTALL)
 
 
+def _reject_json_constant(token: str) -> None:
+    raise ValueError(f"Non-finite JSON constant is forbidden: {token}")
+
+
 class ResearchAction(str, Enum):
     ANSWER_READY = "ANSWER_READY"
     SINGLE_OVERRIDE = "SINGLE_OVERRIDE"
@@ -36,6 +40,13 @@ class ResearchReviewGate(str, Enum):
     CONTINUE_RETAIN_BASE = "CONTINUE_RETAIN_BASE"
     CONTINUE_PROMOTE_RESULT = "CONTINUE_PROMOTE_RESULT"
     UNRESOLVED = "UNRESOLVED"
+
+
+class ResearchNextActionClass(str, Enum):
+    STATE_EXPERIMENT = "STATE_EXPERIMENT"
+    ANALYSIS_ONLY = "ANALYSIS_ONLY"
+    ANSWER_READY = "ANSWER_READY"
+    UNAVAILABLE = "UNAVAILABLE"
 
 
 class UnresolvedReason(str, Enum):
@@ -78,6 +89,7 @@ class ResearchReviewDecision:
     prediction_outcome: str
     evidence_assessment: str
     selected_result: ResearchResultSelection
+    next_action_class: ResearchNextActionClass
     next_research_step: str
     hostile_self_review_conclusion: str
 
@@ -279,6 +291,7 @@ _EXECUTABLE_HEADINGS = {
         "Observation channel",
         "Disconfirmation condition",
         "Fixed-state and camera policy",
+        "Replication controls",
         "Hostile self-review conclusion",
     ),
 }
@@ -352,6 +365,7 @@ def parse_planner_response(text: str) -> PlannerDecision:
             parse_state_override(payload_text)
         else:
             parse_scalar_sweep_plan(payload_text)
+            scalar_sweep_replication_controls_from_text(fields["Replication controls"])
     elif action is ResearchAction.ANSWER_READY:
         if "```" in text:
             raise ValueError("ANSWER_READY must not contain a code block")
@@ -412,16 +426,26 @@ def parse_review_response(text: str) -> ResearchReviewDecision:
             "Prediction outcome",
             "Evidence assessment",
             "Selected result",
+            "Next action class",
             "Next research step",
             "Hostile self-review conclusion",
         ),
     )
     selection = ResearchResultSelection.parse(fields["Selected result"])
+    try:
+        next_action_class = ResearchNextActionClass(fields["Next action class"])
+    except ValueError as exc:
+        raise ValueError("Research review next action class is unsupported") from exc
     if gate is ResearchReviewGate.CONTINUE_PROMOTE_RESULT:
         if selection.kind == "none":
             raise ValueError("CONTINUE_PROMOTE_RESULT requires one exact selected result")
     elif selection.kind != "none":
         raise ValueError(f"{gate.value} must use Selected result: none")
+    if gate in {
+        ResearchReviewGate.CONTINUE_PROMOTE_RESULT,
+        ResearchReviewGate.CONTINUE_RETAIN_BASE,
+    } and next_action_class is not ResearchNextActionClass.STATE_EXPERIMENT:
+        raise ValueError(f"{gate.value} requires Next action class: STATE_EXPERIMENT")
     return ResearchReviewDecision(
         gate=gate,
         source_text=text,
@@ -429,9 +453,36 @@ def parse_review_response(text: str) -> ResearchReviewDecision:
         prediction_outcome=fields["Prediction outcome"],
         evidence_assessment=fields["Evidence assessment"],
         selected_result=selection,
+        next_action_class=next_action_class,
         next_research_step=fields["Next research step"],
         hostile_self_review_conclusion=fields["Hostile self-review conclusion"],
     )
+
+
+def scalar_sweep_replication_controls_from_text(raw: str) -> tuple[int | float, ...]:
+    raw = raw.strip()
+    if raw.lower() == "none":
+        return ()
+    try:
+        value = json.loads(raw, parse_constant=_reject_json_constant)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("Replication controls must be `none` or one JSON numeric array") from exc
+    if not isinstance(value, list):
+        raise ValueError("Replication controls must be `none` or one JSON numeric array")
+    controls: list[int | float] = []
+    for item in value:
+        if isinstance(item, bool) or not isinstance(item, (int, float)):
+            raise ValueError("Replication controls must contain only finite JSON numbers")
+        if item in controls:
+            raise ValueError("Replication controls must not contain duplicates")
+        controls.append(item)
+    return tuple(controls)
+
+
+def scalar_sweep_replication_controls(decision: PlannerDecision) -> tuple[int | float, ...]:
+    if decision.action is not ResearchAction.SCALAR_SWEEP:
+        return ()
+    return scalar_sweep_replication_controls_from_text(decision.fields["Replication controls"])
 
 
 def authorize_single_override(
@@ -497,6 +548,11 @@ def round_plan_document(decision: PlannerDecision, *, attempt_number: int) -> di
         "observation_channel": decision.fields["Observation channel"],
         "disconfirmation_condition": decision.fields["Disconfirmation condition"],
         "camera_policy": decision.fields[camera_field],
+        "replication_controls": (
+            list(scalar_sweep_replication_controls(decision))
+            if decision.action is ResearchAction.SCALAR_SWEEP
+            else []
+        ),
         "hostile_self_review_conclusion": decision.fields["Hostile self-review conclusion"],
         "payload_sha256": decision.payload_sha256,
         "source_response_sha256": decision.source_response_sha256,

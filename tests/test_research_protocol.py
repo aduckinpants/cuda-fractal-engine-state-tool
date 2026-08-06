@@ -53,7 +53,9 @@ Hostile self-review conclusion: One authorized observable leaf is changed.
 """
 
 
-def _sweep_response(path: str = "params.epsilon") -> str:
+def _sweep_response(
+    path: str = "params.epsilon", *, replication_controls: str = "none"
+) -> str:
     return f"""RESEARCH_ACTION: SCALAR_SWEEP
 
 Selected bracket: Five epsilon values around the base.
@@ -62,6 +64,7 @@ Locked trend prediction: Radius increases with epsilon.
 Observation channel: Phase Orbit [phase_orbit] -> Phase Wheel [phase_wheel_palette].
 Disconfirmation condition: Radius is unordered or unchanged.
 Fixed-state and camera policy: Every member retains the exact base except epsilon.
+Replication controls: {replication_controls}
 Hostile self-review conclusion: The axis is authorized and the members are independent.
 
 ```json
@@ -132,6 +135,15 @@ class ResearchProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "outside research permission"):
             authorize_scalar_sweep(parse_planner_response(_sweep_response("params.max_iter")), permissions)
 
+    def test_scalar_sweep_seals_explicit_replication_controls(self) -> None:
+        decision = parse_planner_response(
+            _sweep_response(replication_controls="[5e-7]")
+        )
+        plan = round_plan_document(decision, attempt_number=2)
+        self.assertEqual(plan["replication_controls"], [5e-7])
+        with self.assertRaisesRegex(ValueError, "Replication controls"):
+            parse_planner_response(_sweep_response(replication_controls="all"))
+
     def test_answer_ready_is_provisional_and_has_no_payload(self) -> None:
         decision = parse_planner_response(
             """RESEARCH_ACTION: ANSWER_READY
@@ -173,6 +185,7 @@ Hostile self-review conclusion: No authorized state change can answer this quest
 Prediction outcome: The radius increased as predicted.
 Evidence assessment: Member two is replay-proven and informative.
 Selected result: sweep:sweep-1:2
+Next action class: STATE_EXPERIMENT
 Next research step: Rebind to the selected member.
 Hostile self-review conclusion: The exact member identity is explicit.
 """
@@ -188,6 +201,7 @@ Hostile self-review conclusion: The exact member identity is explicit.
 Prediction outcome: Unknown.
 Evidence assessment: Incomplete.
 Selected result: none
+Next action class: STATE_EXPERIMENT
 Next research step: Continue.
 Hostile self-review conclusion: No exact result was selected.
 """
@@ -201,8 +215,23 @@ Hostile self-review conclusion: No exact result was selected.
 Prediction outcome: Supported.
 Evidence assessment: Complete.
 Selected result: single:proof-1
+Next action class: ANSWER_READY
 Next research step: none
 Hostile self-review conclusion: Complete.
+"""
+            )
+
+    def test_continuation_review_requires_executable_state_action(self) -> None:
+        with self.assertRaisesRegex(ValueError, "requires Next action class: STATE_EXPERIMENT"):
+            parse_review_response(
+                """RESEARCH_GATE: CONTINUE_RETAIN_BASE
+
+Prediction outcome: The trend is visible but not measured.
+Evidence assessment: Full-resolution boundary measurement is still needed.
+Selected result: none
+Next action class: ANALYSIS_ONLY
+Next research step: Measure the boundary radius from the exact frames.
+Hostile self-review conclusion: The requested next operation is unavailable here.
 """
             )
 

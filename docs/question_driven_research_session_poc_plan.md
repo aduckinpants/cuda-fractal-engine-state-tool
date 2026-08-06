@@ -302,6 +302,60 @@ closes at `MANUAL_REVIEW_REQUIRED`.
   conservative adaptive ceiling before any provider generation.
 - After one authorized golden run, stop for user review before broader use.
 
+## Post-Golden Transaction Repair Addendum
+
+The first complete paid golden run proved the vertical slice but exposed three
+host-controller defects. The user authorized one bounded repair and rerun. This
+addendum supersedes the earlier Slice 5 stop only for the work below.
+
+### Repair slice A: continuous bounded investigation
+
+- A second planner call remains a fresh provider context, but receives one
+  compact controller-built ledger derived from immutable prior round plans,
+  execution references, and review decisions.
+- The ledger identifies the current research base, packet lineage, tested scalar
+  values, prior predictions and outcomes, review gates and next steps, remaining
+  attempt count, and remaining dollar budget.
+- Scalar-sweep planner output declares `Replication controls`. A prior tested
+  value may recur only when it is named there; undeclared repetition fails local
+  validation, and a declared control must be both prior-tested and present in the
+  new sweep.
+- The planner rubric distinguishes a dense local bracket for response-law work
+  from a broad logarithmic bracket for regime discovery.
+
+### Repair slice B: executable review gates
+
+- Review output adds one exact `Next action class`: `STATE_EXPERIMENT`,
+  `ANALYSIS_ONLY`, `ANSWER_READY`, or `UNAVAILABLE`.
+- `CONTINUE_RETAIN_BASE` and `CONTINUE_PROMOTE_RESULT` are legal only with
+  `STATE_EXPERIMENT`. Analysis-only or unavailable advice cannot spend another
+  planner round.
+- The review artifact retains both the free-text next step and its exact class.
+
+### Repair slice C: terminal authority and result workspace
+
+- Expected closeout appends events for scientific-record sealing, deterministic
+  Working Session rendering, provider cleanup, and terminal session closure.
+- The final `active-turn.json` projection clears the pending plan and records the
+  terminal state, controller disposition, scientific conclusion, record hash,
+  and cleanup completion. Resume must not repeat a sealed synthesis turn.
+- Results add a controller-generated navigation index and closeout receipt. A
+  visual run gets one deterministic summary assembled from proof-owned PNG
+  presentation artifacts; no second proof-image conversion path is introduced.
+- Working Session and alternate communication statuses are represented
+  separately.
+
+### Repair qualification gate
+
+- Run focused protocol, controller, result, and runner tests, then the complete
+  Python 3.14 suite and the local golden workflow.
+- Hostile-review the transaction and responsibility ownership.
+- Run exactly one fresh count-gated paid golden rerun under the already approved
+  `$0.30` hard cap. Record exact cost and compare continuity, gate legality,
+  terminal projection, result navigation, and scientific discipline with the
+  first live pass.
+- Stop again for user review. Broader automated use remains unauthorized.
+
 ## Golden court
 
 Historical source capture:

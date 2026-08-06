@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,7 @@ from types import SimpleNamespace
 from cuda_fractal_state_tool.agent_bundle import AgentBundle
 from cuda_fractal_state_tool.research_protocol import ResearchBrief
 from cuda_fractal_state_tool.research_run_store import ResearchRunStore
+from cuda_fractal_state_tool.scalar_sweep import parse_scalar_sweep_plan
 from cuda_fractal_state_tool.research_session import (
     ResearchRouteServices,
     ResearchSessionController,
@@ -71,8 +73,11 @@ Hostile self-review conclusion: One authorized leaf changes.
 """
 
 
-def _sweep_response() -> str:
-    return """RESEARCH_ACTION: SCALAR_SWEEP
+def _sweep_response(
+    values: str = "[0.0000005,0.00000075,0.00000125]",
+    replication_controls: str = "none",
+) -> str:
+    return f"""RESEARCH_ACTION: SCALAR_SWEEP
 
 Selected bracket: Three epsilon values.
 Why this bracket: Test an ordered radius trend.
@@ -80,20 +85,23 @@ Locked trend prediction: Radius grows with epsilon.
 Observation channel: Phase Orbit [phase_orbit] -> Phase Wheel [phase_wheel_palette].
 Disconfirmation condition: Radius is unordered.
 Fixed-state and camera policy: Preserve every non-axis field.
+Replication controls: {replication_controls}
 Hostile self-review conclusion: The authorized axis is observable.
 
 ```json
-{"sweep_version":1,"axis":{"path":"params.epsilon","values":[0.0000005,0.00000075,0.00000125]},"member_failure_policy":"continue_independent"}
+{{"sweep_version":1,"axis":{{"path":"params.epsilon","values":{values}}},"member_failure_policy":"continue_independent"}}
 ```
 """
 
 
 def _review(gate: str, selected: str = "none") -> str:
+    next_class = "STATE_EXPERIMENT" if gate.startswith("CONTINUE_") else "ANSWER_READY"
     return f"""RESEARCH_GATE: {gate}
 
 Prediction outcome: The evidence is consistent with the prediction.
 Evidence assessment: The replay evidence is sufficient for this gate.
 Selected result: {selected}
+Next action class: {next_class}
 Next research step: Continue only when requested by this gate.
 Hostile self-review conclusion: The exact result and authority were checked.
 """
@@ -121,7 +129,7 @@ class _Services:
         )
 
     def validate_sweep(self, bundle, payload):
-        return SimpleNamespace(plan=SimpleNamespace(axis_path="params.epsilon"))
+        return SimpleNamespace(plan=parse_scalar_sweep_plan(payload))
 
     def execute_sweep(self, bundle, payload):
         return SimpleNamespace(
@@ -185,6 +193,9 @@ class ResearchSessionControllerTests(unittest.TestCase):
             self.assertEqual(evidence.proof.proof_id, "proof-1")
             controller.apply_review(_review("COMPLETE_RESEARCH"))
             self.assertEqual(controller.state, ResearchSessionState.READY_FOR_SYNTHESIS)
+            self.assertIsNone(
+                store.load_active_turn()["projection"]["pending_round_plan_sha256"]
+            )
             self.assertEqual(services.promotions, [])
 
     def test_failed_planner_payload_allows_exactly_one_correction_without_attempt(self) -> None:
@@ -212,6 +223,32 @@ class ResearchSessionControllerTests(unittest.TestCase):
             self.assertEqual(controller.state, ResearchSessionState.PLANNING)
             self.assertEqual(controller.current_packet.packet_id, "packet-2")
             self.assertEqual(len(services.promotions), 1)
+
+    def test_second_sweep_repetition_requires_exact_declared_controls(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            controller, _services, _store = self._controller(Path(temp_dir))
+            controller.prepare_planner_response(_sweep_response())
+            controller.execute_prepared()
+            controller.apply_review(_review("CONTINUE_RETAIN_BASE"))
+
+            repeated = _sweep_response(
+                values="[0.00000075,0.0000015,0.000002]"
+            )
+            with self.assertRaisesRegex(ValueError, "declared replication controls"):
+                controller.prepare_planner_response(repeated)
+
+            corrected = _sweep_response(
+                values="[0.00000075,0.0000015,0.000002]",
+                replication_controls="[0.00000075]",
+            )
+            controller.prepare_planner_response(corrected, correction=True)
+            plan = json.loads(
+                (
+                    controller.run_store.run_dir
+                    / "attempts/002/round-plan.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(plan["replication_controls"], [0.00000075])
 
     def test_final_attempt_cannot_continue_or_promote(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

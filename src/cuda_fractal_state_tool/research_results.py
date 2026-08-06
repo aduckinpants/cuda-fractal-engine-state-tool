@@ -270,6 +270,9 @@ class ResearchResultService:
             "controller_disposition": disposition.value,
             "scientific_conclusion": record.conclusion.value,
             "scientific_record_sha256": record.sha256,
+            "working_session_status": "rendered",
+            "alternate_communication_status": communication_status,
+            # Retained as a compatibility alias for the pre-repair result reader.
             "communication_status": communication_status,
             "error": error,
             "human_acceptance": False,

@@ -262,7 +262,12 @@ class ResearchSessionRunnerTests(unittest.TestCase):
             services = ResearchRouteServices(
                 validate_single=lambda *args: None,
                 execute_single=lambda *args: None,
-                validate_sweep=lambda *args: SimpleNamespace(),
+                validate_sweep=lambda *args: SimpleNamespace(
+                    plan=SimpleNamespace(
+                        axis_path="params.epsilon",
+                        values=(1e-7, 5e-7, 1e-6),
+                    )
+                ),
                 execute_sweep=lambda *args: sweep,
                 promote=lambda *args: None,
             )
@@ -292,6 +297,7 @@ Locked trend prediction: The visible boundary will move monotonically.
 Observation channel: Compare the fixed-camera frames.
 Disconfirmation condition: Non-monotone or absent movement.
 Fixed-state and camera policy: Keep every other state path fixed.
+Replication controls: none
 Hostile self-review conclusion: Runtime drift invalidates continuation.
 
 ```json
@@ -404,6 +410,24 @@ Hostile self-review conclusion: Runtime drift invalidates continuation.
             self.assertEqual(result.controller_disposition, "COMPLETED")
             self.assertTrue(provider.transport.closed)
             self.assertTrue((store.run_dir / "result/working-session.md").is_file())
+            self.assertTrue((store.run_dir / "result/artifact-index.json").is_file())
+            self.assertTrue((store.run_dir / "result/closeout.json").is_file())
+            self.assertFalse((store.run_dir / "result/visual-summary.png").exists())
+            disposition = json.loads(
+                (store.run_dir / "result/disposition.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(disposition["working_session_status"], "rendered")
+            self.assertEqual(
+                disposition["alternate_communication_status"], "not_requested"
+            )
+            events = store.read_events()
+            self.assertEqual(events[-1]["event_type"], "research_session_closed")
+            active = store.load_active_turn()["projection"]
+            self.assertEqual(active["state"], "COMPLETED")
+            self.assertEqual(active["controller_disposition"], "COMPLETED")
+            self.assertEqual(active["scientific_conclusion"], "ANSWER_PARTIAL")
+            self.assertIsNone(active["pending_round_plan_sha256"])
+            self.assertTrue(active["cleanup_complete"])
 
     def test_budget_refusal_closes_without_experiment_or_provider_retry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
