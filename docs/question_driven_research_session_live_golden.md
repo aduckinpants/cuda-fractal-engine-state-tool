@@ -382,3 +382,43 @@ decoder or scientific authority.
 This is the first complete paid golden pass of the bounded question-driven
 research route. The implementation is ready for user review; it does not claim
 that the scientific content or resulting presentation has been user accepted.
+
+## Post-run contract alignment rerun
+
+External review of Attempt 9 identified contract ambiguity around censored
+observations, round-plan hashes, lifecycle event names, and structured
+confidence. The bounded correction introduced exact per-result observation
+classifications, explicit semantic and file hash names for round plans,
+provider dispatch/recovery facts, and controller-validated confidence and
+limitations.
+
+The fresh count-gated run completed normally:
+
+```text
+run:
+D:\salt-fractal\cuda-fractal-engine-state-tool\question-runs\question-research-a9001590-b54a-403c-a3bc-3cd4ddfcbbad
+
+counted initial input:   171,141 tokens
+hard budget:             $0.30
+round 1 sweep:            5 / 5 REPLAY_PROVEN
+round 1 review:           COMPLETE_RESEARCH
+next action class:        ANSWER_READY
+calculated total:         $0.0896828
+scientific conclusion:    ANSWER_PARTIAL
+structured confidence:    MODERATE
+result disposition:       COMPLETED
+provider cleanup:         complete, zero remaining IDs
+```
+
+The planner selected a tighter five-point epsilon bracket ending at `2e-6`, so
+all five results remained observable and were classified `SUPPORTED`. The run
+qualifies strict result coverage, review-to-synthesis classification identity,
+and structured confidence live. It does not claim a live
+`CENSORED_OUT_OF_FRAME` result because the earlier `1e-5` endpoint was not part
+of this experiment; that controller/schema branch is covered by the local
+replay-proven censored-member court.
+
+All 26 artifact-index entries were present and hash-matching. The terminal event
+and active projection both closed at `COMPLETED`; provider cleanup reported zero
+remaining file IDs. The implementation checkpoint is ready for user review and
+does not claim human acceptance.
