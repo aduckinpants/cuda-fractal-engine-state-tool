@@ -649,11 +649,36 @@ class PacketV8ResponsesTransport:
                 raise classify_provider_failure(exc, dispatched=True) from exc
             latency_seconds = time.monotonic() - started_at
             if response.status != "completed":
+                incomplete_details = (
+                    response.raw.get("incomplete_details")
+                    if isinstance(response.raw, dict)
+                    else None
+                )
+                if run_store is not None:
+                    run_store.write_evidence_json(
+                        f"transport/{turn_id}/incomplete-response.json",
+                        sanitize_evidence(
+                            {
+                                "response": response.raw,
+                                "response_id": response.id,
+                                "status": response.status,
+                                "incomplete_details": incomplete_details,
+                                "requested_model": model,
+                                "resolved_model": response.model,
+                                "reasoning_effort": reasoning_effort,
+                                "model_profile_sha256": model_profile_sha256,
+                                "usage": response.usage,
+                                "latency_seconds": latency_seconds,
+                                "provider_retry_authorized": False,
+                            }
+                        ),
+                    )
                 raise ProviderTransportError(
                     ProviderFailureKind.CONTENT_POLICY
                     if "content_policy" in json.dumps(response.raw).lower()
                     else ProviderFailureKind.MALFORMED_RESPONSE,
-                    f"Provider response did not complete: {response.status}",
+                    "Provider response did not complete: "
+                    f"{response.status}; incomplete_details={incomplete_details!r}",
                 )
             if (
                 not response.id

@@ -65,3 +65,40 @@ malformed model output:
 
 The next paid boundary is one fresh count-gated rerun of the same golden brief
 after focused and full-suite qualification of this hardening checkpoint.
+
+## Attempt 2 — planner and sweep pass; review incomplete
+
+The hardened planner prompt passed without a correction. Luna selected a
+three-member epsilon bracket, and the controller executed all members through
+the canonical Scalar Bracket Sweep V1 and action-free replay path.
+
+```text
+run:
+D:\salt-fractal\cuda-fractal-engine-state-tool\question-runs\question-research-5a2e9f01-6c64-4779-9f15-f56d856e6982
+
+planner actual:         $0.0379758
+experiment attempts:    1
+sweep ID:               f1750d5e-1707-4797-8ea0-bc78e0397ed7
+sweep disposition:      COMPLETE
+members:                3 / 3 REPLAY_PROVEN
+controller boundary:    REVIEW_READY
+scientific conclusion:  NO_SCIENTIFIC_CONCLUSION
+```
+
+The provider returned an `incomplete` review response. The transport correctly
+did not treat it as a review gate and did not retry, but it exposed two further
+bounded pressure points:
+
+- the non-completed provider object was rejected before its exact status and
+  `incomplete_details` were written to durable evidence;
+- the 4,000-token review output ceiling was too narrow for Luna/high at this
+  context size.
+
+The review call was authorized at a conservative `$0.0411112`; the pre-existing
+transport did not preserve enough usage evidence to calculate its actual billed
+cost. Even treating the authorized maximum as spent, the attempt remained well
+below the `$0.30` hard cap.
+
+The next hardening checkpoint preserves incomplete response evidence before
+raising and raises only the review output ceiling to 8,000 tokens. It does not
+authorize a provider retry within Attempt 2. A fresh count-gated run is required.
