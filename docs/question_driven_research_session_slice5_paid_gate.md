@@ -10,6 +10,7 @@ provider count-only request: PASS — exact first request counted under user-app
 provider generation qualification: PASS — bounded two-round run completed
 scientific-record synthesis: PASS — ANSWER_PARTIAL sealed without fallback
 provider cleanup: PASS — zero remaining provider file IDs
+post-golden transaction repair: PASS — local court plus one bounded paid rerun
 user acceptance: PENDING
 ```
 
@@ -19,6 +20,14 @@ provider pacing, authority-drift closure, synthesis capacity, and compact
 proof-value grounding. The final run completed at `$0.1699958`. Exact run
 evidence and each bounded hardening response are recorded in
 `docs/question_driven_research_session_live_golden.md`.
+
+The post-golden rerun closed after one five-member sweep because the fresh
+review classified its proposed next work as `ANALYSIS_ONLY`; no blind second
+planner call was authorized. It cost `$0.0927388`, sealed `ANSWER_PARTIAL`, and
+finished with coherent terminal events, projection, cleanup, artifact index,
+closeout receipt, and visual summary. Round-two ledger transport and
+repeat-control enforcement pass the offline court but were not exercised by
+that one-round live result.
 
 ## Fresh golden authority
 
@@ -116,7 +125,7 @@ Focused court:
 Complete Python 3.14 suite after the final implementation pass:
 
 ```text
-290 passed
+295 passed
 ```
 
 ## Cost disclosure before count-only
@@ -190,6 +199,8 @@ recount.
   de-duplicates repeated sweep pairs, and retains `human_acceptance: false`.
 - The final provider cleanup receipt records zero remaining file IDs.
 
-All planned implementation slices and the authorized paid golden qualification
-are complete. The branch stops at the required user-review boundary. No broader
-automation use, merge, or new product mutation is implied by this evidence.
+All planned implementation slices, the post-golden transaction repair, and the
+authorized paid rerun are complete. The branch stops at the required user-review
+boundary. The form transaction was qualified; this evidence does not claim a
+visual-layout review of the form itself. No broader automation use, merge, or
+new product mutation is implied by this evidence.

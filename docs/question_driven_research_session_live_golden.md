@@ -299,6 +299,86 @@ the runtime's observed float representation rather than echoing the requests.
 The deterministic Working Session report remains explicit that replay proof is
 not human acceptance.
 
+## Post-golden transaction repair and Attempt 9
+
+External review of Attempt 8 correctly identified three host-side defects:
+
+- planner round two was a fresh restart without prior-round evidence;
+- a review could request unavailable analysis-only work while authorizing
+  another state-planning round;
+- synthesis outputs existed without terminal append-only events or a matching
+  `active-turn.json` projection.
+
+The bounded repair adds a hash-bound compact prior-round ledger, explicit scalar
+replication controls, an exact review `next_action_class`, complete terminal
+events/projection, separate Working Session and alternate-communication status,
+and controller-owned result navigation and closeout artifacts. The prior-round
+ledger and repeat-control court are locally qualified. Attempt 9 did not need a
+second experiment, so live round-two continuity remains unexercised rather than
+being overstated.
+
+One launch wrapper was locally terminated after its planner request had been
+dispatched because the shell command had an incorrect 10-second timeout:
+
+```text
+aborted run:
+D:\salt-fractal\cuda-fractal-engine-state-tool\question-runs\question-research-debd67d6-7e6e-40a3-b3b3-4c3da3f7e8fb
+
+classification:          local harness abort; remote completion ambiguous
+resume/redispatch:       forbidden
+provider-file cleanup:   complete, zero remaining IDs
+product verdict:         none
+```
+
+The fresh qualification run then completed normally:
+
+```text
+run:
+D:\salt-fractal\cuda-fractal-engine-state-tool\question-runs\question-research-6440724c-b38d-43de-9ec4-5af4720831a3
+
+counted initial input:   171,141 tokens
+first-call maximum:      $0.0438282
+required with reserves: $0.1726282
+adaptive ceiling:       $0.2776
+hard budget:            $0.30
+round 1 sweep:           5 / 5 REPLAY_PROVEN
+round 1 review:          UNRESOLVED
+next action class:       ANALYSIS_ONLY
+second planner:          not dispatched
+synthesis input:         33,038 tokens
+calculated total:        $0.0927388
+scientific conclusion:   ANSWER_PARTIAL
+result disposition:      COMPLETED
+human acceptance:        false
+provider cleanup:        complete, zero remaining IDs
+```
+
+The review explicitly classified its desired full-resolution boundary
+measurement as `ANALYSIS_ONLY` and closed at synthesis instead of spending a
+blind planner round. The sealed record remains conservative: the lower four
+members show an apparent ordered change, but the `1e-05` endpoint loses the
+candidate boundary and the phase-color versus convergence-boundary mechanism
+remains unresolved.
+
+Terminal authority is now coherent:
+
+```text
+events:                  17 contiguous records
+last event:              research_session_closed
+active projection:       equal to the last event projection
+state:                   COMPLETED
+pending round plan:      null
+final record SHA-256:    f0ebc816bda4cbb74e3f49ae6abb1b9699626629587458c30fa88c707bd47e4d
+artifact index entries:  26, all files present and hash-matching
+visual summary SHA-256:  526add2942eda8baf57ea4c6786bf206ad6e7b7ede91e4f167e3da3102ba1398
+```
+
+The user-facing result directory now contains `artifact-index.json`,
+`closeout.json`, `visual-summary.png`, its derivation receipt, the scientific
+record, and the deterministic Working Session report. The visual summary is a
+navigation-only composition of proof-owned PNG evidence; it is not a new image
+decoder or scientific authority.
+
 This is the first complete paid golden pass of the bounded question-driven
 research route. The implementation is ready for user review; it does not claim
 that the scientific content or resulting presentation has been user accepted.
