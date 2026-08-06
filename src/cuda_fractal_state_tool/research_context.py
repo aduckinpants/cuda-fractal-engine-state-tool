@@ -148,8 +148,14 @@ def build_review_context(
         )
     prompt = """Review this completed experiment in a fresh context.
 Bind every conclusion to the attached exact round plan and result evidence. Compare the locked
-prediction with what the evidence establishes, including failure or no-effect evidence. Return
-exactly the five question_research_protocol.v1 review fields and one legal RESEARCH_GATE.
+prediction with what the evidence establishes, including failure or no-effect evidence.
+The first nonempty line must be exactly `RESEARCH_GATE: <GATE>`, with the colon present, where
+`<GATE>` is one of `COMPLETE_RESEARCH`, `CONTINUE_RETAIN_BASE`,
+`CONTINUE_PROMOTE_RESULT`, or `UNRESOLVED`. Then return exactly these five labeled fields in
+this order: `Prediction outcome:`, `Evidence assessment:`, `Selected result:`,
+`Next research step:`, and `Hostile self-review conclusion:`. Use `Selected result: none`
+unless `CONTINUE_PROMOTE_RESULT` nominates one exact `single:<proof_id>` or
+`sweep:<sweep_id>:<member_index>`. Return plain text only: no JSON object and no code fence.
 Promotion requires one exact replay-proven result identity; replay proof alone never implies it.
 """
     return ResearchStageContext(prompt, tuple(resources), context_path)

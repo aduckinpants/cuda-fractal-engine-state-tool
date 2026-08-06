@@ -102,3 +102,35 @@ below the `$0.30` hard cap.
 The next hardening checkpoint preserves incomplete response evidence before
 raising and raises only the review output ceiling to 8,000 tokens. It does not
 authorize a provider retry within Attempt 2. A fresh count-gated run is required.
+
+## Attempt 3 — full sweep and review content pass; review wire shape fails
+
+The 8,000-token review allowance eliminated the incomplete response. The
+planner again passed without correction, and all five sweep members were
+replay-proven.
+
+```text
+run:
+D:\salt-fractal\cuda-fractal-engine-state-tool\question-runs\question-research-d7bca1d4-d0ec-419a-87c8-70ba6e5902f4
+
+planner actual:         $0.0368214
+review actual:          $0.0425990
+calculated total:       $0.0794204
+experiment attempts:    1
+sweep ID:               47c37043-605b-462c-9b03-ba5350b19345
+sweep disposition:      COMPLETE
+members:                5 / 5 REPLAY_PROVEN
+controller boundary:    REVIEW_READY
+scientific conclusion:  NO_SCIENTIFIC_CONCLUSION
+```
+
+The review contained a useful prediction comparison and correctly described
+the five proof identities, but returned a JSON object with
+`"RESEARCH_GATE": "HOLD"`. The public protocol requires a colon-bearing plain
+text header and one of four exact legal gate values. The controller did not
+infer a gate from this malformed response and did not continue to synthesis.
+
+The next bounded hardening change makes the review wire contract literal in
+the fresh-context prompt: exact header, legal values, ordered field labels,
+selection syntax, and an explicit prohibition on JSON and code fences. The
+strict parser remains unchanged.

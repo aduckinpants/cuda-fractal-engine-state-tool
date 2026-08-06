@@ -117,6 +117,10 @@ class ResearchContextTests(unittest.TestCase):
             )
             self.assertEqual(context.resources[-1].media_role, "vision")
             self.assertIn("fresh context", context.prompt)
+            self.assertIn("RESEARCH_GATE: <GATE>", context.prompt)
+            self.assertIn("with the colon present", context.prompt)
+            self.assertIn("Return plain text only: no JSON object", context.prompt)
+            self.assertIn("Selected result: none", context.prompt)
 
     def test_planner_context_requires_literal_colon_bearing_action_header(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
