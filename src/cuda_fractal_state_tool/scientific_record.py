@@ -302,9 +302,24 @@ def _validate_value_receipts(value: Any, roots: ArtifactRootRegistry) -> None:
         }:
             raise ValueError("requested_canonical_emitted_values contains an invalid item")
         path = item["path"]
-        if not isinstance(path, str) or not path or path in seen:
-            raise ValueError("requested/canonical/emitted paths must be unique non-empty text")
-        seen.add(path)
+        if not isinstance(path, str) or not path:
+            raise ValueError("requested/canonical/emitted paths must be non-empty text")
+        identity = json.dumps(
+            {
+                "path": path,
+                "requested_value": item["requested_value"],
+                "canonical_value_status": item["canonical_value_status"],
+                "canonical_value": item["canonical_value"],
+                "emitted_value": item["emitted_value"],
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+        if identity in seen:
+            raise ValueError("requested/canonical/emitted values contain a duplicate item")
+        seen.add(identity)
         status = item["canonical_value_status"]
         if status not in {"available", "unavailable"}:
             raise ValueError("canonical_value_status must be available or unavailable")

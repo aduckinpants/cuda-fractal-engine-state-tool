@@ -26,7 +26,7 @@ DEFAULT_RESEARCH_STAGE_LIMITS = {
     ResearchProviderStage.PLANNER: ResearchStageLimit(200_000, 8_000),
     ResearchProviderStage.REVIEW: ResearchStageLimit(200_000, 8_000),
     ResearchProviderStage.CORRECTION: ResearchStageLimit(200_000, 4_000),
-    ResearchProviderStage.SYNTHESIS: ResearchStageLimit(100_000, 8_000),
+    ResearchProviderStage.SYNTHESIS: ResearchStageLimit(100_000, 12_000),
     ResearchProviderStage.COMMUNICATION: ResearchStageLimit(50_000, 6_000),
 }
 

@@ -117,6 +117,16 @@ class ResearchProviderDispatcher:
     def _load_durable_turn(self, turn_id: str) -> TransportTurnResult | None:
         response_path = self.run_store.run_dir / "transport" / turn_id / "response.json"
         if not response_path.is_file():
+            incomplete_path = (
+                self.run_store.run_dir
+                / "transport"
+                / turn_id
+                / "incomplete-response.json"
+            )
+            if incomplete_path.is_file():
+                raise RuntimeError(
+                    f"Durable incomplete provider response forbids redispatch: {turn_id}"
+                )
             return None
         value = loads_strict_no_duplicates(response_path.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
@@ -221,6 +231,76 @@ class ResearchProviderDispatcher:
         self._finalized_turns[turn_id] = result
         self._last_provider_response_monotonic = time.monotonic()
         return result
+
+    def _record_incomplete_turn_usage(
+        self,
+        *,
+        stage: ResearchProviderStage,
+        turn_id: str,
+    ) -> None:
+        path = (
+            self.run_store.run_dir
+            / "transport"
+            / turn_id
+            / "incomplete-response.json"
+        )
+        if not path.is_file():
+            return
+        value = loads_strict_no_duplicates(path.read_text(encoding="utf-8"))
+        if not isinstance(value, dict) or not isinstance(value.get("usage"), dict):
+            raise ValueError(f"Incomplete provider usage evidence is malformed: {turn_id}")
+        usage = value["usage"]
+        required = (
+            "input_tokens",
+            "cached_input_tokens",
+            "cache_write_tokens",
+            "output_tokens",
+        )
+        if any(
+            isinstance(usage.get(key), bool)
+            or not isinstance(usage.get(key), int)
+            or usage[key] < 0
+            for key in required
+        ):
+            raise ValueError(f"Incomplete provider usage values are invalid: {turn_id}")
+        resolved_model = value.get("resolved_model")
+        if not isinstance(resolved_model, str) or not resolved_model:
+            raise ValueError(f"Incomplete provider model identity is missing: {turn_id}")
+        actual = calculate_usage_cost(
+            self.cost.pricing_policy,
+            model_name=resolved_model,
+            input_tokens=usage["input_tokens"],
+            cached_input_tokens=usage["cached_input_tokens"],
+            cache_write_tokens=usage["cache_write_tokens"],
+            output_tokens=usage["output_tokens"],
+        )
+        self.cost.record_actual_cost(actual)
+        self.run_store.write_evidence_once_json(
+            f"cost/{turn_id}-incomplete-actual.json",
+            {
+                "stage": stage.value,
+                "provider_status": "incomplete",
+                "actual": actual.to_dict(),
+                "cumulative_calculated_cost_usd": decimal_text(
+                    self.cost.spent_cost_usd
+                ),
+            },
+        )
+        self._append_event(
+            "research_provider_incomplete_response",
+            {
+                "turn_id": turn_id,
+                "stage": stage.value,
+                "resolved_model": resolved_model,
+                "input_tokens": usage["input_tokens"],
+                "output_tokens": usage["output_tokens"],
+                "calculated_call_cost_usd": decimal_text(actual.cost_usd),
+                "cumulative_calculated_cost_usd": decimal_text(
+                    self.cost.spent_cost_usd
+                ),
+                "provider_redispatch": False,
+            },
+        )
 
     def _record_budget(
         self,
@@ -348,22 +428,26 @@ class ResearchProviderDispatcher:
                 raise DispatchAuthorizationRejected(decision.rejection_reason or "Dollar gate rejected")
             self._pace_generation_dispatch(turn_id)
 
-        result = self.transport.send_turn(
-            instructions=RESEARCH_PROVIDER_INSTRUCTIONS,
-            prompt=prompt,
-            packet_dir=packet_dir,
-            previous_response_id=None,
-            run_store=self.run_store,
-            turn_id=turn_id,
-            cancelled=self.cancelled,
-            model=self.model_profile.model,
-            reasoning_effort=self.model_profile.reasoning_effort,
-            model_profile_sha256=self.model_profile.sha256,
-            max_output_tokens=limit.maximum_output_tokens,
-            prompt_cache_policy=self.model_profile.prompt_cache_policy,
-            authorize_dispatch=authorize,
-            additional_resources=additional_resources,
-        )
+        try:
+            result = self.transport.send_turn(
+                instructions=RESEARCH_PROVIDER_INSTRUCTIONS,
+                prompt=prompt,
+                packet_dir=packet_dir,
+                previous_response_id=None,
+                run_store=self.run_store,
+                turn_id=turn_id,
+                cancelled=self.cancelled,
+                model=self.model_profile.model,
+                reasoning_effort=self.model_profile.reasoning_effort,
+                model_profile_sha256=self.model_profile.sha256,
+                max_output_tokens=limit.maximum_output_tokens,
+                prompt_cache_policy=self.model_profile.prompt_cache_policy,
+                authorize_dispatch=authorize,
+                additional_resources=additional_resources,
+            )
+        except Exception:
+            self._record_incomplete_turn_usage(stage=stage, turn_id=turn_id)
+            raise
         return self._finalize_turn(
             stage=stage,
             turn_id=turn_id,

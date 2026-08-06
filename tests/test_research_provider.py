@@ -12,6 +12,7 @@ from cuda_fractal_state_tool.openai_transport import (
     PromptCachePolicy,
     ProviderFile,
     ProviderResponse,
+    ProviderTransportError,
     TransportCancelled,
     TransportResource,
 )
@@ -226,6 +227,63 @@ class ResearchProviderDispatcherTests(unittest.TestCase):
             self.assertEqual(len(pacing), 1)
             self.assertEqual(pacing[0]["payload"]["turn_id"], "planner-2")
             self.assertFalse(pacing[0]["payload"]["provider_dispatch_started"])
+
+    def test_incomplete_response_cost_is_recorded_and_redispatch_is_forbidden(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dispatcher, provider, _transport, resource = self._fixture(Path(temp_dir), "10")
+
+            def incomplete_response(request, *, timeout_seconds):
+                provider.requests.append(request)
+                provider.generated += 1
+                return ProviderResponse(
+                    id="response-incomplete",
+                    model="gpt-5.6-luna",
+                    status="incomplete",
+                    output_text="partial",
+                    usage={
+                        "input_tokens": 1_000,
+                        "cached_input_tokens": 0,
+                        "cache_write_tokens": 0,
+                        "output_tokens": 8_000,
+                    },
+                    raw={
+                        "id": "response-incomplete",
+                        "status": "incomplete",
+                        "incomplete_details": {"reason": "max_output_tokens"},
+                    },
+                )
+
+            provider.create_response = incomplete_response
+            with self.assertRaises(ProviderTransportError):
+                dispatcher.dispatch(
+                    stage=ResearchProviderStage.SYNTHESIS,
+                    turn_id="synthesis-incomplete",
+                    prompt="Synthesize exact evidence.",
+                    packet_dir=None,
+                    additional_resources=(resource,),
+                )
+            self.assertGreater(dispatcher.cost.spent_cost_usd, 0)
+            self.assertTrue(
+                (
+                    dispatcher.run_store.run_dir
+                    / "cost/synthesis-incomplete-incomplete-actual.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                any(
+                    event["event_type"] == "research_provider_incomplete_response"
+                    for event in dispatcher.run_store.read_events()
+                )
+            )
+            with self.assertRaisesRegex(RuntimeError, "forbids redispatch"):
+                dispatcher.dispatch(
+                    stage=ResearchProviderStage.SYNTHESIS,
+                    turn_id="synthesis-incomplete",
+                    prompt="Do not resend.",
+                    packet_dir=None,
+                    additional_resources=(resource,),
+                )
+            self.assertEqual(provider.generated, 1)
 
 
 if __name__ == "__main__":

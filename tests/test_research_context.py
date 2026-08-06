@@ -178,6 +178,10 @@ class ResearchContextTests(unittest.TestCase):
             )
             self.assertEqual(len(context.resources), 2)
             self.assertEqual(context.resources[1].role, "proof_receipt")
+            self.assertIn("answer is one", context.prompt)
+            self.assertIn("unresolved_questions is an array of strings", context.prompt)
+            self.assertIn("same path may appear more than once", context.prompt)
+            self.assertIn("exactly `available` or `unavailable`", context.prompt)
 
     def test_communication_context_contains_only_sealed_science(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -239,6 +239,23 @@ def build_synthesis_context(
                 "emitted_value",
                 "evidence_references",
             ],
+            "wire_shape_rules": {
+                "answer": "non-empty string",
+                "claims": (
+                    "arrays of objects with exactly claim_id, text, and evidence_references"
+                ),
+                "unresolved_questions": "array of non-empty strings, not objects",
+                "requested_canonical_emitted_values": (
+                    "one object per distinct requested/emitted pair; a sweep path may repeat "
+                    "for different values"
+                ),
+                "canonical_value_status": "exactly available or unavailable",
+                "unavailable_canonical_value": "null",
+                "best_next_experiment": "non-empty string or null",
+                "evidence_references": (
+                    "copy exact objects from allowed_evidence_references; never invent or edit"
+                ),
+            },
             "top_level_fields": [
                 "scientific_record_version",
                 "source",
@@ -276,11 +293,25 @@ def build_synthesis_context(
             )
         )
     prompt = """Produce the audience-neutral scientific record for this bounded run.
-Return exactly one fenced JSON object and no prose outside it. Use scientific_record_version 1,
-the exact source identities from the synthesis context, and only its allowed evidence references.
+Return exactly one fenced JSON object and no prose outside it. Follow the exact top-level fields,
+field types, and wire_shape_rules in scientific_record_contract. In particular: answer is one
+string; unresolved_questions is an array of strings; each claim is exactly {claim_id, text,
+evidence_references}; and best_next_experiment is a string or null. Copy evidence-reference
+objects byte-for-field from allowed_evidence_references instead of inventing identities.
+The source object must copy all five declared source fields exactly, including
+`human_acceptance: false`.
+
+For requested_canonical_emitted_values, emit one item for every distinct requested/emitted value
+pair supported by an existing receipt. The same path may appear more than once for different sweep
+values. canonical_value_status is exactly `available` or `unavailable`; use `unavailable` and null
+when no existing normalization receipt provides a canonical value.
+
+Use scientific_record_version 1 and the exact source identities from the synthesis context.
 Separate established, inferred, contradicted, and unresolved material. CONTRADICTED applies only
-when the question's principal proposition was contradicted. best_next_experiment may be null.
-Do not infer science from replay success or image hashes alone and do not record human acceptance.
+when the question's principal proposition was contradicted. Keep the record concise enough to
+complete: use the shortest sufficient evidence set for each item and do not repeat explanatory
+prose across sections. Do not infer science from replay success or image hashes alone and do not
+record human acceptance.
 """
     return ResearchStageContext(prompt, tuple(resources), context_path)
 

@@ -168,3 +168,34 @@ provider dispatcher. A completed provider response starts a conservative
 65-second generation spacing window. Any following provider call waits before
 dispatch, remains cancellable during the wait, and records the pacing event.
 This is not a retry policy and does not resend failed or ambiguous turns.
+
+## Attempt 5 — end-to-end science path reached; synthesis contract exposed
+
+The paced run crossed every previously failing boundary:
+
+```text
+run:
+D:\salt-fractal\cuda-fractal-engine-state-tool\question-runs\question-research-fe0e0151-1198-4a80-8552-6f8d199d7cea
+
+planner actual:         $0.0393750
+review actual:          $0.0383838
+known completed total:  $0.0777588
+experiment attempts:    1
+sweep ID:               9cc22e1d-4186-4aa4-94b6-0ef7ad12a768
+sweep disposition:      COMPLETE
+members:                6 / 6 REPLAY_PROVEN
+review gate:            COMPLETE_RESEARCH
+current research base:  original Packet V8 retained
+```
+
+Pacing inserted the expected waits before review and synthesis, and no TPM
+refusal occurred. The synthesis response reached the provider's 8,000-token
+limit and was correctly rejected as incomplete with no retry. Its preserved
+partial output also exposed an underlying schema defect: a scalar sweep needs
+multiple requested/emitted receipts for one path, while the V1 validator had
+incorrectly required path uniqueness.
+
+The bounded correction raises synthesis capacity to 12,000 output tokens,
+makes the synthesis wire shape literal and concise, and permits repeated paths
+only for distinct requested/canonical/emitted tuples. It does not salvage the
+incomplete response or infer a scientific conclusion locally.

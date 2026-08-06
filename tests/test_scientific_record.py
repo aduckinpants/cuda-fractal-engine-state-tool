@@ -115,6 +115,54 @@ class ScientificRecordTests(unittest.TestCase):
         self.assertEqual(value["scientific_conclusion"], "NO_SCIENTIFIC_CONCLUSION")
         self.assertEqual(value["established_claims"], [])
 
+    def test_sweep_value_receipts_allow_one_path_with_distinct_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            registry, value, _response = self._fixture(root)
+            receipt = {
+                "requested_value_receipts": [
+                    {
+                        "path": "params.epsilon",
+                        "requested_value": 1e-8,
+                        "engine_emitted_value": 1e-8,
+                    },
+                    {
+                        "path": "params.epsilon",
+                        "requested_value": 1e-7,
+                        "engine_emitted_value": 1e-7,
+                    },
+                ]
+            }
+            receipt_bytes = (json.dumps(receipt) + "\n").encode("utf-8")
+            receipt_path = root / "run" / "proof.json"
+            receipt_path.write_bytes(receipt_bytes)
+            reference = dict(value["established_claims"][0]["evidence_references"][0])
+            reference["sha256"] = _sha(receipt_bytes)
+            value["established_claims"][0]["evidence_references"] = [reference]
+            value["requested_canonical_emitted_values"] = [
+                {
+                    "path": "params.epsilon",
+                    "requested_value": requested,
+                    "canonical_value_status": "unavailable",
+                    "canonical_value": None,
+                    "emitted_value": requested,
+                    "evidence_references": [reference],
+                }
+                for requested in (1e-8, 1e-7)
+            ]
+            response = "```json\n" + json.dumps(value) + "\n```"
+            parsed = self._parse(registry, response)
+            self.assertEqual(
+                len(parsed.value["requested_canonical_emitted_values"]), 2
+            )
+
+            value["requested_canonical_emitted_values"].append(
+                dict(value["requested_canonical_emitted_values"][0])
+            )
+            duplicate = "```json\n" + json.dumps(value) + "\n```"
+            with self.assertRaisesRegex(ValueError, "duplicate item"):
+                self._parse(registry, duplicate)
+
     def test_alternate_report_requires_established_claim_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             registry, _value, response = self._fixture(Path(temp_dir))
