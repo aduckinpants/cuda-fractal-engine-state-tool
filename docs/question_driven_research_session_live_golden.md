@@ -199,3 +199,32 @@ The bounded correction raises synthesis capacity to 12,000 output tokens,
 makes the synthesis wire shape literal and concise, and permits repeated paths
 only for distinct requested/canonical/emitted tuples. It does not salvage the
 incomplete response or infer a scientific conclusion locally.
+
+## Attempt 6 — concurrent runtime publication correctly exposed drift
+
+A separate engine publication changed the configured executable from
+`a52efdf113a7df3a75259f4dbc853402827c625d91190b12dd663790abef9f96` to
+`b2c8e11842da91142147a14e88d98caf31696fdbaabc8818698c70d91c0f5845`
+during the six-member sweep.
+
+```text
+run:
+D:\salt-fractal\cuda-fractal-engine-state-tool\question-runs\question-research-39ab17a9-567c-4cbc-9b6e-573e5081611e
+
+planner actual:         $0.0382290
+review actual:          $0.0406336
+calculated total:       $0.0788626
+sweep ID:               4af710bb-9bb1-43d4-a32c-46e84f1b17ff
+members before drift:   5 REPLAY_PROVEN
+member detecting drift: 1 PROOF_FAILED
+sweep disposition:      AUTHORITY_DRIFT
+```
+
+The sweep service correctly detected the change, but the research controller
+accepted a model `CONTINUE_RETAIN_BASE` gate and began pacing planner 02 against
+the now-stale Packet V8. The local harness was stopped during that cancellable
+wait before provider dispatch, so no second planner cost was incurred.
+
+`AUTHORITY_DRIFT` is now a terminal controller boundary immediately after local
+execution. It seals `NO_SCIENTIFIC_CONCLUSION`, skips review and synthesis,
+forbids continuation or promotion, and requires a fresh Packet V8 authority.

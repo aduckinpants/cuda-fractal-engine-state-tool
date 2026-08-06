@@ -21,7 +21,11 @@ from .research_results import (
     ResearchResultService,
     SealedResearchResult,
 )
-from .research_session import ResearchSessionController, ResearchSessionState
+from .research_session import (
+    ResearchExecutionEvidence,
+    ResearchSessionController,
+    ResearchSessionState,
+)
 from .scientific_record import (
     ArtifactRoot,
     ArtifactRootRegistry,
@@ -56,6 +60,61 @@ class ResearchSessionRunner:
         self.controller = controller
         self.provider = provider
         self.results = results
+
+    @staticmethod
+    def _execution_blocker(evidence: ResearchExecutionEvidence) -> str | None:
+        if evidence.sweep is not None and evidence.sweep.disposition == "AUTHORITY_DRIFT":
+            return (
+                "Published runtime or packet authority changed during the scalar sweep; "
+                "no review, continuation, promotion, or synthesis is authorized."
+            )
+        return None
+
+    def _close_execution_blocker(
+        self,
+        *,
+        reason: str,
+        controller_disposition: str,
+    ) -> ResearchSessionRunResult:
+        sealed = self.results.seal_synthesis_failure(
+            reason,
+            research_brief_sha256=canonical_json_sha256(
+                self.controller.brief.to_dict()
+            ),
+            current_bundle=self.controller.current_bundle,
+        )
+        self.controller.run_store.write_evidence_once_json(
+            "result/controller-closeout.json",
+            {
+                "controller_disposition": controller_disposition,
+                "reason": reason,
+                "attempts_consumed": self.controller.attempts_consumed,
+                "provider_retry_authorized": False,
+                "human_acceptance": False,
+            },
+        )
+        active = self.controller.run_store.load_active_turn()
+        projection = dict(active["projection"])
+        projection["disposition"] = controller_disposition
+        self.controller.run_store.record_transition(
+            "research_session_closed",
+            {
+                "controller_disposition": controller_disposition,
+                "scientific_conclusion": "NO_SCIENTIFIC_CONCLUSION",
+                "provider_retry_authorized": False,
+                "reason": reason,
+            },
+            projection,
+        )
+        return ResearchSessionRunResult(
+            sealed,
+            ResearchResultDisposition.MANUAL_REVIEW_REQUIRED,
+            self.controller.current_bundle,
+            self.controller.attempts_consumed,
+            False,
+            self._visual_paths(),
+            controller_disposition,
+        )
 
     def run(self) -> ResearchSessionRunResult:
         alternate_required = (
@@ -111,6 +170,12 @@ class ResearchSessionRunner:
                 }:
                     break
                 evidence = self.controller.execute_prepared()
+                blocker = self._execution_blocker(evidence)
+                if blocker is not None:
+                    return self._close_execution_blocker(
+                        reason=blocker,
+                        controller_disposition="AUTHORITY_DRIFT",
+                    )
                 review_context = build_review_context(
                     run_store=self.controller.run_store,
                     brief=self.controller.brief,

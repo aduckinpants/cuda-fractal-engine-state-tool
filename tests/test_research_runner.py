@@ -10,11 +10,12 @@ from unittest.mock import patch
 
 from cuda_fractal_state_tool.agent_bundle import AgentBundle
 from cuda_fractal_state_tool.openai_transport import DispatchAuthorizationRejected
-from cuda_fractal_state_tool.research_protocol import ResearchBrief
+from cuda_fractal_state_tool.research_protocol import ResearchAction, ResearchBrief
 from cuda_fractal_state_tool.research_results import ResearchResultDisposition, ResearchResultService
 from cuda_fractal_state_tool.research_run_store import ResearchRunStore
 from cuda_fractal_state_tool.research_runner import ResearchSessionRunner
 from cuda_fractal_state_tool.research_session import (
+    ResearchExecutionEvidence,
     ResearchRouteServices,
     ResearchSessionController,
     ResearchSessionState,
@@ -83,6 +84,149 @@ Hostile self-review conclusion: Synthesis must ground any claim in packet eviden
 
 
 class ResearchSessionRunnerTests(unittest.TestCase):
+    def test_authority_drift_is_a_terminal_execution_blocker(self) -> None:
+        evidence = ResearchExecutionEvidence(
+            attempt_number=1,
+            action=ResearchAction.SCALAR_SWEEP,
+            round_plan_sha256="a" * 64,
+            sweep=SimpleNamespace(disposition="AUTHORITY_DRIFT"),
+        )
+        reason = ResearchSessionRunner._execution_blocker(evidence)
+        self.assertIsNotNone(reason)
+        self.assertIn("no review", reason)
+
+        complete = ResearchExecutionEvidence(
+            attempt_number=1,
+            action=ResearchAction.SCALAR_SWEEP,
+            round_plan_sha256="b" * 64,
+            sweep=SimpleNamespace(disposition="COMPLETE"),
+        )
+        self.assertIsNone(ResearchSessionRunner._execution_blocker(complete))
+
+    def test_authority_drift_skips_review_and_synthesis(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            packet = root / "packet"
+            packet.mkdir()
+            (packet / "packet.md").write_text("# Packet\n", encoding="utf-8")
+            (packet / "manifest.json").write_text(
+                '{"packet_version":8}\n', encoding="utf-8"
+            )
+            manifest_sha = hashlib.sha256(
+                (packet / "manifest.json").read_bytes()
+            ).hexdigest()
+            bundle = AgentBundle(
+                8,
+                "packet-1",
+                packet,
+                packet / "packet.md",
+                hashlib.sha256((packet / "packet.md").read_bytes()).hexdigest(),
+                packet / "manifest.json",
+                manifest_sha,
+                "finding-1",
+                "explaino_all",
+                (),
+                (),
+                (),
+            )
+            brief = ResearchBrief.from_dict(
+                {
+                    "question": "How does epsilon change the field?",
+                    "attention_context": "Use exact evidence.",
+                    "user_hypotheses": [],
+                    "experiment_permissions": {
+                        "domains": ["params"],
+                        "allowed_paths": ["params.epsilon"],
+                        "allow_scalar_sweep": True,
+                    },
+                    "fixed_conditions": {"notes": []},
+                    "useful_answer": {"kind": "bounded", "details": "Report honestly."},
+                    "maximum_experiment_rounds": 1,
+                    "communication_profile": "working_session",
+                    "hard_dollar_budget": "1",
+                }
+            )
+            store = ResearchRunStore.create(
+                root / "workspace",
+                run_id="run-drift",
+                protocol_snapshot={"schema": "question_research_protocol.v1"},
+                initial_packet={
+                    "packet_id": bundle.packet_id,
+                    "manifest_sha256": bundle.manifest_sha256,
+                    "finding_id": bundle.finding_id,
+                },
+                research_brief=brief.to_dict(),
+            )
+            sweep = SimpleNamespace(
+                sweep_id="sweep-drift",
+                disposition="AUTHORITY_DRIFT",
+                members=(),
+                web_review_dir=None,
+            )
+            services = ResearchRouteServices(
+                validate_single=lambda *args: None,
+                execute_single=lambda *args: None,
+                validate_sweep=lambda *args: SimpleNamespace(),
+                execute_sweep=lambda *args: sweep,
+                promote=lambda *args: None,
+            )
+            controller = ResearchSessionController(
+                brief=brief,
+                run_store=store,
+                initial_bundle=bundle,
+                services=services,
+            )
+
+            class DriftProvider:
+                def __init__(self):
+                    self.run_store = store
+                    self.transport = _Transport()
+                    self.stages = []
+
+                def dispatch(self, *, stage, **_kwargs):
+                    self.stages.append(stage.value)
+                    if stage.value != "planner":
+                        raise AssertionError(stage)
+                    return SimpleNamespace(
+                        output_text="""RESEARCH_ACTION: SCALAR_SWEEP
+
+Selected bracket: Vary epsilon across a bounded bracket.
+Why this bracket: It tests one authorized scalar path.
+Locked trend prediction: The visible boundary will move monotonically.
+Observation channel: Compare the fixed-camera frames.
+Disconfirmation condition: Non-monotone or absent movement.
+Fixed-state and camera policy: Keep every other state path fixed.
+Hostile self-review conclusion: Runtime drift invalidates continuation.
+
+```json
+{"sweep_version":1,"axis":{"path":"params.epsilon","values":[1e-7,5e-7,1e-6]},"member_failure_policy":"continue_independent"}
+```
+"""
+                    )
+
+            provider = DriftProvider()
+            with patch(
+                "cuda_fractal_state_tool.research_context.load_packet_active_color_pipeline_context",
+                return_value={"active_chain_text": "Phase Orbit -> Phase Wheel"},
+            ):
+                result = ResearchSessionRunner(
+                    controller=controller,
+                    provider=provider,
+                    results=ResearchResultService(store),
+                ).run()
+            self.assertEqual(provider.stages, ["planner"])
+            self.assertEqual(result.controller_disposition, "AUTHORITY_DRIFT")
+            self.assertEqual(
+                result.disposition, ResearchResultDisposition.MANUAL_REVIEW_REQUIRED
+            )
+            self.assertTrue(provider.transport.closed)
+            closeout = json.loads(
+                (store.run_dir / "result/controller-closeout.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertFalse(closeout["provider_retry_authorized"])
+
     def test_answer_ready_routes_through_fresh_synthesis_and_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
