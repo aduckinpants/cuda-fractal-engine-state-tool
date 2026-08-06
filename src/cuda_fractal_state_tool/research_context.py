@@ -302,9 +302,12 @@ The source object must copy all five declared source fields exactly, including
 `human_acceptance: false`.
 
 For requested_canonical_emitted_values, emit one item for every distinct requested/emitted value
-pair supported by an existing receipt. The same path may appear more than once for different sweep
-values. canonical_value_status is exactly `available` or `unavailable`; use `unavailable` and null
-when no existing normalization receipt provides a canonical value.
+pair in the `requested_value_evidence` artifact, using that artifact's exact
+`engine_emitted_value` rather than echoing the request. The same path may appear more than once for
+different sweep values, but do not repeat an identical requested/emitted pair from two rounds. Use
+the exact `requested_value_evidence` reference for these items. canonical_value_status is
+exactly `available` or `unavailable`; use `unavailable` and null when that artifact reports no
+existing normalization value.
 
 Use scientific_record_version 1 and the exact source identities from the synthesis context.
 Separate established, inferred, contradicted, and unresolved material. CONTRADICTED applies only

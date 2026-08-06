@@ -228,3 +228,77 @@ wait before provider dispatch, so no second planner cost was incurred.
 `AUTHORITY_DRIFT` is now a terminal controller boundary immediately after local
 execution. It seals `NO_SCIENTIFIC_CONCLUSION`, skips review and synthesis,
 forbids continuation or promotion, and requires a fresh Packet V8 authority.
+
+## Attempt 7 — fresh authority and full synthesis exposed value-reference gap
+
+A fresh Packet V8 was generated after the engine publication and its exact
+five-member epsilon sweep passed locally before another provider call.
+
+```text
+packet ID:              4320cbf0-2fa9-4d2d-b4bc-4174b7028d0e
+manifest SHA-256:       33e45e9a6efe5c0e3b03892afd134f711fd89e05a197a95de3816ce93f05eed3
+local sweep ID:         3085dcf0-eba1-4f38-96c0-3cdfc16d8ebb
+local sweep:            5 / 5 REPLAY_PROVEN
+```
+
+The paid run crossed two complete experiment rounds and produced a completed
+synthesis response.
+
+```text
+run:
+D:\salt-fractal\cuda-fractal-engine-state-tool\question-runs\question-research-cf560177-56f8-4de8-9dd1-bf51f4c3fc0f
+
+round 1 sweep:          5 / 5 REPLAY_PROVEN
+round 1 review:         CONTINUE_RETAIN_BASE
+round 2 sweep:          3 / 3 REPLAY_PROVEN
+round 2 review:         COMPLETE_RESEARCH
+calculated total:       $0.1721760
+```
+
+The scientific-record validator correctly rejected the response rather than
+sealing ungrounded values. The synthesis cited aggregate sweep receipts, but
+those receipts do not expose the engine-emitted float values held by their
+member proof receipts. It also repeated identical requested/emitted pairs that
+appeared in both rounds. The fallback sealed `NO_SCIENTIFIC_CONCLUSION`, and
+provider cleanup completed with zero remaining file IDs.
+
+The bounded correction creates one compact immutable synthesis artifact from
+the proof-owned `requested_value_receipts`. It preserves proof IDs and receipt
+hashes, records exact engine-emitted values, de-duplicates identical pairs
+across rounds, and avoids introducing one provider upload per proof.
+
+## Attempt 8 — end-to-end qualification pass
+
+The final run used the same fresh Packet V8 and the hardened compact receipt
+projection. It completed without a correction, retry, promotion, authority
+drift, synthesis fallback, or provider-file leak.
+
+```text
+run:
+D:\salt-fractal\cuda-fractal-engine-state-tool\question-runs\question-research-ebdb8472-5a6e-4a5c-9bcb-866f9b455693
+
+counted initial input:  171,069 tokens
+adaptive ceiling:      $0.2776
+hard budget:           $0.30
+round 1 sweep:          5 / 5 REPLAY_PROVEN
+round 1 review:         CONTINUE_RETAIN_BASE
+round 2 sweep:          4 / 4 REPLAY_PROVEN
+round 2 review:         UNRESOLVED
+synthesis input:        49,749 tokens
+calculated total:       $0.1699958
+scientific conclusion:  ANSWER_PARTIAL
+result disposition:     COMPLETED
+human acceptance:       false
+provider cleanup:       complete, zero remaining IDs
+```
+
+The sealed record contains four established claims, two inferences, three
+explicit unresolved questions, both experiment summaries, and seven distinct
+requested/canonical/emitted value rows. The emitted epsilon values preserve
+the runtime's observed float representation rather than echoing the requests.
+The deterministic Working Session report remains explicit that replay proof is
+not human acceptance.
+
+This is the first complete paid golden pass of the bounded question-driven
+research route. The implementation is ready for user review; it does not claim
+that the scientific content or resulting presentation has been user accepted.

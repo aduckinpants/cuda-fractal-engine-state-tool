@@ -7,15 +7,17 @@ offline implementation qualification: PASS
 fresh Packet V8 authority: PASS
 golden epsilon sweep: PASS
 provider count-only request: PASS — exact first request counted under user-approved $0.30 cap
-first provider generation attempt: CLOSED — protocol correction exhausted before experiment execution
-golden rerun: pending hardened literal-header and durable-response recovery checkpoint
+provider generation qualification: PASS — bounded two-round run completed
+scientific-record synthesis: PASS — ANSWER_PARTIAL sealed without fallback
+provider cleanup: PASS — zero remaining provider file IDs
+user acceptance: PENDING
 ```
 
-The user authorized one bounded golden generation under a `$0.30` hard cap.
-The first live attempt selected a valid epsilon sweep but omitted the mandatory
-colon in the planner action header twice. It closed without executing an
-experiment or sealing a scientific conclusion. The exact run evidence and
-hardening response are recorded in
+The user authorized bounded golden qualification under a `$0.30` hard cap.
+Successive non-retried runs exposed and hardened literal response contracts,
+provider pacing, authority-drift closure, synthesis capacity, and compact
+proof-value grounding. The final run completed at `$0.1699958`. Exact run
+evidence and each bounded hardening response are recorded in
 `docs/question_driven_research_session_live_golden.md`.
 
 ## Fresh golden authority
@@ -28,16 +30,13 @@ source capture:
 D:\salt-fractal\cuda_newton_fractal_clone\findings\manual_capture\2026-08-05\143014_930__explaino_transcendental
 
 packet:
-D:\salt-fractal\cuda-fractal-engine-state-tool\findings\3209208bc5ccbc09a8f36fbc60b95d125f082761e0195b8c9aaee1af80f3c2cc\packets\efa80582-f798-4380-aa60-578a8f0e2e40
+D:\salt-fractal\cuda-fractal-engine-state-tool\findings\3209208bc5ccbc09a8f36fbc60b95d125f082761e0195b8c9aaee1af80f3c2cc\packets\4320cbf0-2fa9-4d2d-b4bc-4174b7028d0e
 
 packet ID:
-efa80582-f798-4380-aa60-578a8f0e2e40
+4320cbf0-2fa9-4d2d-b4bc-4174b7028d0e
 
 manifest SHA-256:
-a2fb815a94c9ce104d1378863f98b30e46d654fc004f10925a121668938a197a
-
-runtime executable SHA-256:
-26db530a4e73aa482f5752ed6bc35e7e5092dd94277aa417be25668d338c7560
+33e45e9a6efe5c0e3b03892afd134f711fd89e05a197a95de3816ce93f05eed3
 ```
 
 The packet exposes `params.epsilon` as an applicable, present, direct float
@@ -76,13 +75,13 @@ materialized and action-free replayed all five:
 Evidence:
 
 ```text
-C:\code\cuda-fractal-engine-state-tool\.local\slice5-question-research-sweeps\b3cd802b-d188-437a-8e13-d7fff9bb9022
+D:\salt-fractal\cuda-fractal-engine-state-tool\findings\3209208bc5ccbc09a8f36fbc60b95d125f082761e0195b8c9aaee1af80f3c2cc\sweeps\3085dcf0-eba1-4f38-96c0-3cdfc16d8ebb
 ```
 
 The contact sheet includes the captured base as a labeled observation tile and
-shows a monotonic visible expansion across the bracket. This is local
-experiment evidence only; no scientific conclusion has been synthesized by a
-provider and no human acceptance is recorded.
+is local experiment evidence. The later paid run synthesized a bounded partial
+answer from its independently generated sweeps; no human acceptance is
+recorded.
 
 ## Offline controller courts
 
@@ -117,7 +116,7 @@ Focused court:
 Complete Python 3.14 suite after the final implementation pass:
 
 ```text
-281 passed
+290 passed
 ```
 
 ## Cost disclosure before count-only
@@ -134,14 +133,15 @@ profile SHA-256: dbf174b6e03c074b26588e606e6ddb4a27eb5d36bcbb70184863116e39e268b
 Local policy-derived worst-case ceilings are:
 
 ```text
-one experiment attempt + correction + synthesis:  $0.1688
-two experiment attempts + correction + synthesis: $0.2632
-two attempts + required alternate communication:  $0.2804
+two-attempt Working Session adaptive ceiling:      $0.2776
+approved hard budget:                              $0.30
+final calculated run cost:                         $0.1699958
 ```
 
-These are deterministic stage-cap ceilings, not predicted invoices. The exact
-first planner input token count and exact first-call estimate remain unknown
-until the provider count endpoint processes the fully prepared request.
+The adaptive ceiling is a deterministic stage-cap bound, not a predicted
+invoice. The final count gate measured 171,069 initial input tokens and an exact
+first-call maximum of `$0.0438138`; every later call was recounted before
+dispatch.
 
 ## Exact manual count gate
 
@@ -149,7 +149,7 @@ until the provider count endpoint processes the fully prepared request.
 
    ```powershell
    .\run_ui.cmd `
-     --capture-source "D:\salt-fractal\cuda-fractal-engine-state-tool\findings\3209208bc5ccbc09a8f36fbc60b95d125f082761e0195b8c9aaee1af80f3c2cc\packets\efa80582-f798-4380-aa60-578a8f0e2e40" `
+     --capture-source "D:\salt-fractal\cuda-fractal-engine-state-tool\findings\3209208bc5ccbc09a8f36fbc60b95d125f082761e0195b8c9aaee1af80f3c2cc\packets\4320cbf0-2fa9-4d2d-b4bc-4174b7028d0e" `
      --workspace-root "D:\salt-fractal\cuda-fractal-engine-state-tool"
    ```
 
@@ -186,9 +186,10 @@ recount.
   retry.
 - The UI and provider contexts show the exact active Color Pipeline rather than
   requiring inference from raw state.
-- Provider generation remains uncalled and unauthorized.
+- The final scientific record contains exact proof-derived emitted float values,
+  de-duplicates repeated sweep pairs, and retains `human_acceptance: false`.
+- The final provider cleanup receipt records zero remaining file IDs.
 
-Slice 5 is complete through the approved offline boundary. The only remaining
-planned campaign work is the separately authorized count-only preflight and,
-after review of its exact numbers, one separately authorized golden generation
-run followed by user review.
+All planned implementation slices and the authorized paid golden qualification
+are complete. The branch stops at the required user-review boundary. No broader
+automation use, merge, or new product mutation is implied by this evidence.

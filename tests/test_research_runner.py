@@ -84,6 +84,102 @@ Hostile self-review conclusion: Synthesis must ground any claim in packet eviden
 
 
 class ResearchSessionRunnerTests(unittest.TestCase):
+    def test_sweep_proof_values_are_compacted_for_synthesis(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            workspace = root / "workspace"
+            packet = root / "packet"
+            proof_dir = root / "proof"
+            packet.mkdir()
+            proof_dir.mkdir()
+            (packet / "packet.md").write_text("# Packet\n", encoding="utf-8")
+            (packet / "manifest.json").write_text('{"packet_version":8}\n', encoding="utf-8")
+            manifest_sha = hashlib.sha256((packet / "manifest.json").read_bytes()).hexdigest()
+            bundle = AgentBundle(
+                8,
+                "packet-1",
+                packet,
+                packet / "packet.md",
+                hashlib.sha256((packet / "packet.md").read_bytes()).hexdigest(),
+                packet / "manifest.json",
+                manifest_sha,
+                "finding-1",
+                "explaino_all",
+                (),
+                (),
+                (),
+            )
+            store = ResearchRunStore.create(
+                workspace,
+                run_id="run-values",
+                protocol_snapshot={"schema": "question_research_protocol.v1"},
+                initial_packet={
+                    "packet_id": bundle.packet_id,
+                    "manifest_sha256": bundle.manifest_sha256,
+                    "finding_id": bundle.finding_id,
+                },
+                research_brief={},
+            )
+            receipt_path = proof_dir / "receipt.json"
+            receipt_path.write_text(
+                json.dumps(
+                    {
+                        "requested_value_receipts": [
+                            {
+                                "path": "params.epsilon",
+                                "requested_value": 1e-8,
+                                "engine_emitted_value": 9.99999993922529e-9,
+                            }
+                        ]
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            receipt_sha = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+            proof = SimpleNamespace(
+                proof_id="proof-1",
+                receipt_path=receipt_path,
+                receipt_sha256=receipt_sha,
+            )
+            second_receipt_path = proof_dir / "receipt-2.json"
+            second_receipt_path.write_bytes(receipt_path.read_bytes())
+            second_receipt_sha = hashlib.sha256(
+                second_receipt_path.read_bytes()
+            ).hexdigest()
+            second_proof = SimpleNamespace(
+                proof_id="proof-2",
+                receipt_path=second_receipt_path,
+                receipt_sha256=second_receipt_sha,
+            )
+            members = (
+                SimpleNamespace(index=0, proof_result=proof),
+                SimpleNamespace(index=1, proof_result=second_proof),
+            )
+            sweep = SimpleNamespace(sweep_id="sweep-1", members=members)
+            controller = SimpleNamespace(
+                run_store=store,
+                execution_history=(SimpleNamespace(proof=None, sweep=sweep),),
+            )
+            provider = SimpleNamespace(run_store=store, transport=_Transport())
+            runner = ResearchSessionRunner(
+                controller=controller,
+                provider=provider,
+                results=ResearchResultService(store),
+            )
+
+            evidence_path = runner._seal_requested_value_evidence()
+            self.assertIsNotNone(evidence_path)
+            value = json.loads(evidence_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(value["requested_value_receipts"]), 1)
+            receipt = value["requested_value_receipts"][0]
+            self.assertEqual(receipt["requested_value"], 1e-8)
+            self.assertEqual(receipt["engine_emitted_value"], 9.99999993922529e-9)
+            self.assertEqual(receipt["canonical_value_status"], "unavailable")
+            self.assertEqual(receipt["sources"][0]["proof_receipt_sha256"], receipt_sha)
+            self.assertEqual(len(receipt["sources"]), 2)
+            self.assertEqual(receipt["sources"][1]["proof_receipt_sha256"], second_receipt_sha)
+
     def test_authority_drift_is_a_terminal_execution_blocker(self) -> None:
         evidence = ResearchExecutionEvidence(
             attempt_number=1,

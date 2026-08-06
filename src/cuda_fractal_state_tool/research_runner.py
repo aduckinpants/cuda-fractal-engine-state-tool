@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .agent_bundle import AgentBundle
+from .json_utils import loads_strict_no_duplicates
 from .research_context import (
     build_planner_context,
     build_review_context,
@@ -16,6 +18,7 @@ from .research_cost import ResearchProviderStage
 from .research_protocol import ResearchAction, canonical_json_sha256
 from .research_provider import ResearchProviderDispatcher
 from .openai_transport import DispatchAuthorizationRejected
+from .runtime_surface import sha256_file
 from .research_results import (
     ResearchResultDisposition,
     ResearchResultService,
@@ -321,6 +324,109 @@ class ResearchSessionRunner:
                     paths.append(contact.resolve())
         return tuple(paths)
 
+    def _seal_requested_value_evidence(self) -> Path | None:
+        """Project proof-owned value receipts into one compact synthesis authority.
+
+        The projection avoids uploading every full proof receipt while retaining
+        the exact requested/emitted values and the hashes of the receipts that
+        supplied them.  It is derived only from in-process proof results already
+        owned by this run.
+        """
+
+        entries: dict[str, dict[str, Any]] = {}
+        for execution in self.controller.execution_history:
+            proofs: list[tuple[Any, str | None, int | None]] = []
+            if execution.proof is not None:
+                proofs.append((execution.proof, None, None))
+            if execution.sweep is not None:
+                for member in execution.sweep.members:
+                    if member.proof_result is not None:
+                        proofs.append(
+                            (member.proof_result, execution.sweep.sweep_id, member.index)
+                        )
+            for proof, sweep_id, member_index in proofs:
+                if sha256_file(proof.receipt_path) != proof.receipt_sha256:
+                    raise ValueError(
+                        f"Proof receipt changed before synthesis: {proof.proof_id}"
+                    )
+                document = loads_strict_no_duplicates(
+                    proof.receipt_path.read_text(encoding="utf-8")
+                )
+                if not isinstance(document, dict):
+                    raise ValueError(f"Proof receipt is not an object: {proof.proof_id}")
+                receipts = document.get("requested_value_receipts")
+                if isinstance(receipts, dict):
+                    receipts = [receipts]
+                if not isinstance(receipts, list):
+                    raise ValueError(
+                        f"Proof receipt has invalid requested values: {proof.proof_id}"
+                    )
+                for receipt in receipts:
+                    if not isinstance(receipt, dict):
+                        raise ValueError(
+                            f"Proof receipt has malformed requested value: {proof.proof_id}"
+                        )
+                    path = receipt.get("path")
+                    if (
+                        not isinstance(path, str)
+                        or not path
+                        or "requested_value" not in receipt
+                        or "engine_emitted_value" not in receipt
+                    ):
+                        raise ValueError(
+                            f"Proof receipt has incomplete requested value: {proof.proof_id}"
+                        )
+                    value = {
+                        "path": path,
+                        "requested_value": receipt.get("requested_value"),
+                        "canonical_value_status": (
+                            "available" if "canonical_value" in receipt else "unavailable"
+                        ),
+                        "canonical_value": receipt.get("canonical_value"),
+                        "engine_emitted_value": receipt.get("engine_emitted_value"),
+                    }
+                    identity = json.dumps(
+                        {
+                            "path": value["path"],
+                            "requested_value": value["requested_value"],
+                            "engine_emitted_value": value["engine_emitted_value"],
+                        },
+                        sort_keys=True,
+                        ensure_ascii=False,
+                        allow_nan=False,
+                        separators=(",", ":"),
+                    )
+                    source = {
+                        "proof_id": proof.proof_id,
+                        "proof_receipt_sha256": proof.receipt_sha256,
+                        "sweep_id": sweep_id,
+                        "member_index": member_index,
+                    }
+                    if identity not in entries:
+                        entries[identity] = {**value, "sources": [source]}
+                    else:
+                        existing = entries[identity]
+                        if (
+                            existing["canonical_value_status"]
+                            != value["canonical_value_status"]
+                            or existing["canonical_value"] != value["canonical_value"]
+                        ):
+                            raise ValueError(
+                                "Proof receipts disagree on canonical value for "
+                                f"{path} requested as {value['requested_value']!r}"
+                            )
+                        if source not in existing["sources"]:
+                            existing["sources"].append(source)
+        if not entries:
+            return None
+        return self.controller.run_store.write_evidence_once_json(
+            "synthesis/requested-emitted-evidence.json",
+            {
+                "requested_emitted_evidence_version": 1,
+                "requested_value_receipts": list(entries.values()),
+            },
+        )
+
     def _evidence_authority(
         self,
     ) -> tuple[ArtifactRootRegistry, tuple[EvidenceReference, ...]]:
@@ -333,6 +439,15 @@ class ResearchSessionRunner:
             hashlib.sha256(run_manifest.read_bytes()).hexdigest(),
         )
         roots.append(run_root)
+        value_evidence_path = self._seal_requested_value_evidence()
+        if value_evidence_path is not None:
+            references.append(
+                make_evidence_reference(
+                    root=run_root,
+                    path=value_evidence_path,
+                    artifact_role="requested_value_evidence",
+                )
+            )
         for attempt in range(1, self.controller.attempts_consumed + 1):
             attempt_dir = self.controller.run_store.run_dir / "attempts" / f"{attempt:03d}"
             for filename, role in (
