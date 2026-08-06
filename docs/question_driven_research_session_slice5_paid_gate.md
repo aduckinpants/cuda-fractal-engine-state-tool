@@ -6,12 +6,17 @@
 offline implementation qualification: PASS
 fresh Packet V8 authority: PASS
 golden epsilon sweep: PASS
-provider count-only request: NOT RUN — user approval required
-provider generation: NOT AUTHORIZED
+provider count-only request: PASS — exact first request counted under user-approved $0.30 cap
+first provider generation attempt: CLOSED — protocol correction exhausted before experiment execution
+golden rerun: pending hardened literal-header and durable-response recovery checkpoint
 ```
 
-This is the intended campaign stop. The next action is an exact provider
-count-only preflight initiated by the user. It does not authorize generation.
+The user authorized one bounded golden generation under a `$0.30` hard cap.
+The first live attempt selected a valid epsilon sweep but omitted the mandatory
+colon in the planner action header twice. It closed without executing an
+experiment or sealing a scientific conclusion. The exact run evidence and
+hardening response are recorded in
+`docs/question_driven_research_session_live_golden.md`.
 
 ## Fresh golden authority
 

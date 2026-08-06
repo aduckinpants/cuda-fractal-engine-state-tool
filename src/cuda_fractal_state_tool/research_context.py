@@ -51,7 +51,11 @@ Sealed brief:
 Captured active Color Pipeline:
 {pipeline["active_chain_text"]}
 
-Return exactly one planner outcome allowed by question_research_protocol.v1. SINGLE_OVERRIDE uses
+Return exactly one planner outcome allowed by question_research_protocol.v1.
+The first nonempty line must be exactly `RESEARCH_ACTION: <ACTION>`, with the colon present,
+where `<ACTION>` is one of `SINGLE_OVERRIDE`, `SCALAR_SWEEP`, `ANSWER_READY`, or
+`UNRESOLVED_REPORT`. Do not write `RESEARCH_ACTION <ACTION>` without the colon.
+SINGLE_OVERRIDE uses
 these ordered fields: Chosen experiment; Why this experiment; Locked prediction; Observation
 channel; Disconfirmation condition; Camera and fixed-state policy; Hostile self-review conclusion.
 SCALAR_SWEEP uses: Selected bracket; Why this bracket; Locked trend prediction; Observation

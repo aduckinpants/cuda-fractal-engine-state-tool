@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from .model_profile import ModelProfileV1
+from .json_utils import loads_strict_no_duplicates
 from .openai_transport import (
     DispatchAuthorizationRejected,
     PacketV8ResponsesTransport,
@@ -54,6 +55,135 @@ class ResearchProviderDispatcher:
         self.cost = cost
         self.model_profile = model_profile
         self.cancelled = cancelled
+        self._finalized_turns: dict[str, TransportTurnResult] = {}
+
+    @staticmethod
+    def _output_text_from_raw_response(raw: object) -> str:
+        if not isinstance(raw, dict):
+            return ""
+        parts: list[str] = []
+        output = raw.get("output")
+        if not isinstance(output, list):
+            return ""
+        for item in output:
+            if not isinstance(item, dict) or item.get("type") != "message":
+                continue
+            content = item.get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "output_text":
+                    text = block.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+        return "\n".join(parts).strip()
+
+    def _load_durable_turn(self, turn_id: str) -> TransportTurnResult | None:
+        response_path = self.run_store.run_dir / "transport" / turn_id / "response.json"
+        if not response_path.is_file():
+            return None
+        value = loads_strict_no_duplicates(response_path.read_text(encoding="utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError(f"Durable provider response is not an object: {turn_id}")
+        output_text = value.get("output_text")
+        if not isinstance(output_text, str) or not output_text.strip():
+            output_text = self._output_text_from_raw_response(value.get("response"))
+        if not output_text:
+            raise ValueError(f"Durable provider response has no output text: {turn_id}")
+        if value.get("requested_model") != self.model_profile.model:
+            raise ValueError(f"Durable provider response model binding changed: {turn_id}")
+        if value.get("reasoning_effort") != self.model_profile.reasoning_effort:
+            raise ValueError(f"Durable provider response reasoning binding changed: {turn_id}")
+        if value.get("model_profile_sha256") != self.model_profile.sha256:
+            raise ValueError(f"Durable provider response profile binding changed: {turn_id}")
+        if value.get("prompt_cache_policy") != self.model_profile.prompt_cache_policy.value:
+            raise ValueError(f"Durable provider response cache policy changed: {turn_id}")
+        response_id = value.get("response_id")
+        resolved_model = value.get("resolved_model")
+        if not isinstance(response_id, str) or not response_id:
+            raise ValueError(f"Durable provider response identity is missing: {turn_id}")
+        if not isinstance(resolved_model, str) or not resolved_model:
+            raise ValueError(f"Durable provider resolved model is missing: {turn_id}")
+        return TransportTurnResult(
+            response_id=response_id,
+            previous_response_id=(
+                value.get("previous_response_id")
+                if isinstance(value.get("previous_response_id"), str)
+                else None
+            ),
+            model=resolved_model,
+            output_text=output_text,
+            input_tokens=int(value.get("input_tokens", -1)),
+            output_tokens=int(value.get("output_tokens", -1)),
+            resources=(),
+            unavailable_optional_attachments=tuple(
+                item
+                for item in value.get("unavailable_optional_attachments", [])
+                if isinstance(item, str)
+            ),
+            requested_model=self.model_profile.model,
+            reasoning_effort=self.model_profile.reasoning_effort,
+            model_profile_sha256=self.model_profile.sha256,
+            cached_input_tokens=int(value.get("cached_input_tokens", -1)),
+            cache_write_tokens=int(value.get("cache_write_tokens", -1)),
+            prompt_cache_policy=str(value.get("prompt_cache_policy", "")),
+            latency_seconds=float(value.get("latency_seconds", 0.0)),
+            request_evidence_path=(
+                self.run_store.run_dir / "transport" / turn_id / "request.json"
+            ),
+            response_evidence_path=response_path,
+        )
+
+    def _finalize_turn(
+        self,
+        *,
+        stage: ResearchProviderStage,
+        turn_id: str,
+        result: TransportTurnResult,
+        recovered: bool,
+    ) -> TransportTurnResult:
+        if turn_id in self._finalized_turns:
+            return self._finalized_turns[turn_id]
+        actual = calculate_usage_cost(
+            self.cost.pricing_policy,
+            model_name=result.model,
+            input_tokens=result.input_tokens,
+            cached_input_tokens=result.cached_input_tokens,
+            cache_write_tokens=result.cache_write_tokens,
+            output_tokens=result.output_tokens,
+        )
+        self.cost.record_actual_cost(actual)
+        self.run_store.write_evidence_once_json(
+            f"cost/{turn_id}-actual.json",
+            {
+                "stage": stage.value,
+                "actual": actual.to_dict(),
+                "cumulative_calculated_cost_usd": decimal_text(
+                    self.cost.spent_cost_usd
+                ),
+            },
+        )
+        self._append_event(
+            "research_provider_response_recovered"
+            if recovered
+            else "research_provider_response",
+            {
+                "turn_id": turn_id,
+                "stage": stage.value,
+                "requested_model": result.requested_model,
+                "resolved_model": result.model,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+                "calculated_call_cost_usd": decimal_text(actual.cost_usd),
+                "cumulative_calculated_cost_usd": decimal_text(
+                    self.cost.spent_cost_usd
+                ),
+                "latency_seconds": result.latency_seconds,
+                "provider_redispatch": not recovered,
+            },
+        )
+        self._finalized_turns[turn_id] = result
+        return result
 
     def _record_budget(
         self,
@@ -159,6 +289,14 @@ class ResearchProviderDispatcher:
     ) -> TransportTurnResult:
         stage = ResearchProviderStage(stage)
         limit = self.cost.stage_limits[stage]
+        durable = self._load_durable_turn(turn_id)
+        if durable is not None:
+            return self._finalize_turn(
+                stage=stage,
+                turn_id=turn_id,
+                result=durable,
+                recovered=True,
+            )
 
         def authorize(exact_input_tokens: int) -> None:
             decision = self.cost.authorize_dispatch(
@@ -188,39 +326,9 @@ class ResearchProviderDispatcher:
             authorize_dispatch=authorize,
             additional_resources=additional_resources,
         )
-        actual = calculate_usage_cost(
-            self.cost.pricing_policy,
-            model_name=result.model,
-            input_tokens=result.input_tokens,
-            cached_input_tokens=result.cached_input_tokens,
-            cache_write_tokens=result.cache_write_tokens,
-            output_tokens=result.output_tokens,
+        return self._finalize_turn(
+            stage=stage,
+            turn_id=turn_id,
+            result=result,
+            recovered=False,
         )
-        self.cost.record_actual_cost(actual)
-        self.run_store.write_evidence_once_json(
-            f"cost/{turn_id}-actual.json",
-            {
-                "stage": stage.value,
-                "actual": actual.to_dict(),
-                "cumulative_calculated_cost_usd": decimal_text(
-                    self.cost.spent_cost_usd
-                ),
-            },
-        )
-        self._append_event(
-            "research_provider_response",
-            {
-                "turn_id": turn_id,
-                "stage": stage.value,
-                "requested_model": result.requested_model,
-                "resolved_model": result.model,
-                "input_tokens": result.input_tokens,
-                "output_tokens": result.output_tokens,
-                "calculated_call_cost_usd": decimal_text(actual.cost_usd),
-                "cumulative_calculated_cost_usd": decimal_text(
-                    self.cost.spent_cost_usd
-                ),
-                "latency_seconds": result.latency_seconds,
-            },
-        )
-        return result

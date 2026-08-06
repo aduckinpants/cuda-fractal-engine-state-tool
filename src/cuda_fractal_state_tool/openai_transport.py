@@ -716,6 +716,8 @@ class PacketV8ResponsesTransport:
                         {
                             "response": response.raw,
                             "response_id": result.response_id,
+                            "output_text": result.output_text,
+                            "previous_response_id": result.previous_response_id,
                             "requested_model": result.requested_model,
                             "resolved_model": result.model,
                             "reasoning_effort": result.reasoning_effort,
@@ -727,6 +729,10 @@ class PacketV8ResponsesTransport:
                             "uncached_input_tokens": result.uncached_input_tokens,
                             "output_tokens": result.output_tokens,
                             "latency_seconds": result.latency_seconds,
+                            "resources": [resource.to_evidence() for resource in result.resources],
+                            "unavailable_optional_attachments": list(
+                                result.unavailable_optional_attachments
+                            ),
                         }
                     ),
                 )

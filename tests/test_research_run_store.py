@@ -51,6 +51,10 @@ class ResearchRunStoreTests(unittest.TestCase):
             path = store.write_evidence_once_bytes("attempts/001/round-plan.json", b"{}\n")
 
             self.assertEqual(path.read_bytes(), b"{}\n")
+            self.assertEqual(
+                store.write_evidence_once_bytes("attempts/001/round-plan.json", b"{}\n"),
+                path,
+            )
             with self.assertRaises(FileExistsError):
                 store.write_evidence_once_bytes("attempts/001/round-plan.json", b"changed\n")
 

@@ -209,9 +209,16 @@ class DurableRunStore:
 
     def write_evidence_once_json(self, relative_path: str, value: Any) -> Path:
         path = self._evidence_path(relative_path)
+        payload = _json_bytes(value)
+        if path.is_file():
+            if path.read_bytes() == payload:
+                return path
+            raise FileExistsError(f"Immutable evidence already exists with different bytes: {path}")
         try:
-            _atomic_write_once(path, _json_bytes(value))
+            _atomic_write_once(path, payload)
         except FileExistsError:
+            if path.is_file() and path.read_bytes() == payload:
+                return path
             raise
         except OSError as exc:
             raise RunStoreWriteError(
@@ -224,9 +231,15 @@ class DurableRunStore:
 
     def write_evidence_once_bytes(self, relative_path: str, payload: bytes) -> Path:
         path = self._evidence_path(relative_path)
+        if path.is_file():
+            if path.read_bytes() == payload:
+                return path
+            raise FileExistsError(f"Immutable evidence already exists with different bytes: {path}")
         try:
             _atomic_write_once(path, payload)
         except FileExistsError:
+            if path.is_file() and path.read_bytes() == payload:
+                return path
             raise
         except OSError as exc:
             raise RunStoreWriteError(

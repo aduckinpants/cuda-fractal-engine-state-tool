@@ -138,6 +138,41 @@ class ResearchProviderDispatcherTests(unittest.TestCase):
             self.assertEqual(provider.generated, 0)
             self.assertGreater(Decimal(gate.conservative_adaptive_ceiling_usd), 0)
 
+    def test_completed_durable_response_is_recovered_without_provider_redispatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            dispatcher, provider, _transport, resource = self._fixture(root, "10")
+            first = dispatcher.dispatch(
+                stage=ResearchProviderStage.SYNTHESIS,
+                turn_id="synthesis-1",
+                prompt="Synthesize exact evidence.",
+                packet_dir=None,
+                additional_resources=(resource,),
+            )
+            self.assertEqual(provider.generated, 1)
+
+            recovered_dispatcher, recovered_provider, _transport, _resource = self._fixture(
+                root / "second", "10"
+            )
+            recovered_dispatcher.run_store = dispatcher.run_store
+            recovered = recovered_dispatcher.dispatch(
+                stage=ResearchProviderStage.SYNTHESIS,
+                turn_id="synthesis-1",
+                prompt="This prompt must not be transmitted.",
+                packet_dir=None,
+            )
+
+            self.assertEqual(recovered.response_id, first.response_id)
+            self.assertEqual(recovered.output_text, first.output_text)
+            self.assertEqual(recovered_provider.generated, 0)
+            self.assertEqual(recovered_provider.requests, [])
+            self.assertTrue(
+                any(
+                    event["event_type"] == "research_provider_response_recovered"
+                    for event in dispatcher.run_store.read_events()
+                )
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
